@@ -26,7 +26,11 @@
 */
 
 namespace mallocMC::CreationPolicies::ScatterAlloc {
-  struct DataPage {};
+  template<size_t T_pageSize>
+  struct DataPage {
+    char data[T_pageSize];
+  };
+
   struct RecursivePage {};
 
   using BitMask = uint32_t;
@@ -59,7 +63,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
       return numPages() * PageTableEntry::size();
     }
 
-    DataPage pages[numPages()];
+    DataPage<T_pageSize> pages[numPages()];
     PageTableEntry pageTable[numPages()];
+
+    void* create(uint32_t numBytes) {
+      DataPage<T_pageSize>& page = choosePage(numBytes);
+      return findChunkIn(page);
+    }
+
+    private:
+    DataPage<T_pageSize>& choosePage(uint32_t numBytes) {
+      return pages[0];
+    }
+
+    void* findChunkIn(DataPage<T_pageSize>& page) {
+      return &page;
+    }
   };
 }
