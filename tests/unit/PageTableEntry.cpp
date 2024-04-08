@@ -25,41 +25,24 @@
   THE SOFTWARE.
 */
 
-namespace mallocMC::CreationPolicies::ScatterAlloc {
-  struct DataPage {};
-  struct RecursivePage {};
+#include <catch2/catch.hpp>
+#include <mallocMC/creationPolicies/Scatter.hpp>
 
-  using BitMask = uint32_t;
+using mallocMC::CreationPolicies::ScatterAlloc::PageTableEntry;
 
-  struct PageTableEntry{
-    BitMask _bitMask;
-    uint32_t _chunkSize=0u;
-    uint32_t _fillingLevel=0u;
+TEST_CASE ("PageTableEntry") {
+  PageTableEntry pte;
 
-    void init(uint32_t chunkSize) {
-      _chunkSize=chunkSize;
-    }
+  SECTION ("knows its size.") {
+    CHECK(PageTableEntry::size() == 12);
+    CHECK(pte.size() == 12);
+  }
 
-    static size_t size() {
-      return 12;
-    }
-  };
-
-  template <size_t T_blockSize, size_t T_pageSize>
-  struct AccessBlock {
-    constexpr static size_t numPages() {
-      return 4;
-    }
-
-    size_t dataSize() const {
-      return numPages() * T_pageSize;
-    }
-
-    size_t metadataSize() const {
-      return numPages() * PageTableEntry::size();
-    }
-
-    DataPage pages[numPages()];
-    PageTableEntry pageTable[numPages()];
-  };
+  SECTION ("gets initialised with chunk size.") {
+    uint32_t chunkSize = GENERATE(8,32,64);
+    pte.init(chunkSize);
+    CHECK(pte._chunkSize == chunkSize);
+    CHECK(pte._fillingLevel == 0u);
+    CHECK(pte._bitMask == 0u);
+  }
 }
