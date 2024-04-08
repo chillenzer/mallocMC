@@ -59,4 +59,11 @@ TEST_CASE ("AccessBlock") {
     CHECK(reinterpret_cast<void*>(accessBlock.pages) < reinterpret_cast<void*>(accessBlock.pageTable));
   }
 
+  SECTION("uses an allowed amount of memory.") {
+    CHECK(accessBlock.dataSize() + accessBlock.metadataSize() <= blockSize);
+  }
+
+  SECTION("knows its number of pages.") {
+    CHECK(accessBlock.numPages() == numPages);
+  }
 } 

@@ -28,7 +28,11 @@
 namespace mallocMC::CreationPolicies::ScatterAlloc {
   struct DataPage {};
   struct RecursivePage {};
-  struct PageTableEntry{};
+  struct PageTableEntry{
+    static size_t size() {
+      return 12;
+    }
+  };
 
   template <size_t T_blockSize, size_t T_pageSize>
   struct AccessBlock {
@@ -36,11 +40,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
     PageTableEntry pageTable[4];
 
     size_t dataSize() const {
-      return 4 * T_pageSize;
+      return numPages() * T_pageSize;
     }
 
     size_t metadataSize() const {
-      return 4 * 12;
+      return numPages() * PageTableEntry::size();
+    }
+
+    size_t numPages() const {
+      return 4;
     }
   };
 }
