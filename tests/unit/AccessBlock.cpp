@@ -25,10 +25,17 @@
   THE SOFTWARE.
 */
 
-namespace mallocMC::CreationPolicies::ScatterAlloc {
-  struct DataPage {};
-  struct RecursivePage {};
+#include <catch2/catch.hpp>
+#include <mallocMC/creationPolicies/Scatter.hpp>
 
-  template <size_t blockSize, size_t pageSize>
-  struct AccessBlock {};
+using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+
+TEST_CASE ("AccessBlock") {
+  constexpr size_t pageSize = 1024;
+  constexpr size_t numPages = 4;
+  // bitmask, chunksize, filling level
+  constexpr size_t pteSize = 4 + 4 + 4;
+  constexpr size_t blockSize = numPages * (pageSize + pteSize);
+
+  AccessBlock<blockSize, pageSize> accessBlock;
 }

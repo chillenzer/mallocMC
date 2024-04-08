@@ -64,11 +64,7 @@ alpaka_add_executable(mallocMC_Example03 EXCLUDE_FROM_ALL examples/mallocMC_exam
 target_include_directories(mallocMC_Example03 PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
 target_link_libraries(mallocMC_Example03 PUBLIC alpaka::alpaka warnings)
 
-alpaka_add_executable(VerifyHeap EXCLUDE_FROM_ALL tests/verify_heap.cpp tests/verify_heap_config.hpp)
-target_include_directories(VerifyHeap PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
-target_link_libraries(VerifyHeap PUBLIC alpaka::alpaka warnings)
-
-alpaka_add_executable(tests EXCLUDE_FROM_ALL tests/main.cpp tests/dimensions.cpp tests/policies.cpp)
+alpaka_add_executable(tests EXCLUDE_FROM_ALL tests/main.cpp tests/unit/AccessBlock.cpp)
 target_include_directories(tests PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
 target_link_libraries(tests PUBLIC alpaka::alpaka Catch2::Catch2 warnings)
 
