@@ -31,7 +31,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
     char data[T_pageSize];
   };
 
-  struct RecursivePage {};
+  struct NoBitField{};
+
+  template<size_t T_pageSize, typename HasBitField>
+  struct PageInterpretation {
+    DataPage<T_pageSize>& data;
+    size_t chunkSize{1u};
+
+    void* operator[](size_t i) {
+      return (void*)&data.data[i*chunkSize];
+    }
+  };
 
   using BitMask = uint32_t;
 
