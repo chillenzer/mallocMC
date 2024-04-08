@@ -36,9 +36,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
   using BitMask = uint32_t;
 
   struct PageTableEntry{
-    BitMask _bitMask;
-    uint32_t _chunkSize=0u;
-    uint32_t _fillingLevel=0u;
+    BitMask _bitMask{};
+    uint32_t _chunkSize{0u};
+    uint32_t _fillingLevel{0u};
 
     void init(uint32_t chunkSize) {
       _chunkSize=chunkSize;
