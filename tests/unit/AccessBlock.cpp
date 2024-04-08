@@ -38,4 +38,25 @@ TEST_CASE ("AccessBlock") {
   constexpr size_t blockSize = numPages * (pageSize + pteSize);
 
   AccessBlock<blockSize, pageSize> accessBlock;
-}
+
+  SECTION ("has pages.") {
+    CHECK(accessBlock.pages != nullptr);
+  }
+
+  SECTION ("has page table.") {
+    CHECK(accessBlock.pageTable != nullptr);
+  }
+
+  SECTION ("knows its data size.") {
+    CHECK(accessBlock.dataSize() == numPages * pageSize);
+  }
+
+  SECTION ("knows its metadata size.") {
+    CHECK(accessBlock.metadataSize() == numPages * pteSize);
+  }
+
+  SECTION ("stores page table after pages.") {
+    CHECK(reinterpret_cast<void*>(accessBlock.pages) < reinterpret_cast<void*>(accessBlock.pageTable));
+  }
+
+} 
