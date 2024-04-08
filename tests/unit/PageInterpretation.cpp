@@ -29,7 +29,7 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
-using mallocMC::CreationPolicies::ScatterAlloc::NoBitField;
+using mallocMC::CreationPolicies::ScatterAlloc::HasBitField;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 
 constexpr size_t pageSize=4096u;
@@ -37,7 +37,7 @@ constexpr size_t chunkSize=32u;
 
 TEST_CASE ("PageInterpretation") {
   DataPage<pageSize> data;
-  PageInterpretation<pageSize, NoBitField> page{data, chunkSize};
+  PageInterpretation<pageSize> page{data, chunkSize, HasBitField::No};
 
   SECTION ("refers to the same data it was created with.") {
     CHECK(&data == &page.data);

@@ -31,12 +31,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
     char data[T_pageSize];
   };
 
-  struct NoBitField{};
+  enum class HasBitField {Yes,No};
 
-  template<size_t T_pageSize, typename HasBitField>
+  template<size_t T_pageSize>
   struct PageInterpretation {
     DataPage<T_pageSize>& data;
     size_t chunkSize{1u};
+    HasBitField hasBitField{HasBitField::No};
+
 
     void* operator[](size_t i) {
       return (void*)&data.data[i*chunkSize];
@@ -77,17 +79,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc {
     PageTableEntry pageTable[numPages()];
 
     void* create(uint32_t numBytes) {
-      DataPage<T_pageSize>& page = choosePage(numBytes);
+      auto page = choosePage(numBytes);
       return findChunkIn(page);
     }
 
     private:
-    DataPage<T_pageSize>& choosePage(uint32_t numBytes) {
-      return pages[0];
+    PageInterpretation<T_pageSize> choosePage(uint32_t numBytes) {
+      return {pages[0], numBytes, HasBitField::No};
     }
 
-    void* findChunkIn(DataPage<T_pageSize>& page) {
-      return &page;
+    void* findChunkIn(PageInterpretation<T_pageSize>& page) {
+      return page[0];
     }
   };
 }
