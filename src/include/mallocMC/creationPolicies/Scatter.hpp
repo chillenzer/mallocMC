@@ -56,7 +56,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numChunks() > maxChunksPerPage;
         }
 
-        auto operator[](size_t index) const -> void*
+        [[nodiscard]] auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&data.data[index * chunkSize]);
         }
@@ -71,7 +71,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     using BitMask = std::bitset<BitMaskSize>;
 
-    inline auto firstFreeBit(BitMask const mask) -> size_t
+    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> size_t
     {
         // TODO(lenz): we are not yet caring for performance here...
         for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
@@ -96,7 +96,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             _chunkSize = chunkSize;
         }
 
-        static auto size() -> size_t
+        [[nodiscard]] static auto size() -> size_t
         {
             // contains 3x 32-bit values
             return 12; // NOLINT(*-magic-numbers)
