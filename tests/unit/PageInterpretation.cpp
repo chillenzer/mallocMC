@@ -29,7 +29,6 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
-using mallocMC::CreationPolicies::ScatterAlloc::HasBitField;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
@@ -39,7 +38,7 @@ constexpr size_t chunkSize = 32U;
 TEST_CASE("PageInterpretation")
 {
     DataPage<pageSize> data{};
-    PageInterpretation<pageSize> page{data, chunkSize, HasBitField::No};
+    PageInterpretation<pageSize> page{data, chunkSize};
 
     SECTION("refers to the same data it was created with.")
     {
@@ -49,6 +48,18 @@ TEST_CASE("PageInterpretation")
     SECTION("returns start of data as first chunk.")
     {
         CHECK(page[0] == &data);
+    }
+
+    SECTION("computes correct number of pages.")
+    {
+        CHECK(page.numChunks() == pageSize / chunkSize);
+    }
+
+    SECTION("detects correctly if page should contain bitfield.")
+    {
+        size_t localChunkSize = GENERATE(32U, 512U);
+        PageInterpretation<pageSize> localPage{data, localChunkSize};
+        CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }
 
     SECTION("jumps by chunkSize between indices.")

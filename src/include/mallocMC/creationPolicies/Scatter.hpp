@@ -36,18 +36,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         char data[T_pageSize];
     };
 
-    enum class HasBitField
-    {
-        Yes,
-        No
-    };
+    constexpr const size_t maxChunksPerPage = 32U;
 
     template<size_t T_pageSize>
     struct PageInterpretation
     {
         DataPage<T_pageSize>& data;
         size_t chunkSize{1U};
-        HasBitField hasBitField{HasBitField::No};
+
+        auto numChunks() -> size_t
+        {
+            return T_pageSize / chunkSize;
+        }
+        auto hasBitField() -> bool
+        {
+            return numChunks() > maxChunksPerPage;
+        }
 
         // these are supposed to be temporary objects, don't start messing around with them:
         PageInterpretation(PageInterpretation const&) = delete;
@@ -113,7 +117,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         auto choosePage(uint32_t numBytes) -> PageInterpretation<T_pageSize>
         {
-            return {pages[0], numBytes, HasBitField::No};
+            return {pages[0], numBytes};
         }
 
         auto findChunkIn(PageInterpretation<T_pageSize>& page) -> void*
