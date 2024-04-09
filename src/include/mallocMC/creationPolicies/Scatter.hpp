@@ -28,6 +28,7 @@
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -40,11 +41,33 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     constexpr const size_t BitMaskSize = 32U;
     constexpr const size_t maxChunksPerPage = BitMaskSize;
 
+    using BitMask = std::bitset<BitMaskSize>;
+
+    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> size_t
+    {
+        // TODO(lenz): we are not yet caring for performance here...
+        for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
+        {
+            if(not mask[i])
+            {
+                return i;
+            }
+        }
+        return BitMaskSize;
+    }
+
+    struct Chunk
+    {
+        size_t index;
+        void* pointer;
+    };
+
     template<size_t T_pageSize>
     struct PageInterpretation
     {
         DataPage<T_pageSize>& data;
         size_t chunkSize{1U};
+        BitMask& topLevelMask;
 
         [[nodiscard]] auto numChunks() const -> size_t
         {
@@ -61,6 +84,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return reinterpret_cast<void*>(&data.data[index * chunkSize]);
         }
 
+        [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
+        {
+            auto const index = firstFreeBit(topLevelMask);
+            if(index < BitMaskSize)
+            {
+                return std::optional<Chunk>({index, this->operator[](index)});
+            }
+            return std::nullopt;
+        }
+
         // these are supposed to be temporary objects, don't start messing around with them:
         PageInterpretation(PageInterpretation const&) = delete;
         PageInterpretation(PageInterpretation&&) = delete;
@@ -68,21 +101,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
         ~PageInterpretation() = default;
     };
-
-    using BitMask = std::bitset<BitMaskSize>;
-
-    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> size_t
-    {
-        // TODO(lenz): we are not yet caring for performance here...
-        for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
-        {
-            if(not mask[i])
-            {
-                return i;
-            }
-        }
-        return BitMaskSize;
-    }
 
     // TODO(lenz): Make this a struct of array (discussion with Rene, 2024-04-09)
     struct PageTableEntry // NOLINT(altera-struct-pack-align)
@@ -126,19 +144,20 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto create(uint32_t numBytes) -> void*
         {
-            auto page = choosePage(numBytes);
-            return findChunkIn(page);
+            const auto page = choosePage(numBytes);
+            const auto chunk = page.firstFreeChunk();
+            if(chunk)
+            {
+                page.topLevelMask[chunk.value().index].flip();
+                return chunk.value().pointer;
+            }
+            return nullptr;
         }
 
     private:
         auto choosePage(uint32_t numBytes) -> PageInterpretation<T_pageSize>
         {
-            return {pages[0], numBytes};
-        }
-
-        auto findChunkIn(PageInterpretation<T_pageSize>& page) -> void*
-        {
-            return page[0];
+            return {pages[0], numBytes, pageTable[0]._bitMask};
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

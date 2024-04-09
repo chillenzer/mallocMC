@@ -27,18 +27,21 @@
 
 #include <catch2/catch.hpp>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <optional>
 
+using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
-constexpr size_t pageSize = 4096U;
+constexpr size_t pageSize = 1024U;
 constexpr size_t chunkSize = 32U;
 
 TEST_CASE("PageInterpretation")
 {
     DataPage<pageSize> data{};
-    PageInterpretation<pageSize> page{data, chunkSize};
+    BitMask mask{};
+    PageInterpretation<pageSize> page{data, chunkSize, mask};
 
     SECTION("refers to the same data it was created with.")
     {
@@ -57,8 +60,8 @@ TEST_CASE("PageInterpretation")
 
     SECTION("detects correctly if page should contain bitfield.")
     {
-        size_t localChunkSize = GENERATE(32U, 512U);
-        PageInterpretation<pageSize> localPage{data, localChunkSize};
+        size_t localChunkSize = GENERATE(8U, 128U);
+        PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
         CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }
 
@@ -68,5 +71,28 @@ TEST_CASE("PageInterpretation")
         {
             CHECK(distance(reinterpret_cast<char*>(page[i]), reinterpret_cast<char*>(page[i + 1])) == chunkSize);
         }
+    }
+
+    SECTION("finds first free chunk.")
+    {
+        mask.flip();
+        size_t const index = GENERATE(0, 2);
+        mask.flip(index);
+        auto const chunk = page.firstFreeChunk();
+
+        if(chunk)
+        {
+            CHECK(chunk.value().pointer == page[index]);
+        }
+        else
+        {
+            FAIL("Expected to get a valid chunk but didn't.");
+        }
+    }
+
+    SECTION("returns nullopt if all chunks are full.")
+    {
+        mask.flip();
+        CHECK(page.firstFreeChunk() == std::nullopt);
     }
 }
