@@ -25,6 +25,7 @@
   THE SOFTWARE.
 */
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 
@@ -36,7 +37,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         char data[T_pageSize];
     };
 
-    constexpr const size_t maxChunksPerPage = 32U;
+    constexpr const size_t BitMaskSize = 32U;
+    constexpr const size_t maxChunksPerPage = BitMaskSize;
 
     template<size_t T_pageSize>
     struct PageInterpretation
@@ -67,7 +69,20 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ~PageInterpretation() = default;
     };
 
-    using BitMask = uint32_t;
+    using BitMask = std::bitset<BitMaskSize>;
+
+    inline auto firstFreeBit(BitMask const mask) -> size_t
+    {
+        // TODO(lenz): we are not yet caring for performance here...
+        for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
+        {
+            if(not mask[i])
+            {
+                return i;
+            }
+        }
+        return BitMaskSize;
+    }
 
     // TODO(lenz): Make this a struct of array (discussion with Rene, 2024-04-09)
     struct PageTableEntry // NOLINT(altera-struct-pack-align)
