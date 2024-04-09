@@ -44,13 +44,19 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         DataPage<T_pageSize>& data;
         size_t chunkSize{1U};
 
-        auto numChunks() -> size_t
+        [[nodiscard]] auto numChunks() const -> size_t
         {
             return T_pageSize / chunkSize;
         }
-        auto hasBitField() -> bool
+
+        [[nodiscard]] auto hasBitField() const -> bool
         {
             return numChunks() > maxChunksPerPage;
+        }
+
+        auto operator[](size_t index) const -> void*
+        {
+            return reinterpret_cast<void*>(&data.data[index * chunkSize]);
         }
 
         // these are supposed to be temporary objects, don't start messing around with them:
@@ -59,11 +65,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto operator=(PageInterpretation const&) -> PageInterpretation& = delete;
         auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
         ~PageInterpretation() = default;
-
-        auto operator[](size_t index) -> void*
-        {
-            return reinterpret_cast<void*>(&data.data[index * chunkSize]);
-        }
     };
 
     using BitMask = uint32_t;
@@ -95,12 +96,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return 4;
         }
 
-        [[nodiscard]] auto dataSize() const -> size_t
+        [[nodiscard]] constexpr static auto dataSize() -> size_t
         {
             return numPages() * T_pageSize;
         }
 
-        [[nodiscard]] auto metadataSize() const -> size_t
+        [[nodiscard]] constexpr static auto metadataSize() -> size_t
         {
             return numPages() * PageTableEntry::size();
         }

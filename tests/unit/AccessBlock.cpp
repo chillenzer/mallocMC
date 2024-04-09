@@ -42,12 +42,14 @@ TEST_CASE("AccessBlock")
 
     SECTION("has pages.")
     {
-        CHECK(accessBlock.pages);
+        // This check is mainly leftovers from TDD. Keep them as long as `pages` is public interface.
+        CHECK(accessBlock.pages); // NOLINT(*-array-*decay)
     }
 
     SECTION("has page table.")
     {
-        CHECK(accessBlock.pageTable);
+        // This check is mainly leftovers from TDD. Keep them as long as `pageTable` is public interface.
+        CHECK(accessBlock.pageTable); // NOLINT(*-array-*decay)
     }
 
     SECTION("knows its data size.")
