@@ -39,7 +39,7 @@ constexpr size_t pageSize = 1024U;
 
 TEST_CASE("PageInterpretation")
 {
-    uint32_t chunkSize = 32U;
+    uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
     DataPage<pageSize> data{};
     BitMask mask{};
     PageInterpretation<pageSize> page{data, chunkSize, mask};

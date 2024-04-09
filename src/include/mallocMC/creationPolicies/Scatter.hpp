@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -38,12 +39,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         char data[T_pageSize];
     };
 
-    constexpr const size_t BitMaskSize = 32U;
-    constexpr const size_t maxChunksPerPage = BitMaskSize;
+    constexpr const uint32_t BitMaskSize = 32U;
+    constexpr const uint32_t maxChunksPerPage = BitMaskSize;
 
     using BitMask = std::bitset<BitMaskSize>;
 
-    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> size_t
+    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> uint32_t
     {
         // TODO(lenz): we are not yet caring for performance here...
         for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
@@ -58,7 +59,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct Chunk
     {
-        size_t index;
+        uint32_t index;
         void* pointer;
     };
 
@@ -69,7 +70,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t& chunkSize;
         BitMask& topLevelMask;
 
-        [[nodiscard]] auto numChunks() const -> size_t
+        [[nodiscard]] auto numChunks() const -> uint32_t
         {
             return T_pageSize / chunkSize;
         }
@@ -102,6 +103,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ~PageInterpretation() = default;
     };
 
+
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    [[nodiscard]] auto ceilingDivision(T const numerator, T const denominator) -> T
+    {
+        return (numerator + (denominator - 1)) / denominator;
+    }
+
     // TODO(lenz): Make this a struct of array (discussion with Rene, 2024-04-09)
     struct PageTableEntry // NOLINT(altera-struct-pack-align)
     {
@@ -114,10 +122,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             _chunkSize = chunkSize;
         }
 
-        [[nodiscard]] static auto size() -> size_t
+        [[nodiscard]] static auto size() -> uint32_t
         {
-            // contains 3x 32-bit values
-            return 12; // NOLINT(*-magic-numbers)
+            // contains 2x 32-bit values + BitMaskSize
+            return 8U + ceilingDivision(BitMaskSize, 8U); // NOLINT(*-magic-numbers)
         }
     };
 
