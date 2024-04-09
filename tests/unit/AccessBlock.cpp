@@ -90,16 +90,19 @@ TEST_CASE("AccessBlock")
         *ptr = arbitraryValue;
         CHECK(*ptr == arbitraryValue);
     }
-}
-
-// The following is not yet implemented. Apparently, tags at SECTION level are not supported, so we split this off into
-// a separate TEST_CASE.
-TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("creates second memory somewhere else.")
     {
         CHECK(accessBlock.create(32U) != accessBlock.create(32U));
+    }
+}
+
+TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
+
+    SECTION("can create memory larger than page size.")
+    {
+        CHECK(accessBlock.create(2U * pageSize));
     }
 }

@@ -144,6 +144,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto create(uint32_t numBytes) -> void*
         {
+            if(numBytes > T_pageSize)
+            {
+                // Not yet implemented.
+                return nullptr;
+            }
             const auto page = choosePage(numBytes);
             const auto chunk = page.firstFreeChunk();
             if(chunk)
