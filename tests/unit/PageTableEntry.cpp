@@ -30,19 +30,22 @@
 
 using mallocMC::CreationPolicies::ScatterAlloc::PageTableEntry;
 
-TEST_CASE ("PageTableEntry") {
-  PageTableEntry pte;
+TEST_CASE("PageTableEntry")
+{
+    PageTableEntry pte;
 
-  SECTION ("knows its size.") {
-    CHECK(PageTableEntry::size() == 12);
-    CHECK(pte.size() == 12);
-  }
+    SECTION("knows its size.")
+    {
+        CHECK(PageTableEntry::size() == 12);
+        CHECK(pte.size() == 12);
+    }
 
-  SECTION ("gets initialised with chunk size.") {
-    uint32_t chunkSize = GENERATE(8,32,64);
-    pte.init(chunkSize);
-    CHECK(pte._chunkSize == chunkSize);
-    CHECK(pte._fillingLevel == 0u);
-    CHECK(pte._bitMask == 0u);
-  }
+    SECTION("gets initialised with chunk size.")
+    {
+        uint32_t chunkSize = GENERATE(8, 32, 64);
+        pte.init(chunkSize);
+        CHECK(pte._chunkSize == chunkSize);
+        CHECK(pte._fillingLevel == 0U);
+        CHECK(pte._bitMask == 0U);
+    }
 }

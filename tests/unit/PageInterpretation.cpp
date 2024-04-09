@@ -31,23 +31,31 @@
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::HasBitField;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+using std::distance;
 
-constexpr size_t pageSize=4096u;
-constexpr size_t chunkSize=32u;
+constexpr size_t pageSize = 4096U;
+constexpr size_t chunkSize = 32U;
 
-TEST_CASE ("PageInterpretation") {
-  DataPage<pageSize> data;
-  PageInterpretation<pageSize> page{data, chunkSize, HasBitField::No};
+TEST_CASE("PageInterpretation")
+{
+    DataPage<pageSize> data{};
+    PageInterpretation<pageSize> page{data, chunkSize, HasBitField::No};
 
-  SECTION ("refers to the same data it was created with.") {
-    CHECK(&data == &page.data);
-  }
+    SECTION("refers to the same data it was created with.")
+    {
+        CHECK(&data == &page.data);
+    }
 
-  SECTION ("returns start of data as first chunk.") {
-    CHECK(page[0] == &data);
-  }
+    SECTION("returns start of data as first chunk.")
+    {
+        CHECK(page[0] == &data);
+    }
 
-  SECTION ("returns successively increasing pointers when indexing.") {
-    for (auto i=0u; i<(pageSize/chunkSize) - 1; ++i) CHECK(page[i] < page[i+1]);
-  }
+    SECTION("jumps by chunkSize between indices.")
+    {
+        for(auto i = 0U; i < (pageSize / chunkSize) - 1; ++i)
+        {
+            CHECK(distance(reinterpret_cast<char*>(page[i]), reinterpret_cast<char*>(page[i + 1])) == chunkSize);
+        }
+    }
 }

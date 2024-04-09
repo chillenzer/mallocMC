@@ -25,71 +25,100 @@
   THE SOFTWARE.
 */
 
-namespace mallocMC::CreationPolicies::ScatterAlloc {
-  template<size_t T_pageSize>
-  struct DataPage {
-    char data[T_pageSize];
-  };
+#include <cstddef>
+#include <cstdint>
 
-  enum class HasBitField {Yes,No};
+namespace mallocMC::CreationPolicies::ScatterAlloc
+{
+    template<size_t T_pageSize>
+    struct DataPage
+    {
+        char data[T_pageSize];
+    };
 
-  template<size_t T_pageSize>
-  struct PageInterpretation {
-    DataPage<T_pageSize>& data;
-    size_t chunkSize{1u};
-    HasBitField hasBitField{HasBitField::No};
+    enum class HasBitField
+    {
+        Yes,
+        No
+    };
 
+    template<size_t T_pageSize>
+    struct PageInterpretation
+    {
+        DataPage<T_pageSize>& data;
+        size_t chunkSize{1U};
+        HasBitField hasBitField{HasBitField::No};
 
-    void* operator[](size_t i) {
-      return (void*)&data.data[i*chunkSize];
-    }
-  };
+        // these are supposed to be temporary objects, don't start messing around with them:
+        PageInterpretation(PageInterpretation const&) = delete;
+        PageInterpretation(PageInterpretation&&) = delete;
+        auto operator=(PageInterpretation const&) -> PageInterpretation& = delete;
+        auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
+        ~PageInterpretation() = default;
 
-  using BitMask = uint32_t;
+        auto operator[](size_t index) -> void*
+        {
+            return reinterpret_cast<void*>(&data.data[index * chunkSize]);
+        }
+    };
 
-  struct PageTableEntry{
-    BitMask _bitMask{};
-    uint32_t _chunkSize{0u};
-    uint32_t _fillingLevel{0u};
+    using BitMask = uint32_t;
 
-    void init(uint32_t chunkSize) {
-      _chunkSize=chunkSize;
-    }
+    // TODO(lenz): Make this a struct of array (discussion with Rene, 2024-04-09)
+    struct PageTableEntry // NOLINT(altera-struct-pack-align)
+    {
+        BitMask _bitMask{};
+        uint32_t _chunkSize{0U};
+        uint32_t _fillingLevel{0U};
 
-    static size_t size() {
-      return 12;
-    }
-  };
+        void init(uint32_t chunkSize)
+        {
+            _chunkSize = chunkSize;
+        }
 
-  template <size_t T_blockSize, size_t T_pageSize>
-  struct AccessBlock {
-    constexpr static size_t numPages() {
-      return 4;
-    }
+        static auto size() -> size_t
+        {
+            // contains 3x 32-bit values
+            return 12; // NOLINT(*-magic-numbers)
+        }
+    };
 
-    size_t dataSize() const {
-      return numPages() * T_pageSize;
-    }
+    template<size_t T_blockSize, size_t T_pageSize>
+    struct AccessBlock
+    {
+        [[nodiscard]] constexpr static auto numPages() -> size_t
+        {
+            return 4;
+        }
 
-    size_t metadataSize() const {
-      return numPages() * PageTableEntry::size();
-    }
+        [[nodiscard]] auto dataSize() const -> size_t
+        {
+            return numPages() * T_pageSize;
+        }
 
-    DataPage<T_pageSize> pages[numPages()];
-    PageTableEntry pageTable[numPages()];
+        [[nodiscard]] auto metadataSize() const -> size_t
+        {
+            return numPages() * PageTableEntry::size();
+        }
 
-    void* create(uint32_t numBytes) {
-      auto page = choosePage(numBytes);
-      return findChunkIn(page);
-    }
+        DataPage<T_pageSize> pages[numPages()];
+        PageTableEntry pageTable[numPages()];
+
+        auto create(uint32_t numBytes) -> void*
+        {
+            auto page = choosePage(numBytes);
+            return findChunkIn(page);
+        }
 
     private:
-    PageInterpretation<T_pageSize> choosePage(uint32_t numBytes) {
-      return {pages[0], numBytes, HasBitField::No};
-    }
+        auto choosePage(uint32_t numBytes) -> PageInterpretation<T_pageSize>
+        {
+            return {pages[0], numBytes, HasBitField::No};
+        }
 
-    void* findChunkIn(PageInterpretation<T_pageSize>& page) {
-      return page[0];
-    }
-  };
-}
+        auto findChunkIn(PageInterpretation<T_pageSize>& page) -> void*
+        {
+            return page[0];
+        }
+    };
+} // namespace mallocMC::CreationPolicies::ScatterAlloc
