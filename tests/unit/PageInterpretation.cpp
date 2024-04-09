@@ -26,6 +26,7 @@
 */
 
 #include <catch2/catch.hpp>
+#include <cstdint>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <optional>
 
@@ -35,10 +36,10 @@ using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
 constexpr size_t pageSize = 1024U;
-constexpr size_t chunkSize = 32U;
 
 TEST_CASE("PageInterpretation")
 {
+    uint32_t chunkSize = 32U;
     DataPage<pageSize> data{};
     BitMask mask{};
     PageInterpretation<pageSize> page{data, chunkSize, mask};
@@ -60,7 +61,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("detects correctly if page should contain bitfield.")
     {
-        size_t localChunkSize = GENERATE(8U, 128U);
+        uint32_t localChunkSize = GENERATE(8U, 128U);
         PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
         CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }

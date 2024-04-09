@@ -66,7 +66,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     struct PageInterpretation
     {
         DataPage<T_pageSize>& data;
-        size_t chunkSize{1U};
+        uint32_t& chunkSize;
         BitMask& topLevelMask;
 
         [[nodiscard]] auto numChunks() const -> size_t
