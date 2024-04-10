@@ -29,12 +29,18 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
 // bitmask, chunksize, filling level
 constexpr size_t pteSize = 4 + 4 + 4;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
+
+auto pageNumberOf(void* const pointer, DataPage<pageSize>* pages) -> size_t
+{
+    return std::distance(reinterpret_cast<char*>(pages), reinterpret_cast<char*>(pointer)) / pageSize;
+}
 
 TEST_CASE("AccessBlock")
 {
@@ -100,6 +106,13 @@ TEST_CASE("AccessBlock")
 TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
+
+    SECTION("creates memory of different chunk size in different pages.")
+    {
+        CHECK(
+            pageNumberOf(accessBlock.create(32U), accessBlock.pages)
+            != pageNumberOf(accessBlock.create(512U), accessBlock.pages));
+    }
 
     SECTION("can create memory larger than page size.")
     {
