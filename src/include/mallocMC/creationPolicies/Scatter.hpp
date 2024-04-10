@@ -78,6 +78,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t& _chunkSize;
         BitMask& _topLevelMask;
 
+        // this is needed to instantiate this in-place in an std::optional
         PageInterpretation<T_pageSize>(DataPage<T_pageSize>& data, uint32_t& chunkSize, BitMask& topLevelMask)
             : _data(data)
             , _chunkSize(chunkSize)
