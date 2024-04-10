@@ -39,8 +39,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         char data[T_pageSize];
     };
 
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, T const denominator) -> T
+    {
+        return (numerator + (denominator - 1)) / denominator;
+    }
+
+
     constexpr const uint32_t BitMaskSize = 32U;
     constexpr const uint32_t maxChunksPerPage = BitMaskSize;
+    constexpr const uint32_t pageTableEntrySize = 4U + 4U + ceilingDivision(BitMaskSize, 8U);
 
     using BitMask = std::bitset<BitMaskSize>;
 
@@ -104,29 +112,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     };
 
 
-    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, T const denominator) -> T
+    template<size_t T_numPages>
+    struct PageTable
     {
-        return (numerator + (denominator - 1)) / denominator;
-    }
-
-    // TODO(lenz): Make this a struct of array (discussion with Rene, 2024-04-09)
-    struct PageTableEntry // NOLINT(altera-struct-pack-align)
-    {
-        BitMask _bitMask{};
-        uint32_t _chunkSize{0U};
-        uint32_t _fillingLevel{0U};
-
-        void init(uint32_t chunkSize)
-        {
-            _chunkSize = chunkSize;
-        }
-
-        [[nodiscard]] constexpr static auto size() -> uint32_t
-        {
-            // contains 2x 32-bit values + BitMaskSize
-            return 8U + ceilingDivision(BitMaskSize, 8U); // NOLINT(*-magic-numbers)
-        }
+        BitMask _bitMasks[T_numPages]{};
+        uint32_t _chunkSizes[T_numPages]{};
+        uint32_t _fillingLevels[T_numPages]{};
     };
 
     template<size_t T_blockSize, size_t T_pageSize>
@@ -134,7 +125,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         [[nodiscard]] constexpr static auto numPages() -> size_t
         {
-            return T_blockSize / (T_pageSize + PageTableEntry::size());
+            return T_blockSize / (T_pageSize + pageTableEntrySize);
         }
 
         [[nodiscard]] constexpr static auto dataSize() -> size_t
@@ -144,11 +135,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] constexpr static auto metadataSize() -> size_t
         {
-            return numPages() * PageTableEntry::size();
+            return numPages() * pageTableEntrySize;
         }
 
         DataPage<T_pageSize> pages[numPages()];
-        PageTableEntry pageTable[numPages()];
+        PageTable<numPages()> pageTable;
 
         auto create(uint32_t numBytes) -> void*
         {
@@ -170,7 +161,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         auto choosePage(uint32_t numBytes) -> PageInterpretation<T_pageSize>
         {
-            return {pages[0], numBytes, pageTable[0]._bitMask};
+            return {pages[0], numBytes, pageTable._bitMasks[0]};
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

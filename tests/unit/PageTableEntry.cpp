@@ -28,24 +28,35 @@
 #include <catch2/catch.hpp>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
-using mallocMC::CreationPolicies::ScatterAlloc::PageTableEntry;
+using mallocMC::CreationPolicies::ScatterAlloc::PageTable;
 
-TEST_CASE("PageTableEntry")
+constexpr const size_t numPages = 3;
+
+TEST_CASE("PageTable")
 {
-    PageTableEntry pte;
+    PageTable<numPages> pageTable{};
 
-    SECTION("knows its size.")
+    SECTION("initialises bit masks to 0.")
     {
-        CHECK(PageTableEntry::size() == 12);
-        CHECK(pte.size() == 12);
+        for(auto const& bitMask : pageTable._bitMasks)
+        {
+            CHECK(bitMask == 0U);
+        }
     }
 
-    SECTION("gets initialised with chunk size.")
+    SECTION("initialises chunk sizes to 0.")
     {
-        uint32_t chunkSize = GENERATE(8, 32, 64);
-        pte.init(chunkSize);
-        CHECK(pte._chunkSize == chunkSize);
-        CHECK(pte._fillingLevel == 0U);
-        CHECK(pte._bitMask == 0U);
+        for(auto const& chunkSize : pageTable._chunkSizes)
+        {
+            CHECK(chunkSize == 0U);
+        }
+    }
+
+    SECTION("initialises filling levels to 0.")
+    {
+        for(auto const& fillingLevel : pageTable._fillingLevels)
+        {
+            CHECK(fillingLevel == 0U);
+        }
     }
 }

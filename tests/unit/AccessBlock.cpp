@@ -53,12 +53,6 @@ TEST_CASE("AccessBlock")
         CHECK(accessBlock.pages); // NOLINT(*-array-*decay)
     }
 
-    SECTION("has page table.")
-    {
-        // This check is mainly leftovers from TDD. Keep them as long as `pageTable` is public interface.
-        CHECK(accessBlock.pageTable); // NOLINT(*-array-*decay)
-    }
-
     SECTION("knows its data size.")
     {
         CHECK(accessBlock.dataSize() == numPages * pageSize);
@@ -71,7 +65,7 @@ TEST_CASE("AccessBlock")
 
     SECTION("stores page table after pages.")
     {
-        CHECK(reinterpret_cast<void*>(accessBlock.pages) < reinterpret_cast<void*>(accessBlock.pageTable));
+        CHECK(reinterpret_cast<void*>(accessBlock.pages) < reinterpret_cast<void*>(&accessBlock.pageTable));
     }
 
     SECTION("uses an allowed amount of memory.")
@@ -121,12 +115,6 @@ TEST_CASE("AccessBlock")
             pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0])
             == pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0]));
     }
-}
-
-// TODO(lenz): These are supposed to work at some point.
-TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("creates memory of different chunk size in different pages.")
     {
@@ -134,6 +122,12 @@ TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
             pageNumberOf(accessBlock.create(32U), &accessBlock.pages[0])
             != pageNumberOf(accessBlock.create(512U), &accessBlock.pages[0]));
     }
+}
+
+// TODO(lenz): These are supposed to work at some point.
+TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("fails to create memory if there's no page with fitting chunk size")
     {
