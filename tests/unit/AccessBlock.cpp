@@ -118,8 +118,8 @@ TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
     SECTION("creates memory of different chunk size in different pages.")
     {
         CHECK(
-            pageNumberOf(accessBlock.create(32U), accessBlock.pages)
-            != pageNumberOf(accessBlock.create(512U), accessBlock.pages));
+            pageNumberOf(accessBlock.create(32U), &accessBlock.pages[0])
+            != pageNumberOf(accessBlock.create(512U), &accessBlock.pages[0]));
     }
 
     SECTION("can create memory larger than page size.")
