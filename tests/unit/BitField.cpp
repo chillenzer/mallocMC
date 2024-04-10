@@ -28,6 +28,7 @@
 #include <catch2/catch.hpp>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
+using mallocMC::CreationPolicies::ScatterAlloc::BitFieldTree;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit;
@@ -70,5 +71,64 @@ TEST_CASE("BitMask")
     {
         mask.flip();
         CHECK(firstFreeBit(mask) == BitMaskSize);
+    }
+}
+
+TEST_CASE("BitFieldTree")
+{
+    SECTION("knows its first free bit with depth 0.")
+    {
+        BitMask mask{};
+        mask.flip();
+        uint32_t const index = GENERATE(0, 3);
+        mask.flip(index);
+
+        BitFieldTree tree{mask, nullptr, 0U};
+
+        CHECK(firstFreeBit(tree) == index);
+    }
+
+    SECTION("knows its first free bit with depth 1.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize]{};
+        uint32_t const firstLevelIndex = GENERATE(0, 3);
+        uint32_t const secondLevelIndex = GENERATE(2, 5);
+
+        head.flip();
+        head.flip(firstLevelIndex);
+        for(auto& bitMask : main)
+        {
+            bitMask.flip();
+        }
+        main[firstLevelIndex].flip(secondLevelIndex);
+
+        BitFieldTree tree{head, &(main[0]), 1U};
+
+        CHECK(firstFreeBit(tree) == firstLevelIndex * BitMaskSize + secondLevelIndex);
+    }
+
+    SECTION("knows its first free bit with depth 2.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
+        uint32_t const firstLevelIndex = GENERATE(0, 5);
+        uint32_t const secondLevelIndex = GENERATE(2, 7);
+        uint32_t const thirdLevelIndex = GENERATE(3, 11);
+
+        head.flip();
+        for(auto& bitMask : main)
+        {
+            bitMask.flip();
+        }
+
+        head.flip(firstLevelIndex);
+        main[firstLevelIndex].flip(secondLevelIndex);
+        main[BitMaskSize * (1 + firstLevelIndex) + secondLevelIndex].flip(thirdLevelIndex);
+
+        BitFieldTree tree{head, &(main[0]), 2U};
+
+        CHECK(
+            firstFreeBit(tree) == BitMaskSize * (BitMaskSize * firstLevelIndex + secondLevelIndex) + thirdLevelIndex);
     }
 }

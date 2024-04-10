@@ -71,7 +71,54 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         void* pointer;
     };
 
+    // Compute the volume (number of nodes) of a complete N-ary tree
+    template<uint32_t N>
+    inline auto treeVolume(uint32_t const depth) -> uint32_t
+    {
+        if(depth == 0)
+        {
+            return 1U;
+        }
+        return (N + 1) * treeVolume<BitMaskSize>(depth - 1);
+    }
+
     struct BitFieldTree
+    {
+        BitMask& head;
+        BitMask* levels{nullptr};
+        uint32_t depth{0U};
+
+        // Return a pointer to the level-th level in the tree.
+        auto operator[](uint32_t level) -> BitMask*
+        {
+            if(level == 0)
+            {
+                return &head;
+            }
+            // We subtract one because the head node is stored separately.
+            return &levels[treeVolume<BitMaskSize>(level - 1) - 1];
+        }
+    };
+
+    inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
+    {
+        auto result = firstFreeBit(tree.head);
+        for(uint32_t currentDepth = 0U; currentDepth < tree.depth; currentDepth++)
+        {
+            const auto index = firstFreeBit(tree[currentDepth + 1][result]);
+
+            // This means that we didn't find any free bit:
+            if(index == BitMaskSize)
+            {
+                return treeVolume<BitMaskSize>(tree.depth) - 1;
+            }
+
+            result = (BitMaskSize * result) + index;
+        }
+        return result;
+    }
+
+    struct BitFieldTreeDummy
     {
     };
 
@@ -115,11 +162,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-        [[nodiscard]] auto bitField() const -> std::optional<BitFieldTree>
+        [[nodiscard]] auto bitField() const -> std::optional<BitFieldTreeDummy>
         {
             if(numChunks() > BitMaskSize)
             {
-                return BitFieldTree{};
+                return BitFieldTreeDummy{};
             }
             return std::nullopt;
         }
