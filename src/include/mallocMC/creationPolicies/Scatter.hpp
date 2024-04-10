@@ -105,7 +105,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    [[nodiscard]] auto ceilingDivision(T const numerator, T const denominator) -> T
+    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, T const denominator) -> T
     {
         return (numerator + (denominator - 1)) / denominator;
     }
@@ -122,7 +122,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             _chunkSize = chunkSize;
         }
 
-        [[nodiscard]] static auto size() -> uint32_t
+        [[nodiscard]] constexpr static auto size() -> uint32_t
         {
             // contains 2x 32-bit values + BitMaskSize
             return 8U + ceilingDivision(BitMaskSize, 8U); // NOLINT(*-magic-numbers)
@@ -134,7 +134,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         [[nodiscard]] constexpr static auto numPages() -> size_t
         {
-            return 4;
+            return T_blockSize / (T_pageSize + PageTableEntry::size());
         }
 
         [[nodiscard]] constexpr static auto dataSize() -> size_t

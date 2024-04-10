@@ -82,6 +82,14 @@ TEST_CASE("AccessBlock")
     {
         CHECK(accessBlock.numPages() == numPages);
     }
+
+    SECTION("correctly reports a different number of pages.")
+    {
+        constexpr size_t localNumPages = 5U;
+        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
+        AccessBlock<localBlockSize, pageSize> localAccessBlock;
+        CHECK(localAccessBlock.numPages() == localNumPages);
+    }
     SECTION("does not create nullptr.")
     {
         // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is most
