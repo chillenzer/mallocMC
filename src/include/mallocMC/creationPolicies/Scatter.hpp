@@ -71,6 +71,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         void* pointer;
     };
 
+    struct BitFieldTree
+    {
+    };
+
     template<size_t T_pageSize>
     struct PageInterpretation
     {
@@ -107,6 +111,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(index < BitMaskSize)
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
+            }
+            return std::nullopt;
+        }
+
+        [[nodiscard]] auto bitField() const -> std::optional<BitFieldTree>
+        {
+            if(numChunks() > BitMaskSize)
+            {
+                return BitFieldTree{};
             }
             return std::nullopt;
         }

@@ -96,4 +96,16 @@ TEST_CASE("PageInterpretation")
         mask.flip();
         CHECK(page.firstFreeChunk() == std::nullopt);
     }
+
+    SECTION("recognises if there is no bit field at the end.")
+    {
+        CHECK(page.bitField() == std::nullopt);
+    }
+
+    SECTION("recognises if there is a bit field at the end.")
+    {
+        uint32_t localChunkSize = 4U;
+        PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
+        CHECK(localPage.bitField() != std::nullopt);
+    }
 }
