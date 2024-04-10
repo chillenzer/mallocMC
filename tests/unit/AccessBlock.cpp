@@ -122,12 +122,6 @@ TEST_CASE("AccessBlock")
             pageNumberOf(accessBlock.create(32U), &accessBlock.pages[0])
             != pageNumberOf(accessBlock.create(512U), &accessBlock.pages[0]));
     }
-}
-
-// TODO(lenz): These are supposed to work at some point.
-TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("fails to create memory if there's no page with fitting chunk size")
     {
@@ -141,6 +135,12 @@ TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
         localAccessBlock.create(chunkSize);
         CHECK(localAccessBlock.create(otherChunkSize) == nullptr);
     }
+}
+
+// TODO(lenz): These are supposed to work at some point.
+TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("can create memory larger than page size.")
     {

@@ -46,7 +46,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("refers to the same data it was created with.")
     {
-        CHECK(&data == &page.data);
+        CHECK(&data == &page._data);
     }
 
     SECTION("returns start of data as first chunk.")

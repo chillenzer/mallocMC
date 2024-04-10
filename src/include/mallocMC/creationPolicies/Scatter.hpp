@@ -74,13 +74,20 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<size_t T_pageSize>
     struct PageInterpretation
     {
-        DataPage<T_pageSize>& data;
-        uint32_t& chunkSize;
-        BitMask& topLevelMask;
+        DataPage<T_pageSize>& _data;
+        uint32_t& _chunkSize;
+        BitMask& _topLevelMask;
+
+        PageInterpretation<T_pageSize>(DataPage<T_pageSize>& data, uint32_t& chunkSize, BitMask& topLevelMask)
+            : _data(data)
+            , _chunkSize(chunkSize)
+            , _topLevelMask(topLevelMask)
+        {
+        }
 
         [[nodiscard]] auto numChunks() const -> uint32_t
         {
-            return T_pageSize / chunkSize;
+            return T_pageSize / _chunkSize;
         }
 
         [[nodiscard]] auto hasBitField() const -> bool
@@ -90,12 +97,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto operator[](size_t index) const -> void*
         {
-            return reinterpret_cast<void*>(&data.data[index * chunkSize]);
+            return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
-            auto const index = firstFreeBit(topLevelMask);
+            auto const index = firstFreeBit(_topLevelMask);
             if(index < BitMaskSize)
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
@@ -149,19 +156,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return nullptr;
             }
             const auto page = choosePage(numBytes);
-            const auto chunk = page.firstFreeChunk();
-            if(chunk)
+            if(page)
             {
-                page.topLevelMask[chunk.value().index].flip();
-                return chunk.value().pointer;
+                const auto chunk = page.value().firstFreeChunk();
+                if(chunk)
+                {
+                    page.value()._topLevelMask[chunk.value().index].flip();
+                    return chunk.value().pointer;
+                }
             }
             return nullptr;
         }
 
     private:
-        auto choosePage(uint32_t numBytes) -> PageInterpretation<T_pageSize>
+        auto choosePage(uint32_t numBytes) -> std::optional<PageInterpretation<T_pageSize>>
         {
-            return {pages[0], numBytes, pageTable._bitMasks[0]};
+            for(size_t i = 0; i < numPages(); ++i)
+            {
+                if(pageTable._chunkSizes[i] == numBytes || pageTable._chunkSizes[i] == 0U)
+                {
+                    pageTable._chunkSizes[i] = numBytes;
+                    return std::optional<PageInterpretation<T_pageSize>>{
+                        std::in_place_t{},
+                        pages[i],
+                        pageTable._chunkSizes[i],
+                        pageTable._bitMasks[i]};
+                }
+            }
+            return std::nullopt;
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
