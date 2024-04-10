@@ -26,6 +26,7 @@
 */
 
 #include <catch2/catch.hpp>
+#include <cstdint>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
@@ -90,6 +91,7 @@ TEST_CASE("AccessBlock")
         AccessBlock<localBlockSize, pageSize> localAccessBlock;
         CHECK(localAccessBlock.numPages() == localNumPages);
     }
+
     SECTION("does not create nullptr.")
     {
         // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is most
@@ -109,8 +111,19 @@ TEST_CASE("AccessBlock")
     {
         CHECK(accessBlock.create(32U) != accessBlock.create(32U));
     }
+
+    SECTION("creates memory with same chunk size in same page (if there is no other).")
+    {
+        constexpr size_t localNumPages = 1U;
+        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
+        AccessBlock<localBlockSize, pageSize> localAccessBlock;
+        CHECK(
+            pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0])
+            == pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0]));
+    }
 }
 
+// TODO(lenz): These are supposed to work at some point.
 TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
@@ -120,6 +133,19 @@ TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
         CHECK(
             pageNumberOf(accessBlock.create(32U), &accessBlock.pages[0])
             != pageNumberOf(accessBlock.create(512U), &accessBlock.pages[0]));
+    }
+
+    SECTION("fails to create memory if there's no page with fitting chunk size")
+    {
+        constexpr size_t localNumPages = 1U;
+        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
+        AccessBlock<localBlockSize, pageSize> localAccessBlock;
+        const uint32_t chunkSize = 32U;
+        const uint32_t otherChunkSize = 512U;
+
+        // set the chunk size of the only available page:
+        localAccessBlock.create(chunkSize);
+        CHECK(localAccessBlock.create(otherChunkSize) == nullptr);
     }
 
     SECTION("can create memory larger than page size.")
