@@ -25,39 +25,26 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter.hpp"
+#pragma once
 
-#include <catch2/catch.hpp>
+#include <type_traits>
 
-using mallocMC::CreationPolicies::ScatterAlloc::PageTable;
-
-constexpr const size_t numPages = 3;
-
-TEST_CASE("PageTable")
+namespace mallocMC
 {
-    PageTable<numPages> pageTable{};
-
-    SECTION("initialises bit masks to 0.")
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, T const denominator) -> T
     {
-        for(auto const& bitMask : pageTable._bitMasks)
-        {
-            CHECK(bitMask == 0U);
-        }
+        return (numerator + (denominator - 1)) / denominator;
     }
 
-    SECTION("initialises chunk sizes to 0.")
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    inline constexpr auto powInt(T const base, T const exp) -> T
     {
-        for(auto const& chunkSize : pageTable._chunkSizes)
+        auto result = 1U;
+        for(auto i = 0U; i < exp; ++i)
         {
-            CHECK(chunkSize == 0U);
+            result *= base;
         }
+        return result;
     }
-
-    SECTION("initialises filling levels to 0.")
-    {
-        for(auto const& fillingLevel : pageTable._fillingLevels)
-        {
-            CHECK(fillingLevel == 0U);
-        }
-    }
-}
+} // namespace mallocMC

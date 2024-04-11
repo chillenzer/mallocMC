@@ -25,9 +25,13 @@
   THE SOFTWARE.
 */
 
+// This is fine. We're mixing uint32_t and size_t from time to time to do manual index calculations. That will not
+// happen in production code.
+// NOLINTBEGIN(*widening*)
+#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+
 #include <catch2/catch.hpp>
 #include <cstdint>
-#include <mallocMC/creationPolicies/Scatter.hpp>
 #include <optional>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
@@ -195,3 +199,4 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         CHECK(page.bitFieldDepth() == 3U);
     }
 }
+// NOLINTEND(*widening*)

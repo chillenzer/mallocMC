@@ -27,7 +27,7 @@
 
 #include <catch2/catch.hpp>
 #include <cstdint>
-#include <mallocMC/creationPolicies/Scatter.hpp>
+#include <mallocMC/creationPolicies/Scatter/BitField.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldTree;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;

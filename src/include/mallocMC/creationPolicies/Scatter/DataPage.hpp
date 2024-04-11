@@ -25,39 +25,22 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter.hpp"
+#pragma once
 
-#include <catch2/catch.hpp>
+#include <cstddef>
+#include <cstdint>
 
-using mallocMC::CreationPolicies::ScatterAlloc::PageTable;
-
-constexpr const size_t numPages = 3;
-
-TEST_CASE("PageTable")
+namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    PageTable<numPages> pageTable{};
-
-    SECTION("initialises bit masks to 0.")
+    template<size_t T_pageSize>
+    struct DataPage
     {
-        for(auto const& bitMask : pageTable._bitMasks)
-        {
-            CHECK(bitMask == 0U);
-        }
-    }
+        char data[T_pageSize];
+    };
 
-    SECTION("initialises chunk sizes to 0.")
+    struct Chunk
     {
-        for(auto const& chunkSize : pageTable._chunkSizes)
-        {
-            CHECK(chunkSize == 0U);
-        }
-    }
-
-    SECTION("initialises filling levels to 0.")
-    {
-        for(auto const& fillingLevel : pageTable._fillingLevels)
-        {
-            CHECK(fillingLevel == 0U);
-        }
-    }
-}
+        uint32_t index{};
+        void* pointer{};
+    };
+} // namespace mallocMC::CreationPolicies::ScatterAlloc
