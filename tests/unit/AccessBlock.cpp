@@ -26,7 +26,9 @@
 */
 
 #include <catch2/catch.hpp>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
@@ -41,6 +43,23 @@ constexpr size_t blockSize = numPages * (pageSize + pteSize);
 auto pageNumberOf(void* const pointer, DataPage<pageSize>* pages) -> size_t
 {
     return std::distance(reinterpret_cast<char*>(pages), reinterpret_cast<char*>(pointer)) / pageSize;
+}
+
+template<size_t T_blockSize, size_t T_pageSize>
+void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
+{
+    for(auto& tmpChunkSize : accessBlock.pageTable._chunkSizes)
+    {
+        tmpChunkSize = chunkSize;
+    }
+    for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
+    {
+        fillingLevel = chunkSize;
+    }
+    for(auto& bitMask : accessBlock.pageTable._bitMasks)
+    {
+        bitMask.flip();
+    }
 }
 
 TEST_CASE("AccessBlock")
@@ -136,19 +155,33 @@ TEST_CASE("AccessBlock")
         CHECK(localAccessBlock.create(otherChunkSize) == nullptr);
     }
 
-    SECTION("fails to create memory if all pages have full filling level.")
+    SECTION("fails to create memory if all pages have full filling level even if bit masks are empty.")
     {
         constexpr const uint32_t chunkSize = 32U;
-        for(auto& tmpChunkSize : accessBlock.pageTable._chunkSizes)
+        fillWith(accessBlock, chunkSize);
+        for(auto& bitMask : accessBlock.pageTable._bitMasks)
         {
-            tmpChunkSize = chunkSize;
-        }
-        for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
-        {
-            // fully filled
-            fillingLevel = chunkSize;
+            // reverse previous filling
+            bitMask.flip();
         }
         CHECK(accessBlock.create(chunkSize) == nullptr);
+    }
+
+    SECTION("finds last remaining chunk for creation without hierarchical bit fields.")
+    {
+        constexpr const uint32_t chunkSize = 32U;
+        fillWith(accessBlock, chunkSize);
+
+        const uint32_t index1 = GENERATE(0, 1, 2, 3);
+        const uint32_t index2 = GENERATE(0, 1, 2, 3);
+        accessBlock.pageTable._fillingLevels[index1] -= 1;
+        accessBlock.pageTable._bitMasks[index1].flip(index2);
+
+        CHECK(
+            std::distance(
+                reinterpret_cast<char*>(&accessBlock.pages[0]),
+                reinterpret_cast<char*>(accessBlock.create(chunkSize)))
+            == index1 * pageSize + index2 * chunkSize);
     }
 }
 
