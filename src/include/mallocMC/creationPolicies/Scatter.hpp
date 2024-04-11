@@ -75,11 +75,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<uint32_t N>
     inline auto treeVolume(uint32_t const depth) -> uint32_t
     {
-        if(depth == 0)
+        // Analytical formula: Sum_n=0^depth N^n = (N^(depth+1) - 1) / (N - 1)
+        auto result = 1;
+        for(auto currentDepth = 0U; currentDepth < depth + 1; ++currentDepth)
         {
-            return 1U;
+            result *= N;
         }
-        return (N + 1) * treeVolume<BitMaskSize>(depth - 1);
+        return (result - 1) / (N - 1);
     }
 
     struct BitFieldTree
@@ -103,6 +105,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
         auto result = firstFreeBit(tree.head);
+        // This means that we didn't find any free bit:
+        if(result == BitMaskSize)
+        {
+            return treeVolume<BitMaskSize>(tree.depth) - 1;
+        }
+
         for(uint32_t currentDepth = 0U; currentDepth < tree.depth; currentDepth++)
         {
             const auto index = firstFreeBit(tree[currentDepth + 1][result]);

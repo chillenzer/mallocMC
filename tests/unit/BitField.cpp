@@ -26,12 +26,14 @@
 */
 
 #include <catch2/catch.hpp>
+#include <cstdint>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldTree;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit;
+using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
 TEST_CASE("BitMask")
 {
@@ -72,6 +74,14 @@ TEST_CASE("BitMask")
         mask.flip();
         CHECK(firstFreeBit(mask) == BitMaskSize);
     }
+}
+
+TEST_CASE("treeVolume")
+{
+    constexpr uint32_t numChildren = 3;
+    const uint32_t depth = GENERATE(0, 1, 2, 3, 4, 5, 6, 7);
+    const uint32_t expected[] = {1, 4, 13, 40, 121, 364, 1093, 3280};
+    CHECK(treeVolume<numChildren>(depth) == expected[depth]);
 }
 
 TEST_CASE("BitFieldTree")
