@@ -30,6 +30,7 @@
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
+#include <cstdint>
 #include <optional>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -65,12 +66,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         DataPage<T_pageSize>& _data;
         uint32_t& _chunkSize;
         BitMask& _topLevelMask;
+        uint32_t& _fillingLevel;
 
         // this is needed to instantiate this in-place in an std::optional
-        PageInterpretation<T_pageSize>(DataPage<T_pageSize>& data, uint32_t& chunkSize, BitMask& topLevelMask)
+        PageInterpretation<T_pageSize>(
+            DataPage<T_pageSize>& data,
+            uint32_t& chunkSize,
+            BitMask& topLevelMask,
+            uint32_t& fillingLevel)
             : _data(data)
             , _chunkSize(chunkSize)
             , _topLevelMask(topLevelMask)
+            , _fillingLevel(fillingLevel)
         {
         }
 

@@ -81,6 +81,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 if(chunk)
                 {
                     page.value()._topLevelMask[chunk.value().index].flip();
+                    ++page.value()._fillingLevel;
                     return chunk.value().pointer;
                 }
             }
@@ -99,7 +100,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                         std::in_place_t{},
                         pages[i],
                         pageTable._chunkSizes[i],
-                        pageTable._bitMasks[i]};
+                        pageTable._bitMasks[i],
+                        pageTable._fillingLevels[i]};
                 }
             }
             return std::nullopt;
@@ -110,9 +112,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return (pageTable._chunkSizes[index] == numBytes
                     && pageTable._fillingLevels[index]
                         < PageInterpretation<
-                              T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index]}
+                              T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index], pageTable._fillingLevels[index]}
                               .numChunks())
                 || pageTable._chunkSizes[index] == 0U;
+        }
+
+    public:
+        auto destroy(void* const pointer) -> void
+        {
+            std::fill(std::begin(pageTable._bitMasks), std::end(pageTable._bitMasks), 0U);
+            std::fill(std::begin(pageTable._fillingLevels), std::end(pageTable._fillingLevels), 0U);
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

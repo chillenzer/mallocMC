@@ -25,6 +25,7 @@
   THE SOFTWARE.
 */
 
+#include <algorithm>
 #include <catch2/catch.hpp>
 #include <cstddef>
 #include <cstdint>
@@ -57,7 +58,7 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     }
     auto maxFillingLevel
         = PageInterpretation<
-              T_pageSize>{accessBlock.pages[0], accessBlock.pageTable._chunkSizes[0], accessBlock.pageTable._bitMasks[0]}
+              T_pageSize>{accessBlock.pages[0], accessBlock.pageTable._chunkSizes[0], accessBlock.pageTable._bitMasks[0], accessBlock.pageTable._fillingLevels[0]}
               .numChunks();
     for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
     {
@@ -69,7 +70,7 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     }
 }
 
-TEST_CASE("AccessBlock")
+TEST_CASE("AccessBlock (reporting)")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
 
@@ -111,6 +112,11 @@ TEST_CASE("AccessBlock")
         AccessBlock<localBlockSize, pageSize> localAccessBlock;
         CHECK(localAccessBlock.numPages() == localNumPages);
     }
+}
+
+TEST_CASE("AccessBlock (creating)")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("does not create nullptr if memory is available.")
     {
@@ -213,7 +219,8 @@ TEST_CASE("AccessBlock")
         PageInterpretation<pageSize> page(
             accessBlock.pages[index1],
             accessBlock.pageTable._chunkSizes[index1],
-            accessBlock.pageTable._bitMasks[index1]);
+            accessBlock.pageTable._bitMasks[index1],
+            accessBlock.pageTable._fillingLevels[index1]);
         auto bitField = page.bitField();
         for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField.depth) - 1; ++i)
         {
@@ -228,15 +235,77 @@ TEST_CASE("AccessBlock")
             std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
             == static_cast<long int>(index1 * pageSize + (index2 * BitMaskSize + index3) * chunkSize));
     }
+
+    SECTION("increases filling level upon creation.")
+    {
+        REQUIRE(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                0U)
+            == accessBlock.numPages());
+        accessBlock.create(32U);
+        CHECK(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                1U)
+            == 1U);
+    }
 }
 
 // TODO(lenz): These are supposed to work at some point.
-TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
+TEST_CASE("AccessBlock (creating) (failing)", "[!shouldfail]")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("can create memory larger than page size.")
     {
         CHECK(accessBlock.create(2U * pageSize));
+    }
+}
+
+TEST_CASE("AccessBlock (destroying)")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
+
+    SECTION("destroys a previously created pointer.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        void* pointer = accessBlock.create(numBytes);
+        accessBlock.destroy(pointer);
+        SUCCEED("Just check that you can do this at all.");
+    }
+
+    SECTION("resets bits upon destroy without hierarchy.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        void* pointer = accessBlock.create(numBytes);
+        REQUIRE(
+            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
+            < accessBlock.numPages());
+        accessBlock.destroy(pointer);
+        CHECK(
+            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
+            == accessBlock.numPages());
+    }
+
+    SECTION("decreases filling level upon destroy without hierarchy.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        void* pointer = accessBlock.create(numBytes);
+        REQUIRE(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                0U)
+            < accessBlock.numPages());
+        accessBlock.destroy(pointer);
+        CHECK(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                0U)
+            == accessBlock.numPages());
     }
 }

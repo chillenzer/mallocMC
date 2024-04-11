@@ -48,7 +48,8 @@ TEST_CASE("PageInterpretation")
     uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
     DataPage<pageSize> data{};
     BitMask mask{};
-    PageInterpretation<pageSize> page{data, chunkSize, mask};
+    uint32_t fillingLevel{};
+    PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
     SECTION("refers to the same data it was created with.")
     {
@@ -68,7 +69,7 @@ TEST_CASE("PageInterpretation")
     SECTION("detects correctly if page should contain bitfield.")
     {
         uint32_t localChunkSize = GENERATE(8U, 128U);
-        PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
+        PageInterpretation<pageSize> localPage{data, localChunkSize, mask, fillingLevel};
         CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }
 
@@ -112,7 +113,7 @@ TEST_CASE("PageInterpretation")
     SECTION("recognises if there is a bit field at the end.")
     {
         uint32_t localChunkSize = 1U;
-        PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
+        PageInterpretation<pageSize> localPage{data, localChunkSize, mask, fillingLevel};
         CHECK(localPage.bitField().levels != nullptr);
         CHECK(localPage.bitField().depth == 1U);
     }
@@ -120,9 +121,10 @@ TEST_CASE("PageInterpretation")
 
 TEST_CASE("PageInterpretation.bitFieldDepth")
 {
+    uint32_t fillingLevel{};
     constexpr uint32_t const BitMaskBytes = BitMaskSize / 8U;
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr const size_t pageSize
+    constexpr size_t const pageSize
         = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * BitMaskBytes;
     DataPage<pageSize> data{};
     BitMask mask{};
@@ -131,7 +133,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -140,7 +142,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize - 1;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -150,7 +152,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -160,7 +162,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -171,7 +173,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -182,7 +184,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize
             = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 2U);
     }
@@ -194,7 +196,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes
                               - BitMaskSize * BitMaskSize * BitMaskSize * BitMaskBytes)
             / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask};
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 3U);
     }
