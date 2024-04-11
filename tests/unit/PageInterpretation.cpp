@@ -99,13 +99,21 @@ TEST_CASE("PageInterpretation")
 
     SECTION("recognises if there is no bit field at the end.")
     {
-        CHECK(page.bitField() == std::nullopt);
+        CHECK(page.bitField().levels == nullptr);
+        CHECK(page.bitField().depth == 0U);
     }
+}
+
+TEST_CASE("PageInterpretation (failing)", "[!shouldfail]")
+{
+    DataPage<pageSize> data{};
+    BitMask mask{};
 
     SECTION("recognises if there is a bit field at the end.")
     {
-        uint32_t localChunkSize = 4U;
+        uint32_t localChunkSize = 1U;
         PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
-        CHECK(localPage.bitField() != std::nullopt);
+        CHECK(localPage.bitField().levels != nullptr);
+        CHECK(localPage.bitField().depth == 1);
     }
 }

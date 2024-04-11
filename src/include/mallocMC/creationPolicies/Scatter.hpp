@@ -86,7 +86,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct BitFieldTree
     {
-        BitMask& head;
+        BitMask& head; // NOLINT(*ref*member*)
         BitMask* levels{nullptr};
         uint32_t depth{0U};
 
@@ -125,10 +125,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
         return result;
     }
-
-    struct BitFieldTreeDummy
-    {
-    };
 
     template<size_t T_pageSize>
     struct PageInterpretation
@@ -170,13 +166,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-        [[nodiscard]] auto bitField() const -> std::optional<BitFieldTreeDummy>
+        [[nodiscard]] auto bitField() const -> BitFieldTree
         {
-            if(numChunks() > BitMaskSize)
-            {
-                return BitFieldTreeDummy{};
-            }
-            return std::nullopt;
+            return BitFieldTree{_topLevelMask, bitFieldStart(), bitFieldDepth()};
+        }
+        [[nodiscard]] auto bitFieldStart() const -> BitMask*
+        {
+            return nullptr;
+        }
+        [[nodiscard]] auto bitFieldDepth() const -> uint32_t
+        {
+            return 0U;
         }
 
         // these are supposed to be temporary objects, don't start messing around with them:
