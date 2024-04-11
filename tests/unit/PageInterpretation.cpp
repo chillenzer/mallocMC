@@ -31,14 +31,16 @@
 #include <optional>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 using std::distance;
 
-constexpr size_t pageSize = 1024U;
 
 TEST_CASE("PageInterpretation")
 {
+    constexpr size_t pageSize = 1024U;
     uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
     DataPage<pageSize> data{};
     BitMask mask{};
@@ -102,18 +104,94 @@ TEST_CASE("PageInterpretation")
         CHECK(page.bitField().levels == nullptr);
         CHECK(page.bitField().depth == 0U);
     }
-}
-
-TEST_CASE("PageInterpretation (failing)", "[!shouldfail]")
-{
-    DataPage<pageSize> data{};
-    BitMask mask{};
 
     SECTION("recognises if there is a bit field at the end.")
     {
         uint32_t localChunkSize = 1U;
         PageInterpretation<pageSize> localPage{data, localChunkSize, mask};
         CHECK(localPage.bitField().levels != nullptr);
-        CHECK(localPage.bitField().depth == 1);
+        CHECK(localPage.bitField().depth == 1U);
+    }
+}
+
+TEST_CASE("PageInterpretation.bitFieldDepth")
+{
+    constexpr uint32_t const BitMaskBytes = BitMaskSize / 8U;
+    // Such that we can fit up to four levels of hierarchy in there:
+    constexpr const size_t pageSize
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * BitMaskBytes;
+    DataPage<pageSize> data{};
+    BitMask mask{};
+
+    SECTION("knows correct bit field depths for depth 0.")
+    {
+        uint32_t const numChunks = BitMaskSize;
+        uint32_t chunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 0U);
+    }
+
+    SECTION("knows correct bit field depths for depth 0 with less chunks.")
+    {
+        uint32_t const numChunks = BitMaskSize - 1;
+        uint32_t chunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 0U);
+    }
+
+    SECTION("knows correct bit field depths for depth 1.")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize;
+        // choose chunk size such that bit field fits behind it:
+        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 1U);
+    }
+
+    SECTION("knows correct bit field depths for depth 1 with less chunks.")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
+        // choose chunk size such that bit field fits behind it:
+        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 1U);
+    }
+
+    SECTION(
+        "knows correct bit field depths for depth 1 with slightly too big chunks such that we get less than expected.")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
+        // choose chunk size such that bit field fits behind it:
+        uint32_t chunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 1U);
+    }
+
+    SECTION("knows correct bit field depths for depth 2.")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize;
+        // choose chunk size such that bit field fits behind it:
+        uint32_t chunkSize
+            = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes) / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 2U);
+    }
+
+    SECTION("knows correct bit field depths for depth 3.")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize;
+        // choose chunk size such that bit field fits behind it:
+        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes
+                              - BitMaskSize * BitMaskSize * BitMaskSize * BitMaskBytes)
+            / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask};
+
+        CHECK(page.bitFieldDepth() == 3U);
     }
 }

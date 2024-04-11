@@ -73,7 +73,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     // Compute the volume (number of nodes) of a complete N-ary tree
     template<uint32_t N>
-    inline auto treeVolume(uint32_t const depth) -> uint32_t
+    inline constexpr auto treeVolume(uint32_t const depth) -> uint32_t
     {
         // Analytical formula: Sum_n=0^depth N^n = (N^(depth+1) - 1) / (N - 1)
         auto result = 1;
@@ -102,7 +102,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-    inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
+    inline constexpr auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
         auto result = firstFreeBit(tree.head);
         // This means that we didn't find any free bit:
@@ -126,6 +126,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return result;
     }
 
+    // Computing the number of chunks is not quite trivial: We have to take into account the space for the hierarchical
+    // bit field at the end of the page, the size of which again depends on the number of chunks. So, we kind of solve
+    // this self-consistently by making a naive estimate and checking if
+    inline constexpr auto selfConsistentNumChunks(
+        size_t const pageSize,
+        uint32_t const chunkSize,
+        uint32_t const depth = 0U) -> uint32_t
+    {
+        auto naiveEstimate = pageSize / chunkSize;
+        auto bitsAvailable = BitMaskSize;
+        for(uint32_t currentDepth = 0U; currentDepth < depth; ++currentDepth)
+        {
+            bitsAvailable *= BitMaskSize;
+        }
+        if(naiveEstimate <= bitsAvailable)
+        {
+            return naiveEstimate;
+        }
+
+        // otherwise let's check how the situation looks with the next level of bit field hierarchy added:
+        auto numBitsInNextLevel = bitsAvailable * BitMaskSize;
+        // we count memory in bytes not bits:
+        auto bitFieldSpaceRequirement = numBitsInNextLevel / 8U;
+        auto remainingPageSize = pageSize - bitFieldSpaceRequirement;
+        auto newEstimate = remainingPageSize / chunkSize;
+        return selfConsistentNumChunks(remainingPageSize, chunkSize, depth + 1);
+    }
+
     template<size_t T_pageSize>
     struct PageInterpretation
     {
@@ -143,12 +171,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto numChunks() const -> uint32_t
         {
-            return T_pageSize / _chunkSize;
+            return selfConsistentNumChunks(T_pageSize, _chunkSize);
         }
 
         [[nodiscard]] auto hasBitField() const -> bool
         {
-            return numChunks() > maxChunksPerPage;
+            return bitFieldDepth() > 0;
         }
 
         [[nodiscard]] auto operator[](size_t index) const -> void*
@@ -170,13 +198,29 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             return BitFieldTree{_topLevelMask, bitFieldStart(), bitFieldDepth()};
         }
+
         [[nodiscard]] auto bitFieldStart() const -> BitMask*
         {
-            return nullptr;
+            if(!hasBitField())
+            {
+                return nullptr;
+            }
+            auto BitMaskBytes = BitMaskSize / 8U;
+            return reinterpret_cast<BitMask*>(
+                &_data.data[T_pageSize - (treeVolume<BitMaskSize>(bitFieldDepth()) - 1) * BitMaskBytes]);
         }
+
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t
         {
-            return 0U;
+            // We subtract one such that numChunks() == BitMaskSize yields 0.
+            auto tmp = (numChunks() - 1) / BitMaskSize;
+            uint32_t counter = 0U;
+            while(tmp > 0)
+            {
+                counter++;
+                tmp /= BitMaskSize;
+            }
+            return counter;
         }
 
         // these are supposed to be temporary objects, don't start messing around with them:
@@ -185,6 +229,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto operator=(PageInterpretation const&) -> PageInterpretation& = delete;
         auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
         ~PageInterpretation() = default;
+    };
+
+    struct Tmp
+    {
+        size_t pageSize{};
+        uint32_t chunkSize{};
+        uint32_t depth{};
     };
 
 
@@ -258,7 +309,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
         {
             return (pageTable._chunkSizes[index] == numBytes
-                    && pageTable._fillingLevels[index] < pageTable._chunkSizes[index])
+                    && pageTable._fillingLevels[index]
+                        < PageInterpretation<
+                              T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index]}
+                              .numChunks())
                 || pageTable._chunkSizes[index] == 0U;
         }
     };

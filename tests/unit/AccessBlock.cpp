@@ -32,7 +32,10 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
+using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
@@ -52,9 +55,13 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     {
         tmpChunkSize = chunkSize;
     }
+    auto maxFillingLevel
+        = PageInterpretation<
+              T_pageSize>{accessBlock.pages[0], accessBlock.pageTable._chunkSizes[0], accessBlock.pageTable._bitMasks[0]}
+              .numChunks();
     for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
     {
-        fillingLevel = chunkSize;
+        fillingLevel = maxFillingLevel;
     }
     for(auto& bitMask : accessBlock.pageTable._bitMasks)
     {
@@ -189,6 +196,39 @@ TEST_CASE("AccessBlock")
 TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
+
+    SECTION("finds last remaining chunk for creation with hierarchical bit fields.")
+    {
+        constexpr const uint32_t chunkSize = 1U;
+        fillWith(accessBlock, chunkSize);
+
+        const uint32_t index1 = GENERATE(0, 1, 2, 3);
+        const uint32_t index2 = GENERATE(0, 1, 2, 3);
+        const uint32_t index3 = GENERATE(0, 1, 2, 3);
+        accessBlock.pageTable._fillingLevels[index1] -= 1;
+        accessBlock.pageTable._bitMasks[index1].flip(index2);
+
+        // We are a bit sloppy here: Technically speaking, we would have to flip the hierarchical bit fields in all
+        // pages for a consistent state. But as we have already flipped all the high-level bits these pages won't be
+        // considered anyways.
+        PageInterpretation<pageSize> page(
+            accessBlock.pages[index1],
+            accessBlock.pageTable._chunkSizes[index1],
+            accessBlock.pageTable._bitMasks[index1]);
+        auto bitField = page.bitField();
+        for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField.depth) - 1; ++i)
+        {
+            bitField.levels[i].flip();
+        }
+        bitField[bitField.depth - 1][index2].flip(index3);
+
+
+        CHECK(
+            std::distance(
+                reinterpret_cast<char*>(&accessBlock.pages[0]),
+                reinterpret_cast<char*>(accessBlock.create(chunkSize)))
+            == index1 * pageSize + (index2 * BitMaskSize + index3) * chunkSize);
+    }
 
     SECTION("can create memory larger than page size.")
     {
