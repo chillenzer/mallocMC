@@ -86,7 +86,7 @@ TEST_CASE("AccessBlock")
         CHECK(localAccessBlock.numPages() == localNumPages);
     }
 
-    SECTION("does not create nullptr.")
+    SECTION("does not create nullptr if memory is available.")
     {
         // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is most
         // likely not exactly the nullptr. We just leave this in as it currently doesn't hurt anybody to keep it.
@@ -134,6 +134,21 @@ TEST_CASE("AccessBlock")
         // set the chunk size of the only available page:
         localAccessBlock.create(chunkSize);
         CHECK(localAccessBlock.create(otherChunkSize) == nullptr);
+    }
+
+    SECTION("fails to create memory if all pages have full filling level.")
+    {
+        constexpr const uint32_t chunkSize = 32U;
+        for(auto& tmpChunkSize : accessBlock.pageTable._chunkSizes)
+        {
+            tmpChunkSize = chunkSize;
+        }
+        for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
+        {
+            // fully filled
+            fillingLevel = chunkSize;
+        }
+        CHECK(accessBlock.create(chunkSize) == nullptr);
     }
 }
 

@@ -242,7 +242,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             for(size_t i = 0; i < numPages(); ++i)
             {
-                if(pageTable._chunkSizes[i] == numBytes || pageTable._chunkSizes[i] == 0U)
+                if(thisPageIsAppropriate(i, numBytes))
                 {
                     pageTable._chunkSizes[i] = numBytes;
                     return std::optional<PageInterpretation<T_pageSize>>{
@@ -253,6 +253,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 }
             }
             return std::nullopt;
+        }
+
+        auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
+        {
+            return (pageTable._chunkSizes[index] == numBytes
+                    && pageTable._fillingLevels[index] < pageTable._chunkSizes[index])
+                || pageTable._chunkSizes[index] == 0U;
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
