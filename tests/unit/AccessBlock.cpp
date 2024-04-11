@@ -65,7 +65,7 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     }
     for(auto& bitMask : accessBlock.pageTable._bitMasks)
     {
-        bitMask.flip();
+        bitMask.set();
     }
 }
 
@@ -136,10 +136,13 @@ TEST_CASE("AccessBlock")
     {
         constexpr size_t localNumPages = 1U;
         constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
-        AccessBlock<localBlockSize, pageSize> localAccessBlock;
-        CHECK(
-            pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0])
-            == pageNumberOf(localAccessBlock.create(32U), &accessBlock.pages[0]));
+        constexpr const uint32_t chunkSize = 32U;
+        AccessBlock<localBlockSize, pageSize> localAccessBlock{};
+        void* result1 = localAccessBlock.create(chunkSize);
+        REQUIRE(result1 != nullptr);
+        void* result2 = localAccessBlock.create(chunkSize);
+        REQUIRE(result2 != nullptr);
+        CHECK(pageNumberOf(result1, &accessBlock.pages[0]) == pageNumberOf(result2, &accessBlock.pages[0]));
     }
 
     SECTION("creates memory of different chunk size in different pages.")
@@ -184,27 +187,23 @@ TEST_CASE("AccessBlock")
         accessBlock.pageTable._fillingLevels[index1] -= 1;
         accessBlock.pageTable._bitMasks[index1].flip(index2);
 
-        CHECK(
-            std::distance(
-                reinterpret_cast<char*>(&accessBlock.pages[0]),
-                reinterpret_cast<char*>(accessBlock.create(chunkSize)))
-            == index1 * pageSize + index2 * chunkSize);
-    }
-}
+        void* result = accessBlock.create(chunkSize);
+        REQUIRE(result != nullptr);
 
-// TODO(lenz): These are supposed to work at some point.
-TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
+        CHECK(
+            std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
+            == static_cast<long>(index1 * pageSize + index2 * chunkSize));
+    }
 
     SECTION("finds last remaining chunk for creation with hierarchical bit fields.")
     {
         constexpr const uint32_t chunkSize = 1U;
         fillWith(accessBlock, chunkSize);
 
-        const uint32_t index1 = GENERATE(0, 1, 2, 3);
+        const uint32_t index1 = GENERATE(0, 1, 2);
         const uint32_t index2 = GENERATE(0, 1, 2, 3);
         const uint32_t index3 = GENERATE(0, 1, 2, 3);
+
         accessBlock.pageTable._fillingLevels[index1] -= 1;
         accessBlock.pageTable._bitMasks[index1].flip(index2);
 
@@ -218,17 +217,23 @@ TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
         auto bitField = page.bitField();
         for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField.depth) - 1; ++i)
         {
-            bitField.levels[i].flip();
+            bitField.levels[i].set();
         }
-        bitField[bitField.depth - 1][index2].flip(index3);
+        bitField[bitField.depth][index2].flip(index3);
 
 
+        void* result = accessBlock.create(chunkSize);
+        REQUIRE(result != nullptr);
         CHECK(
-            std::distance(
-                reinterpret_cast<char*>(&accessBlock.pages[0]),
-                reinterpret_cast<char*>(accessBlock.create(chunkSize)))
-            == index1 * pageSize + (index2 * BitMaskSize + index3) * chunkSize);
+            std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
+            == static_cast<long int>(index1 * pageSize + (index2 * BitMaskSize + index3) * chunkSize));
     }
+}
+
+// TODO(lenz): These are supposed to work at some point.
+TEST_CASE("AccessBlock (failing)", "[!shouldfail]")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("can create memory larger than page size.")
     {

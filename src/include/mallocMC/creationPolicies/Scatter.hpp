@@ -52,7 +52,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     using BitMask = std::bitset<BitMaskSize>;
 
-    [[nodiscard]] inline auto firstFreeBit(BitMask const mask) -> uint32_t
+    [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask) -> uint32_t
     {
         // TODO(lenz): we are not yet caring for performance here...
         for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
@@ -70,18 +70,24 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t index;
         void* pointer;
     };
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    inline constexpr auto powInt(T const base, T const exp) -> T
+    {
+        auto result = 1U;
+        for(auto i = 0U; i < exp; ++i)
+        {
+            result *= base;
+        }
+        return result;
+    }
+
 
     // Compute the volume (number of nodes) of a complete N-ary tree
     template<uint32_t N>
     inline constexpr auto treeVolume(uint32_t const depth) -> uint32_t
     {
         // Analytical formula: Sum_n=0^depth N^n = (N^(depth+1) - 1) / (N - 1)
-        auto result = 1;
-        for(auto currentDepth = 0U; currentDepth < depth + 1; ++currentDepth)
-        {
-            result *= N;
-        }
-        return (result - 1) / (N - 1);
+        return (powInt(N, depth + 1) - 1) / (N - 1);
     }
 
     struct BitFieldTree
@@ -104,11 +110,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline constexpr auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
+        // this is one past the end of the chunks, so no valid index:
+        auto noFreeBitFound = powInt(BitMaskSize, tree.depth + 1);
+
         auto result = firstFreeBit(tree.head);
         // This means that we didn't find any free bit:
         if(result == BitMaskSize)
         {
-            return treeVolume<BitMaskSize>(tree.depth) - 1;
+            return noFreeBitFound;
         }
 
         for(uint32_t currentDepth = 0U; currentDepth < tree.depth; currentDepth++)
@@ -118,7 +127,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // This means that we didn't find any free bit:
             if(index == BitMaskSize)
             {
-                return treeVolume<BitMaskSize>(tree.depth) - 1;
+                return noFreeBitFound;
             }
 
             result = (BitMaskSize * result) + index;
@@ -135,11 +144,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t const depth = 0U) -> uint32_t
     {
         auto naiveEstimate = pageSize / chunkSize;
-        auto bitsAvailable = BitMaskSize;
-        for(uint32_t currentDepth = 0U; currentDepth < depth; ++currentDepth)
-        {
-            bitsAvailable *= BitMaskSize;
-        }
+        auto bitsAvailable = powInt(BitMaskSize, depth + 1);
         if(naiveEstimate <= bitsAvailable)
         {
             return naiveEstimate;
@@ -148,9 +153,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         // otherwise let's check how the situation looks with the next level of bit field hierarchy added:
         auto numBitsInNextLevel = bitsAvailable * BitMaskSize;
         // we count memory in bytes not bits:
-        auto bitFieldSpaceRequirement = numBitsInNextLevel / 8U;
+        auto bitFieldSpaceRequirement = numBitsInNextLevel / 8U; // NOLINT(*magic*)
         auto remainingPageSize = pageSize - bitFieldSpaceRequirement;
-        auto newEstimate = remainingPageSize / chunkSize;
         return selfConsistentNumChunks(remainingPageSize, chunkSize, depth + 1);
     }
 
@@ -186,8 +190,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
-            auto const index = firstFreeBit(_topLevelMask);
-            if(index < BitMaskSize)
+            auto const index = firstFreeBit(bitField());
+            auto noFreeBitFound = powInt(BitMaskSize, bitField().depth + 1);
+            if(index < noFreeBitFound)
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
             }
@@ -205,7 +210,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 return nullptr;
             }
-            auto BitMaskBytes = BitMaskSize / 8U;
+            auto BitMaskBytes = BitMaskSize / 8U; // NOLINT(*magic*)
             return reinterpret_cast<BitMask*>(
                 &_data.data[T_pageSize - (treeVolume<BitMaskSize>(bitFieldDepth()) - 1) * BitMaskBytes]);
         }
@@ -230,14 +235,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
         ~PageInterpretation() = default;
     };
-
-    struct Tmp
-    {
-        size_t pageSize{};
-        uint32_t chunkSize{};
-        uint32_t depth{};
-    };
-
 
     template<size_t T_numPages>
     struct PageTable
