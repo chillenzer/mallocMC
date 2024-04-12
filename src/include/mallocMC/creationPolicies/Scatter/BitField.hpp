@@ -49,6 +49,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         BitMask& head; // NOLINT(*ref*member*)
         BitMask* levels{nullptr};
+        // CAUTION: This might be slightly unintuitive but `depth` refers to the number of levels below `head` (or the
+        // number of edges down to a leave). This is convenient due to our weird storage situation where the head is
+        // situated somewhere else.
         uint32_t depth{0U};
 
         // Return a pointer to the level-th level in the tree.
@@ -60,6 +63,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             // We subtract one because the head node is stored separately.
             return &levels[treeVolume<BitMaskSize>(level - 1) - 1];
+        }
+
+        // Set the bit corresponding to chunk `index`. If that fills the corresponding bit mask, the function takes
+        // care of propagating up the information.
+        void set(uint32_t const index, bool value = true)
+        {
+            auto& mask = this->operator[](depth)[index / BitMaskSize];
+            mask.set(index % BitMaskSize, value);
+            if(depth > 0 && (value == mask.all()))
+            {
+                BitFieldTree{head, levels, depth - 1U}.set(index / BitMaskSize, value);
+            }
         }
     };
 

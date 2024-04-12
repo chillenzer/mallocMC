@@ -108,7 +108,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto chunk = firstFreeChunk();
             if(chunk)
             {
-                _topLevelMask.set(chunk.value().index);
+                bitField().set(chunk.value().index);
                 return chunk.value().pointer;
             }
             return nullptr;

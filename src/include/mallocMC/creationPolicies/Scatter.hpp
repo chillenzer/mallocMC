@@ -74,16 +74,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 // Not yet implemented.
                 return nullptr;
             }
-            const auto page = choosePage(numBytes);
+            auto page = choosePage(numBytes);
             if(page)
             {
-                const auto chunk = page.value().firstFreeChunk();
-                if(chunk)
-                {
-                    page.value()._topLevelMask[chunk.value().index].flip();
-                    ++page.value()._fillingLevel;
-                    return chunk.value().pointer;
-                }
+                return page.value().create();
             }
             return nullptr;
         }

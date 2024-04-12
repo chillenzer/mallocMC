@@ -141,4 +141,159 @@ TEST_CASE("BitFieldTree")
         CHECK(
             firstFreeBit(tree) == BitMaskSize * (BitMaskSize * firstLevelIndex + secondLevelIndex) + thirdLevelIndex);
     }
+
+    SECTION("sets top-level mask bits for depth 0.")
+    {
+        BitMask head{};
+        BitFieldTree tree{head, nullptr, 0U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
+        tree.set(index);
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            CHECK(tree.head[i] == (i == index));
+        }
+    }
+
+    SECTION("sets lowest-level mask bits for depth not 0.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
+        BitFieldTree tree{head, &(main[0]), 2U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
+
+        tree.set(index);
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            for(uint32_t j = 0; j < BitMaskSize; ++j)
+            {
+                CHECK(tree[tree.depth][i][j] == (i * BitMaskSize + j == index));
+            }
+        }
+    }
+
+    SECTION("sets bits in top-level mask as appropriate for depth 1.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize];
+        BitFieldTree tree{head, &(main[0]), 1U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            // fills up this complete bitmask such that the corresponding bit in head needs flipping
+            tree.set(BitMaskSize * index + i);
+        }
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            CHECK(tree.head[i] == (i == index));
+        }
+    }
+
+    SECTION("sets bits in higher-level mask as appropriate for depth 2.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)];
+        BitFieldTree tree{head, &(main[0]), 2U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
+
+        for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
+        {
+            // fills up `BitMaskSize` complete bitmasks such that the corresponding bits in higher levels need flipping
+            tree.set(BitMaskSize * BitMaskSize * index + i);
+        }
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            CHECK(tree.head[i] == (i == index));
+            if(i == index)
+            {
+                CHECK(tree[1U][i].all());
+            }
+            else
+            {
+                CHECK(tree[1U][i].none());
+            }
+        }
+    }
+
+    SECTION("unsets top-level mask bits for depth 0.")
+    {
+        BitMask head{};
+        BitFieldTree tree{head, nullptr, 0U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
+        tree.set(index);
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            REQUIRE(tree.head[i] == (i == index));
+        }
+        tree.set(index, false);
+        CHECK(tree.head.none());
+    }
+
+    SECTION("unsets lowest-level mask bits for depth not 0.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
+        BitFieldTree tree{head, &(main[0]), 2U};
+        uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
+
+        tree.set(index);
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            for(uint32_t j = 0; j < BitMaskSize; ++j)
+            {
+                REQUIRE(tree[tree.depth][i][j] == (i * BitMaskSize + j == index));
+            }
+        }
+
+        tree.set(index, false);
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            CHECK(tree[tree.depth][i].none());
+        }
+    }
+
+
+    SECTION("unsets bits in higher-level mask as appropriate for depth 2.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)];
+        BitFieldTree tree{head, &(main[0]), 2U};
+        uint32_t index = 3U;
+        uint32_t unsetIndex = 0;
+
+        for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
+        {
+            // fills up `BitMaskSize` complete bitmasks such that the corresponding bits in higher levels need flipping
+            tree.set(BitMaskSize * BitMaskSize * index + i);
+        }
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            REQUIRE(tree.head[i] == (i == index));
+            if(i == index)
+            {
+                REQUIRE(tree[1U][i].all());
+            }
+            else
+            {
+                REQUIRE(tree[1U][i].none());
+            }
+        }
+
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            // We unset one bit from each lowest-level set of children, so all level-1 nodes should report that each
+            // child has a free spot. (Amd so does the top-level mask then, of course.)
+            tree.set(index * BitMaskSize * BitMaskSize + i * BitMaskSize + unsetIndex, false);
+        }
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
+        {
+            CHECK(tree[1U][i].none());
+        }
+        CHECK(tree.head.none());
+    }
 }
