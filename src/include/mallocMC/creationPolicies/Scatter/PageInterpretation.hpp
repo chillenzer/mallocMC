@@ -136,6 +136,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return counter;
         }
 
+        [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
+        {
+            return 0U;
+        }
+
         // these are supposed to be temporary objects, don't start messing around with them:
         PageInterpretation(PageInterpretation const&) = delete;
         PageInterpretation(PageInterpretation&&) = delete;

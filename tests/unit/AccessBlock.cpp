@@ -34,7 +34,6 @@
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
-using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
@@ -43,11 +42,6 @@ constexpr size_t numPages = 4;
 // bitmask, chunksize, filling level
 constexpr size_t pteSize = 4 + 4 + 4;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
-
-auto pageNumberOf(void* const pointer, DataPage<pageSize>* pages) -> size_t
-{
-    return std::distance(reinterpret_cast<char*>(pages), reinterpret_cast<char*>(pointer)) / pageSize;
-}
 
 template<size_t T_blockSize, size_t T_pageSize>
 void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
@@ -148,14 +142,14 @@ TEST_CASE("AccessBlock (creating)")
         REQUIRE(result1 != nullptr);
         void* result2 = localAccessBlock.create(chunkSize);
         REQUIRE(result2 != nullptr);
-        CHECK(pageNumberOf(result1, &accessBlock.pages[0]) == pageNumberOf(result2, &accessBlock.pages[0]));
+        CHECK(indexOf(result1, &accessBlock.pages[0], pageSize) == indexOf(result2, &accessBlock.pages[0], pageSize));
     }
 
     SECTION("creates memory of different chunk size in different pages.")
     {
         CHECK(
-            pageNumberOf(accessBlock.create(32U), &accessBlock.pages[0])
-            != pageNumberOf(accessBlock.create(512U), &accessBlock.pages[0]));
+            indexOf(accessBlock.create(32U), &accessBlock.pages[0], pageSize)
+            != indexOf(accessBlock.create(512U), &accessBlock.pages[0], pageSize));
     }
 
     SECTION("fails to create memory if there's no page with fitting chunk size")
@@ -290,6 +284,22 @@ TEST_CASE("AccessBlock (destroying)")
             == accessBlock.numPages());
     }
 
+    SECTION("resets correct bit without touching others upon destroy without hierarchy.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        accessBlock.create(numBytes);
+        void* pointer = accessBlock.create(numBytes);
+        REQUIRE(
+            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
+            < accessBlock.numPages());
+
+        accessBlock.destroy(pointer);
+
+        CHECK(
+            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
+            == accessBlock.numPages() - 1);
+    }
+
     SECTION("decreases filling level upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
@@ -300,12 +310,48 @@ TEST_CASE("AccessBlock (destroying)")
                 std::end(accessBlock.pageTable._fillingLevels),
                 0U)
             < accessBlock.numPages());
+        REQUIRE(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                1U)
+            == 1);
+
         accessBlock.destroy(pointer);
+
         CHECK(
             std::count(
                 std::begin(accessBlock.pageTable._fillingLevels),
                 std::end(accessBlock.pageTable._fillingLevels),
                 0U)
             == accessBlock.numPages());
+    }
+
+    SECTION("decreases filling level without touching others upon destroy without hierarchy.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        accessBlock.create(numBytes);
+        void* pointer = accessBlock.create(numBytes);
+        REQUIRE(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                0U)
+            < accessBlock.numPages());
+
+        accessBlock.destroy(pointer);
+
+        CHECK(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                0U)
+            == accessBlock.numPages() - 1);
+        CHECK(
+            std::count(
+                std::begin(accessBlock.pageTable._fillingLevels),
+                std::end(accessBlock.pageTable._fillingLevels),
+                1U)
+            == 1);
     }
 }
