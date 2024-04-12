@@ -87,6 +87,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return selfConsistentNumChunks(T_pageSize, _chunkSize);
         }
 
+        [[nodiscard]] auto dataSize() const -> size_t
+        {
+            return numChunks() * _chunkSize;
+        }
+
         [[nodiscard]] auto hasBitField() const -> bool
         {
             return bitFieldDepth() > 0;
@@ -95,6 +100,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         [[nodiscard]] auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
+        }
+
+        auto create() -> void*
+        {
+            atomicAdd(_fillingLevel, 1);
+            auto chunk = firstFreeChunk();
+            if(chunk)
+            {
+                _topLevelMask.set(chunk.value().index);
+                return chunk.value().pointer;
+            }
+            return nullptr;
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>

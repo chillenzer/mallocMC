@@ -26,6 +26,7 @@
 */
 
 #include "mallocMC/auxiliary.hpp"
+#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 
 #include <algorithm>
 #include <catch2/catch.hpp>
@@ -36,6 +37,7 @@
 
 using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;

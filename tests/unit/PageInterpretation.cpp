@@ -32,6 +32,7 @@
 
 #include <catch2/catch.hpp>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
@@ -199,6 +200,66 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 3U);
+    }
+}
+
+TEST_CASE("PageInterpretation.create")
+{
+    uint32_t fillingLevel{};
+    constexpr uint32_t const BitMaskBytes = BitMaskSize / 8U;
+    // Such that we can fit up to four levels of hierarchy in there:
+    constexpr size_t const pageSize
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * BitMaskBytes;
+    DataPage<pageSize> data{};
+    BitMask mask{};
+
+    uint32_t const numChunks = BitMaskSize;
+    uint32_t chunkSize = pageSize / numChunks;
+    PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+
+    SECTION("returns a pointer to within the data.")
+    {
+        auto* pointer = page.create();
+        CHECK(
+            std::distance(&page._data.data[0], reinterpret_cast<char*>(pointer)) < static_cast<long>(page.dataSize()));
+    }
+
+    SECTION("returns a pointer to the start of a chunk.")
+    {
+        auto* pointer = page.create();
+        CHECK(std::distance(&page._data.data[0], reinterpret_cast<char*>(pointer)) % chunkSize == 0U);
+    }
+
+    SECTION("returns nullptr if everything is full.")
+    {
+        mask.set();
+        auto* pointer = page.create();
+        CHECK(pointer == nullptr);
+    }
+
+    SECTION("updates filling level.")
+    {
+        page.create();
+        CHECK(fillingLevel == 1U);
+    }
+
+    SECTION("updates top-level bit field if there is no hierarchy.")
+    {
+        REQUIRE(mask.none());
+        auto* pointer = page.create();
+        auto const index = page.chunkNumberOf(pointer);
+        CHECK(mask[index]);
+    }
+
+    SECTION("can provide numChunks pieces of memory and returns nullptr afterwards.")
+    {
+        for(uint32_t i = 0; i < page.numChunks(); ++i)
+        {
+            auto* pointer = page.create();
+            CHECK(pointer != nullptr);
+        }
+        auto* pointer = page.create();
+        CHECK(pointer == nullptr);
     }
 }
 // NOLINTEND(*widening*)
