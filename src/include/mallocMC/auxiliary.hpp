@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <iterator>
 #include <type_traits>
 
 namespace mallocMC
@@ -46,5 +48,10 @@ namespace mallocMC
             result *= base;
         }
         return result;
+    }
+
+    inline auto indexOf(void* const pointer, void* start, size_t const stepSize) -> size_t
+    {
+        return std::distance(reinterpret_cast<char*>(start), reinterpret_cast<char*>(pointer)) / stepSize;
     }
 } // namespace mallocMC

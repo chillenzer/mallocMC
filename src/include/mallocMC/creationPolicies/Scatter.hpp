@@ -46,12 +46,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    inline auto indexOf(void* const pointer, void* start, size_t const stepSize) -> size_t
-    {
-        return std::distance(reinterpret_cast<char*>(start), reinterpret_cast<char*>(pointer)) / stepSize;
-    }
-
-
     template<size_t T_blockSize, size_t T_pageSize>
     struct AccessBlock
     {
@@ -132,7 +126,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 pageTable._chunkSizes[pageIndex],
                 pageTable._bitMasks[pageIndex],
                 pageTable._fillingLevels[pageIndex]};
+
             --page._fillingLevel;
+
             auto chunkIndex = page.chunkNumberOf(pointer);
             page._topLevelMask.set(chunkIndex, false);
         }

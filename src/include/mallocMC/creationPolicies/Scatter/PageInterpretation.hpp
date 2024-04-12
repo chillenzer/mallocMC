@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
@@ -138,7 +139,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
         {
-            return 0U;
+            return indexOf(pointer, &_data, _chunkSize);
         }
 
         // these are supposed to be temporary objects, don't start messing around with them:

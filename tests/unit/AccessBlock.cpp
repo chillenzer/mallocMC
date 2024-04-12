@@ -25,6 +25,8 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/auxiliary.hpp"
+
 #include <algorithm>
 #include <catch2/catch.hpp>
 #include <cstddef>
@@ -32,6 +34,7 @@
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 
+using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
@@ -275,83 +278,64 @@ TEST_CASE("AccessBlock (destroying)")
     {
         constexpr const uint32_t numBytes = 32U;
         void* pointer = accessBlock.create(numBytes);
-        REQUIRE(
-            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
-            < accessBlock.numPages());
+        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        auto chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
+        REQUIRE(accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
+
         accessBlock.destroy(pointer);
-        CHECK(
-            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
-            == accessBlock.numPages());
+
+        CHECK(!accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
     }
 
     SECTION("resets one bit without touching others upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
-        accessBlock.create(numBytes);
+
+        void* untouchedPointer = accessBlock.create(numBytes);
+        auto const untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
+        auto const untouchedChunkIndex = indexOf(untouchedPointer, &accessBlock.pages[untouchedPageIndex], numBytes);
+        REQUIRE(accessBlock.pageTable._bitMasks[untouchedPageIndex][untouchedChunkIndex]);
+
         void* pointer = accessBlock.create(numBytes);
-        REQUIRE(
-            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
-            < accessBlock.numPages());
+        auto const pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        auto const chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
+        REQUIRE(accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
 
         accessBlock.destroy(pointer);
 
-        CHECK(
-            std::count(std::begin(accessBlock.pageTable._bitMasks), std::end(accessBlock.pageTable._bitMasks), 0U)
-            == accessBlock.numPages() - 1);
+        CHECK(accessBlock.pageTable._bitMasks[untouchedPageIndex][untouchedChunkIndex]);
+        CHECK(!accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
     }
 
     SECTION("decreases one filling level upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         void* pointer = accessBlock.create(numBytes);
-        REQUIRE(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                0U)
-            < accessBlock.numPages());
-        REQUIRE(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                1U)
-            == 1);
+        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == 1U);
 
         accessBlock.destroy(pointer);
 
-        CHECK(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                0U)
-            == accessBlock.numPages());
+        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == 0U);
     }
 
     SECTION("decreases one filling level without touching others upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
-        accessBlock.create(numBytes);
+
+        void* untouchedPointer = accessBlock.create(numBytes);
+        auto untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
+        REQUIRE(accessBlock.pageTable._fillingLevels[untouchedPageIndex] == 1U);
+
         void* pointer = accessBlock.create(numBytes);
-        REQUIRE(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                0U)
-            < accessBlock.numPages());
+        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+
+        uint32_t fillingLevel = pageIndex == untouchedPageIndex ? 2U : 1U;
+        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel);
 
         accessBlock.destroy(pointer);
 
-        CHECK(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                0U)
-            == accessBlock.numPages() - 1);
-        CHECK(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                1U)
-            == 1);
+        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel - 1);
+        CHECK(accessBlock.pageTable._fillingLevels[untouchedPageIndex] > 0);
     }
 }
