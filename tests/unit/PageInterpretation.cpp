@@ -31,6 +31,7 @@
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
+#include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
 #include <catch2/catch.hpp>
 #include <cstdint>
@@ -125,11 +126,12 @@ TEST_CASE("PageInterpretation")
 TEST_CASE("PageInterpretation.bitFieldDepth")
 {
     uint32_t fillingLevel{};
-    constexpr uint32_t const BitMaskBytes = BitMaskSize / 8U;
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * BitMaskBytes;
-    DataPage<pageSize> data{};
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
+    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
+    DataPage<pageSize>& data{*actualData};
     BitMask mask{};
 
     SECTION("knows correct bit field depths for depth 0.")
@@ -154,7 +156,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
+        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
@@ -164,7 +166,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes) / numChunks;
+        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
@@ -186,7 +188,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize
-            = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes) / numChunks;
+            = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)) / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 2U);
@@ -196,8 +198,8 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * BitMaskBytes - BitMaskSize * BitMaskSize * BitMaskBytes
-                              - BitMaskSize * BitMaskSize * BitMaskSize * BitMaskBytes)
+        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)
+                              - BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask))
             / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
 
@@ -208,11 +210,12 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
 TEST_CASE("PageInterpretation.create")
 {
     uint32_t fillingLevel{};
-    constexpr uint32_t const BitMaskBytes = BitMaskSize / 8U;
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * BitMaskBytes;
-    DataPage<pageSize> data{};
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
+    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
+    DataPage<pageSize>& data{*actualData};
     BitMask mask{};
 
     SECTION("regardless of hierarchy")

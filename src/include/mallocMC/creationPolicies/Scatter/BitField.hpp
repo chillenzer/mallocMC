@@ -78,6 +78,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
+    constexpr inline auto noFreeBitFound(uint32_t const depth) -> uint32_t
+    {
+        return powInt(BitMaskSize, depth + 1);
+    }
+
     [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask) -> uint32_t
     {
         // TODO(lenz): we are not yet caring for performance here...
@@ -88,29 +93,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return i;
             }
         }
-        return BitMaskSize;
+        return noFreeBitFound(0);
     }
 
     inline constexpr auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
-        // this is one past the end of the chunks, so no valid index:
-        auto noFreeBitFound = powInt(BitMaskSize, tree.depth + 1);
-
         auto result = firstFreeBit(tree.head);
-        // This means that we didn't find any free bit:
-        if(result == BitMaskSize)
+
+        if(result == noFreeBitFound(0))
         {
-            return noFreeBitFound;
+            return noFreeBitFound(tree.depth);
         }
 
         for(uint32_t currentDepth = 0U; currentDepth < tree.depth; currentDepth++)
         {
             const auto index = firstFreeBit(tree[currentDepth + 1][result]);
 
-            // This means that we didn't find any free bit:
-            if(index == BitMaskSize)
+            if(index == noFreeBitFound(0))
             {
-                return noFreeBitFound;
+                return noFreeBitFound(tree.depth);
             }
 
             result = (BitMaskSize * result) + index;

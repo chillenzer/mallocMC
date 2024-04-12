@@ -36,7 +36,7 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t pageTableEntrySize = 4U + 4U + ceilingDivision(BitMaskSize, 8U);
+    constexpr const uint32_t pageTableEntrySize = 4U + 4U + sizeof(BitMask);
 
     // Computing the number of chunks is not quite trivial: We have to take into account the space for the hierarchical
     // bit field at the end of the page, the size of which again depends on the number of chunks. So, we kind of solve
@@ -104,10 +104,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto create() -> void*
         {
-            atomicAdd(_fillingLevel, 1);
             auto chunk = firstFreeChunk();
             if(chunk)
             {
+                atomicAdd(_fillingLevel, 1U);
                 bitField().set(chunk.value().index);
                 return chunk.value().pointer;
             }
@@ -116,9 +116,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
-            auto const index = firstFreeBit(bitField());
-            auto noFreeBitFound = powInt(BitMaskSize, bitField().depth + 1);
-            if(index < noFreeBitFound)
+            auto tree = bitField();
+            auto const index = firstFreeBit(tree);
+            if(index < noFreeBitFound(tree.depth))
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
             }
@@ -136,9 +136,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 return nullptr;
             }
-            auto BitMaskBytes = BitMaskSize / 8U; // NOLINT(*magic*)
             return reinterpret_cast<BitMask*>(
-                &_data.data[T_pageSize - (treeVolume<BitMaskSize>(bitFieldDepth()) - 1) * BitMaskBytes]);
+                &_data.data[T_pageSize - sizeof(BitMask) * (treeVolume<BitMaskSize>(bitFieldDepth()) - 1)]);
         }
 
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t

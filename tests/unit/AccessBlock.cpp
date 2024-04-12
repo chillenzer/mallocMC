@@ -45,7 +45,7 @@ using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
 // bitmask, chunksize, filling level
-constexpr size_t pteSize = 4 + 4 + 4;
+constexpr size_t pteSize = 4 + 4 + 8;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
 
 template<size_t T_blockSize, size_t T_pageSize>
