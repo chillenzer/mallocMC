@@ -271,7 +271,7 @@ TEST_CASE("AccessBlock (destroying)")
         SUCCEED("Just check that you can do this at all.");
     }
 
-    SECTION("resets bits upon destroy without hierarchy.")
+    SECTION("resets one bit upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         void* pointer = accessBlock.create(numBytes);
@@ -284,7 +284,7 @@ TEST_CASE("AccessBlock (destroying)")
             == accessBlock.numPages());
     }
 
-    SECTION("resets correct bit without touching others upon destroy without hierarchy.")
+    SECTION("resets one bit without touching others upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         accessBlock.create(numBytes);
@@ -300,7 +300,7 @@ TEST_CASE("AccessBlock (destroying)")
             == accessBlock.numPages() - 1);
     }
 
-    SECTION("decreases filling level upon destroy without hierarchy.")
+    SECTION("decreases one filling level upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         void* pointer = accessBlock.create(numBytes);
@@ -327,7 +327,7 @@ TEST_CASE("AccessBlock (destroying)")
             == accessBlock.numPages());
     }
 
-    SECTION("decreases filling level without touching others upon destroy without hierarchy.")
+    SECTION("decreases one filling level without touching others upon destroy without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         accessBlock.create(numBytes);
