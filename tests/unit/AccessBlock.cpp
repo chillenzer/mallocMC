@@ -280,16 +280,22 @@ TEST_CASE("AccessBlock.create")
         CHECK(indexOf(pointer, &accessBlock.pages[0], pageSize) == pageIndex);
         CHECK(indexOf(pointer, &accessBlock.pages[pageIndex], chunkSize) == chunkIndex);
     }
-}
-
-// ,TODO(lenz): These are supposed to work at some point.
-TEST_CASE("AccessBlock (creating) (failing)", "[!shouldfail]")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("can create memory larger than page size.")
     {
-        CHECK(accessBlock.create(2U * pageSize));
+        // We give a strong guarantee that this searches the first possible block, so we know the index here.
+        CHECK(indexOf(accessBlock.create(2U * pageSize), &accessBlock.pages[0], pageSize) == 0);
+    }
+
+    SECTION("finds contiguous memory for larger than page size.")
+    {
+        constexpr size_t localNumPages = 5U;
+        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
+        AccessBlock<localBlockSize, pageSize> localAccessBlock;
+        uint32_t const anythingNonzero = 1U;
+        localAccessBlock.pageTable._chunkSizes[1] = anythingNonzero;
+        // We give a strong guarantee that this searches the first possible block, so we know the index here.
+        CHECK(indexOf(localAccessBlock.create(2U * pageSize), &localAccessBlock.pages[0], pageSize) == 2U);
     }
 }
 

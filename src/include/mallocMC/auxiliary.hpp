@@ -33,15 +33,15 @@
 
 namespace mallocMC
 {
-    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, T const denominator) -> T
+    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
+    [[nodiscard]] constexpr auto ceilingDivision(T const numerator, U const denominator) -> T
     {
         return (numerator + (denominator - 1)) / denominator;
     }
 
     // power function for integers, returns base^exp
-    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    inline constexpr auto powInt(T const base, T const exp) -> T
+    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
+    inline constexpr auto powInt(T const base, U const exp) -> T
     {
         auto result = 1U;
         for(auto i = 0U; i < exp; ++i)
@@ -53,8 +53,8 @@ namespace mallocMC
 
     // integer logarithm, i.e. "how many times can I divide value by base", its the inverse of powInt for appropriately
     // defined target spaces
-    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    inline constexpr auto logInt(T value, T const base) -> T
+    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
+    inline constexpr auto logInt(T value, U const base) -> T
     {
         T counter = 0U;
         while(value > 0U)

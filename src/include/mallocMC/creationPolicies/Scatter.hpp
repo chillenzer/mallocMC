@@ -29,8 +29,10 @@
 
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
+#include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -38,8 +40,6 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t maxChunksPerPage = BitMaskSize;
-
     template<size_t T_numPages>
     struct PageTable
     {
@@ -78,8 +78,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(numBytes > T_pageSize)
             {
-                // Not yet implemented.
-                return nullptr;
+                auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
+                auto chunk = createContiguousPages(numPagesNeeded);
+                if(chunk)
+                {
+                    return chunk.value().pointer;
+                }
             }
             auto startIndex = computeHash(numBytes);
 
@@ -126,6 +130,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                               T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index], pageTable._fillingLevels[index]}
                               .numChunks())
                 || pageTable._chunkSizes[index] == 0U;
+        }
+
+        auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
+        {
+            for(size_t index = 0; index < numPages() - numPagesNeeded; ++index)
+            {
+                if(std::all_of(
+                       &pageTable._chunkSizes[index],
+                       &pageTable._chunkSizes[index + numPagesNeeded],
+                       [](auto const val) { return val == 0U; }))
+                {
+                    return std::optional<Chunk>({index, &pages[index]});
+                };
+            }
+            return std::nullopt;
         }
 
     public:
