@@ -39,6 +39,7 @@ namespace mallocMC
         return (numerator + (denominator - 1)) / denominator;
     }
 
+    // power function for integers, returns base^exp
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
     inline constexpr auto powInt(T const base, T const exp) -> T
     {
@@ -48,6 +49,20 @@ namespace mallocMC
             result *= base;
         }
         return result;
+    }
+
+    // integer logarithm, i.e. "how many times can I divide value by base", its the inverse of powInt for appropriately
+    // defined target spaces
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    inline constexpr auto logInt(T value, T const base) -> T
+    {
+        T counter = 0U;
+        while(value > 0U)
+        {
+            counter++;
+            value /= base;
+        }
+        return counter;
     }
 
     inline auto indexOf(void* const pointer, void* start, size_t const stepSize) -> size_t

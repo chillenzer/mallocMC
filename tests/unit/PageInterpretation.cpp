@@ -122,6 +122,13 @@ TEST_CASE("PageInterpretation")
         CHECK(localPage.bitField().levels != nullptr);
         CHECK(localPage.bitField().depth == 1U);
     }
+
+    SECTION("knows the maximal bit field size.")
+    {
+        // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
+        // field size should be
+        CHECK(page.maxBitFieldSize() == 32U * sizeof(BitMask));
+    }
 }
 
 TEST_CASE("PageInterpretation.bitFieldDepth")
@@ -342,6 +349,51 @@ TEST_CASE("PageInterpretation.destroy")
             for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
             {
                 CHECK(tree[tree.depth][i].none());
+            }
+        }
+
+        SECTION("throws if pointer does not point to allocated memory.")
+        {
+            // create another pointer, so the page doesn't get freed after invalidating one pointer
+            page.create();
+            // destroying this invalidates the pointer and deallocates the memory
+            page.destroy(pointer);
+            // attempting to do so again is an invalid operation
+            CHECK_THROWS_WITH(page.destroy(pointer), Catch::Contains("Attempted to destroy un-allocated memory"));
+        }
+
+        SECTION("throws if chunk size is 0.")
+        {
+            // The following might be the case if the page was recently free'd. For testing purposes, we set it
+            // directly.
+            chunkSize = 0U;
+            CHECK_THROWS_WITH(
+                page.destroy(pointer),
+                Catch::Contains("Attempted to destroy a pointer with chunkSize==0. Likely this page was recently (and "
+                                "potentially pre-maturely) freed."));
+        }
+
+        SECTION("resets chunk size when page is abandoned.")
+        {
+            // this is the only allocation on this page, so page is abandoned afterwards
+            page.destroy(pointer);
+            CHECK(page._chunkSize == 0U);
+        }
+
+        SECTION("cleans up in bit field region of page when page is abandoned.")
+        {
+            // This test does not really do anything and no such functionality is implemented currently because in a
+            // single-threaded environment this is a trivial condition (as long as you use the create()/destroy()
+            // interface). This might change once we enter multi-threaded realms.
+            // TODO(lenz): Come back to this and check if this still holds true in the final implementation.
+
+            // This is the only allocation on this page, so page is abandoned afterwards.
+            page.destroy(pointer);
+
+            // TODO(lenz): Check for off-by-one error in lower bound.
+            for(size_t i = pageSize - 1; i >= pageSize - page.maxBitFieldSize(); i--)
+            {
+                CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
             }
         }
     }

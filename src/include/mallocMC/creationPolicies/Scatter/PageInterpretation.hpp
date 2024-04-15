@@ -117,22 +117,43 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto destroy(void* pointer) -> void
         {
+            if(_chunkSize == 0)
+            {
+                throw std::runtime_error{
+                    "Attempted to destroy a pointer with chunkSize==0. Likely this page was recently "
+                    "(and potentially pre-maturely) freed."};
+            }
             auto chunkIndex = chunkNumberOf(pointer);
+            if(isValidDestruction(chunkIndex))
+            {
+                bitField().set(chunkIndex, false);
+                atomicAdd(_fillingLevel, -1);
+                if(_fillingLevel == 0U)
+                {
+                    _chunkSize = 0U;
+                }
+            }
+        }
+
+    private:
+        auto isValidDestruction(uint32_t const chunkIndex) -> bool
+        {
             if(chunkIndex < 0 || chunkIndex >= numChunks())
             {
                 throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};
             }
             if(!isAllocated(chunkIndex))
             {
-                throw std::runtime_error{"Attempted to destroy unallocated memory."};
+                throw std::runtime_error{"Attempted to destroy un-allocated memory."};
             }
-            bitField().set(chunkIndex, false);
-            atomicAdd(_fillingLevel, -1);
+            return true;
         }
 
+    public:
         auto isAllocated(uint32_t const chunkIndex) -> bool
         {
-            return true;
+            auto tree = bitField();
+            return tree[tree.depth][chunkIndex / _chunkSize][chunkIndex % _chunkSize];
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
@@ -157,21 +178,29 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 return nullptr;
             }
-            return reinterpret_cast<BitMask*>(
-                &_data.data[T_pageSize - sizeof(BitMask) * (treeVolume<BitMaskSize>(bitFieldDepth()) - 1)]);
+            return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
+        }
+
+        [[nodiscard]] auto bitFieldSize() const -> uint32_t
+        {
+            if(!hasBitField())
+            {
+                return 0U;
+            }
+            auto tmp = sizeof(BitMask) * (treeVolume<BitMaskSize>(bitFieldDepth()) - 1);
+            return tmp;
         }
 
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t
         {
             // We subtract one such that numChunks() == BitMaskSize yields 0.
-            auto tmp = (numChunks() - 1) / BitMaskSize;
-            uint32_t counter = 0U;
-            while(tmp > 0)
-            {
-                counter++;
-                tmp /= BitMaskSize;
-            }
-            return counter;
+            return logInt((numChunks() - 1) / BitMaskSize, BitMaskSize);
+        }
+
+        [[nodiscard]] auto maxBitFieldSize() -> uint32_t
+        {
+            uint32_t tmpChunkSize = 1U;
+            return PageInterpretation<T_pageSize>{_data, tmpChunkSize, _topLevelMask, _fillingLevel}.bitFieldSize();
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
