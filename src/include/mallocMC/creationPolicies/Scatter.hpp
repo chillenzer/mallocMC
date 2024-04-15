@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
@@ -46,6 +47,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _chunkSizes[T_numPages]{};
         uint32_t _fillingLevels[T_numPages]{};
     };
+
+    inline auto computeHash([[maybe_unused]] uint32_t const numBytes) -> size_t
+    {
+        return 0;
+    }
 
     template<size_t T_blockSize, size_t T_pageSize>
     struct AccessBlock
@@ -75,28 +81,38 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 // Not yet implemented.
                 return nullptr;
             }
-            auto page = choosePage(numBytes);
-            if(page)
+            auto startIndex = computeHash(numBytes);
+
+            // TODO(lenz): This loop is dangerous. If we'd happen to be in an inconsistent state, this would get us
+            // into an infinite loop. Check if we can solve this more elegantly.
+            while(auto page = choosePage(numBytes, startIndex))
             {
-                return page.value().create();
+                auto pointer = page.value().create();
+                if(pointer != nullptr)
+                {
+                    return pointer;
+                }
+                startIndex = indexOf(&page.value()._data, pages, T_pageSize) + 1;
             }
             return nullptr;
         }
 
     private:
-        auto choosePage(uint32_t numBytes) -> std::optional<PageInterpretation<T_pageSize>>
+        auto choosePage(uint32_t const numBytes, size_t const startIndex = 0)
+            -> std::optional<PageInterpretation<T_pageSize>>
         {
             for(size_t i = 0; i < numPages(); ++i)
             {
-                if(thisPageIsAppropriate(i, numBytes))
+                auto index = (startIndex + i) % numPages();
+                if(thisPageIsAppropriate(index, numBytes))
                 {
-                    pageTable._chunkSizes[i] = numBytes;
+                    pageTable._chunkSizes[index] = numBytes;
                     return std::optional<PageInterpretation<T_pageSize>>{
                         std::in_place_t{},
-                        pages[i],
-                        pageTable._chunkSizes[i],
-                        pageTable._bitMasks[i],
-                        pageTable._fillingLevels[i]};
+                        pages[index],
+                        pageTable._chunkSizes[index],
+                        pageTable._bitMasks[index],
+                        pageTable._fillingLevels[index]};
                 }
             }
             return std::nullopt;

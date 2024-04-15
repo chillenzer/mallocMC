@@ -39,6 +39,7 @@
 #include <iterator>
 #include <optional>
 
+using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
@@ -283,6 +284,29 @@ TEST_CASE("PageInterpretation.create")
             auto* pointer = page.create();
             auto const index = page.chunkNumberOf(pointer);
             CHECK(mask[index]);
+        }
+    }
+
+    SECTION("with hierarchy")
+    {
+        uint32_t const numChunks = BitMaskSize * BitMaskSize;
+        uint32_t chunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+
+        SECTION("recovers from not finding a free chunk in a lower level.")
+        {
+            auto tree = page.bitField();
+            uint32_t const index = 2 * BitMaskSize + 1;
+            for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
+            {
+                // We fill only the lowest level leaving the upper ones empty, so the PageInterpretation will fail to
+                // find a free bit on the first attempt and has to recover from it.
+                tree[tree.depth][i].set();
+            }
+            tree.set(index, false);
+            REQUIRE(mask.none());
+            auto* pointer = page.create();
+            CHECK(indexOf(pointer, page._data.data, chunkSize) == index);
         }
     }
 }

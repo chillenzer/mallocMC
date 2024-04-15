@@ -296,4 +296,20 @@ TEST_CASE("BitFieldTree")
         }
         CHECK(tree.head.none());
     }
+
+    SECTION("recovers from incorrect higher-level bits when finding a free bit.")
+    {
+        BitMask head{};
+        BitMask main[BitMaskSize * (1 + BitMaskSize)];
+        BitFieldTree tree{head, &(main[0]), 2U};
+        uint32_t const index = 7 * BitMaskSize * BitMaskSize + 5;
+
+        for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
+        {
+            // fill up lowest level but don't tell the higher levels, so that we get into a neatly inconsistent state
+            tree[tree.depth][i].set();
+        }
+        tree.set(index, false);
+        CHECK(firstFreeBit(tree) == index);
+    }
 }

@@ -83,10 +83,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return powInt(BitMaskSize, depth + 1);
     }
 
-    [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask) -> uint32_t
+    [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask, uint32_t const startIndex = 0) -> uint32_t
     {
         // TODO(lenz): we are not yet caring for performance here...
-        for(size_t i = 0; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
+        for(size_t i = startIndex; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
         {
             if(not mask[i])
             {
@@ -96,26 +96,33 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return noFreeBitFound(0);
     }
 
-    inline constexpr auto firstFreeBit(BitFieldTree tree) -> uint32_t
+    inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
-        auto result = firstFreeBit(tree.head);
+        uint32_t indexOnLevel[tree.depth + 2];
+        indexOnLevel[0] = 0U;
+        uint32_t startIndex = 0U;
 
-        if(result == noFreeBitFound(0))
+        for(uint32_t currentDepth = 0U; currentDepth <= tree.depth; currentDepth++)
         {
-            return noFreeBitFound(tree.depth);
-        }
-
-        for(uint32_t currentDepth = 0U; currentDepth < tree.depth; currentDepth++)
-        {
-            const auto index = firstFreeBit(tree[currentDepth + 1][result]);
+            const auto index = firstFreeBit(tree[currentDepth][indexOnLevel[currentDepth]], startIndex);
 
             if(index == noFreeBitFound(0))
             {
-                return noFreeBitFound(tree.depth);
+                if(currentDepth == 0)
+                {
+                    return noFreeBitFound(tree.depth);
+                }
+                startIndex = indexOnLevel[currentDepth] + 1;
+                // move up twice because the next iteration step will execute currentDepth++, so we're effectively
+                // moving up one level
+                currentDepth -= 2;
             }
-
-            result = (BitMaskSize * result) + index;
+            else
+            {
+                startIndex = 0;
+                indexOnLevel[currentDepth + 1] = (BitMaskSize * indexOnLevel[currentDepth]) + index;
+            }
         }
-        return result;
+        return indexOnLevel[tree.depth + 1];
     }
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

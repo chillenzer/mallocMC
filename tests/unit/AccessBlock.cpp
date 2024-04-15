@@ -27,6 +27,7 @@
 
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
+#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include <algorithm>
 #include <catch2/catch.hpp>
@@ -251,9 +252,37 @@ TEST_CASE("AccessBlock.create")
                 1U)
             == 1U);
     }
+
+    SECTION("recovers from not finding a free chunk in page.")
+    {
+        uint32_t const chunkSize = 32U;
+        uint32_t const pageIndex = GENERATE(0, 2);
+        uint32_t const chunkIndex = GENERATE(2, 3, 13);
+        fillWith(accessBlock, chunkSize);
+
+        for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
+        {
+            // we lie here and set all filling levels to 0, so accessBlock thinks that the pages are free but they are
+            // not
+            fillingLevel = 0U;
+        }
+        // But we show some mercy and make one chunk available.
+        PageInterpretation<pageSize>(
+            accessBlock.pages[pageIndex],
+            accessBlock.pageTable._chunkSizes[pageIndex],
+            accessBlock.pageTable._bitMasks[pageIndex],
+            accessBlock.pageTable._fillingLevels[pageIndex])
+            .bitField()
+            .set(chunkIndex, false);
+
+        auto* pointer = accessBlock.create(chunkSize);
+
+        CHECK(indexOf(pointer, &accessBlock.pages[0], pageSize) == pageIndex);
+        CHECK(indexOf(pointer, &accessBlock.pages[pageIndex], chunkSize) == chunkIndex);
+    }
 }
 
-// TODO(lenz): These are supposed to work at some point.
+// ,TODO(lenz): These are supposed to work at some point.
 TEST_CASE("AccessBlock (creating) (failing)", "[!shouldfail]")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
