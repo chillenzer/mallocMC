@@ -274,7 +274,7 @@ TEST_CASE("PageInterpretation.create")
             REQUIRE(mask.none());
             auto* pointer = page.create();
             auto const index = page.chunkNumberOf(pointer);
-            // CHECK(mask[index]);
+            CHECK(mask[index]);
         }
     }
 }

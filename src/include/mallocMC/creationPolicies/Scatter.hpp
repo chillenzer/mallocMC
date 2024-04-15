@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -115,6 +116,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto destroy(void* const pointer) -> void
         {
             auto const pageIndex = indexOf(pointer, pages, T_pageSize);
+            if(pageIndex > numPages() || pageIndex < 0)
+            {
+                throw std::runtime_error{"Attempted to destroy invalid pointer."};
+            }
             auto page = PageInterpretation<T_pageSize>{
                 pages[pageIndex],
                 pageTable._chunkSizes[pageIndex],

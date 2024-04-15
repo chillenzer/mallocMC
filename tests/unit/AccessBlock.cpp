@@ -113,11 +113,11 @@ TEST_CASE("AccessBlock (reporting)")
     }
 }
 
-TEST_CASE("AccessBlock (creating)")
+TEST_CASE("AccessBlock.create")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
 
-    SECTION("does not create nullptr if memory is available.")
+    SECTION("does not return nullptr if memory is available.")
     {
         // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is most
         // likely not exactly the nullptr. We just leave this in as it currently doesn't hurt anybody to keep it.
@@ -339,5 +339,11 @@ TEST_CASE("AccessBlock (destroying)")
 
         CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel - 1);
         CHECK(accessBlock.pageTable._fillingLevels[untouchedPageIndex] > 0);
+    }
+
+    SECTION("throws if given an invalid pointer.")
+    {
+        void* pointer = nullptr;
+        CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
     }
 }
