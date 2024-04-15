@@ -78,13 +78,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(numBytes > T_pageSize)
             {
-                auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
-                auto chunk = createContiguousPages(numPagesNeeded);
-                if(chunk)
-                {
-                    return chunk.value().pointer;
-                }
+                return handleMultiplePages(numBytes);
             }
+            return handleSinglePage(numBytes);
+        }
+
+    private:
+        auto handleMultiplePages(uint32_t const numBytes) -> void*
+        {
+            auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
+            auto chunk = createContiguousPages(numPagesNeeded);
+            if(chunk)
+            {
+                return chunk.value().pointer;
+            }
+            return nullptr;
+        }
+
+        auto handleSinglePage(uint32_t const numBytes) -> void*
+        {
             auto startIndex = computeHash(numBytes);
 
             // TODO(lenz): This loop is dangerous. If we'd happen to be in an inconsistent state, this would get us
@@ -101,7 +113,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return nullptr;
         }
 
-    private:
         auto choosePage(uint32_t const numBytes, size_t const startIndex = 0)
             -> std::optional<PageInterpretation<T_pageSize>>
         {
@@ -125,11 +136,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
         {
             return (pageTable._chunkSizes[index] == numBytes
-                    && pageTable._fillingLevels[index]
-                        < PageInterpretation<
-                              T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index], pageTable._fillingLevels[index]}
-                              .numChunks())
-                || pageTable._chunkSizes[index] == 0U;
+                && pageTable._fillingLevels[index]
+                    < PageInterpretation<
+                          T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index], pageTable._fillingLevels[index]}
+                          .numChunks())
+            || pageTable._chunkSizes[index] == 0U;
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
