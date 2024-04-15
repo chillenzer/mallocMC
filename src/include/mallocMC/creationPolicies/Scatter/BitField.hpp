@@ -55,7 +55,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t depth{0U};
 
         // Return a pointer to the level-th level in the tree.
-        auto operator[](uint32_t level) -> BitMask*
+        auto operator[](uint32_t level) const -> BitMask*
         {
             if(level == 0)
             {

@@ -30,6 +30,7 @@
 // NOLINTBEGIN(*widening*)
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
+#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
@@ -278,4 +279,72 @@ TEST_CASE("PageInterpretation.create")
         }
     }
 }
+
+TEST_CASE("PageInterpretation.destroy")
+{
+    uint32_t fillingLevel{};
+    // Such that we can fit up to four levels of hierarchy in there:
+    constexpr size_t const pageSize
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
+    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
+    DataPage<pageSize>& data{*actualData};
+    BitMask mask{};
+
+    SECTION("regardless of hierarchy")
+    {
+        uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
+        uint32_t chunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        auto* pointer = page.create();
+
+        SECTION("throws if given an invalid pointer.")
+        {
+            pointer = nullptr;
+            CHECK_THROWS_WITH(
+                page.destroy(pointer),
+                Catch::Contains("Attempted to destroy out-of-bounds pointer. Chunk index out of range!"));
+        }
+
+        SECTION("allows pointers to anywhere in the chunk.")
+        {
+            // This test documents the state as is. We haven't defined this outcome as a requirement but if we change
+            // it, we might still want to be aware of this because users might want to be informed.
+            pointer = reinterpret_cast<void*>(reinterpret_cast<char*>(pointer) + chunkSize / 2);
+            CHECK_NOTHROW(page.destroy(pointer));
+        }
+
+        SECTION("updates filling level.")
+        {
+            REQUIRE(page._fillingLevel == 1U);
+            page.destroy(pointer);
+            CHECK(fillingLevel == 0U);
+        }
+
+        SECTION("only ever unsets bits in top-level bit mask.")
+        {
+            auto count = page._topLevelMask.count();
+            page.destroy(pointer);
+            CHECK(page._topLevelMask.count() <= count);
+        }
+
+        SECTION("unsets correct bit in lowest-level bit mask.")
+        {
+            auto const tree = page.bitField();
+            auto const index = mallocMC::indexOf(pointer, &page._data, chunkSize);
+            for(uint32_t i = 0; i < numChunks; ++i)
+            {
+                REQUIRE(tree[tree.depth][i / BitMaskSize][i % BitMaskSize] == (i == index));
+            }
+
+            page.destroy(pointer);
+
+            for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
+            {
+                CHECK(tree[tree.depth][i].none());
+            }
+        }
+    }
+}
+
 // NOLINTEND(*widening*)

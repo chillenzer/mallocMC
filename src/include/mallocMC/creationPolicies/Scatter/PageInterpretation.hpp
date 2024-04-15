@@ -33,6 +33,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -112,6 +113,26 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return chunk.value().pointer;
             }
             return nullptr;
+        }
+
+        auto destroy(void* pointer) -> void
+        {
+            auto chunkIndex = chunkNumberOf(pointer);
+            if(chunkIndex < 0 || chunkIndex >= numChunks())
+            {
+                throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};
+            }
+            if(!isAllocated(chunkIndex))
+            {
+                throw std::runtime_error{"Attempted to destroy unallocated memory."};
+            }
+            bitField().set(chunkIndex, false);
+            atomicAdd(_fillingLevel, -1);
+        }
+
+        auto isAllocated(uint32_t const chunkIndex) -> bool
+        {
+            return true;
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
