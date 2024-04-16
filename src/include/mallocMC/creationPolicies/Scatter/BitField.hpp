@@ -47,6 +47,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct BitFieldTree
     {
+        // This class is about to be removed. But until it is, we'll document that this weird structure of separate
+        // head and levels is a relict of the original idea of storing the top-level bit mask in the AccessBlock and
+        // the potential further bit masks in the page itself.
         BitMask& head; // NOLINT(*ref*member*)
         BitMask* levels{nullptr};
         // CAUTION: This might be slightly unintuitive but `depth` refers to the number of levels below `head` (or the
