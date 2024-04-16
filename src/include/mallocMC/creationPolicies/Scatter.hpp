@@ -74,6 +74,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         DataPage<T_pageSize> pages[numPages()];
         PageTable<numPages()> pageTable;
 
+        auto interpret(size_t const pageIndex)
+        {
+            return PageInterpretation<T_pageSize>(
+                pages[pageIndex],
+                pageTable._chunkSizes[pageIndex],
+                pageTable._bitMasks[pageIndex],
+                pageTable._fillingLevels[pageIndex]);
+        }
+
         auto create(uint32_t numBytes) -> void*
         {
             if(numBytes > T_pageSize)
@@ -139,11 +148,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
         {
             return (pageTable._chunkSizes[index] == numBytes
-                && pageTable._fillingLevels[index]
-                    < PageInterpretation<
-                          T_pageSize>{pages[index], pageTable._chunkSizes[index], pageTable._bitMasks[index], pageTable._fillingLevels[index]}
-                          .numChunks())
-            || pageTable._chunkSizes[index] == 0U;
+                    && pageTable._fillingLevels[index] < interpret(index).numChunks())
+                || pageTable._chunkSizes[index] == 0U;
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
@@ -169,13 +175,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
             }
-            auto page = PageInterpretation<T_pageSize>{
-                pages[pageIndex],
-                pageTable._chunkSizes[pageIndex],
-                pageTable._bitMasks[pageIndex],
-                pageTable._fillingLevels[pageIndex]};
-
-            page.destroy(pointer);
+            interpret(pageIndex).destroy(pointer);
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

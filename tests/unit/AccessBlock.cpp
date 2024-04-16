@@ -40,7 +40,6 @@ using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
-using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
 constexpr size_t pageSize = 1024;
@@ -56,10 +55,7 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     {
         tmpChunkSize = chunkSize;
     }
-    auto maxFillingLevel
-        = PageInterpretation<
-              T_pageSize>{accessBlock.pages[0], accessBlock.pageTable._chunkSizes[0], accessBlock.pageTable._bitMasks[0], accessBlock.pageTable._fillingLevels[0]}
-              .numChunks();
+    auto maxFillingLevel = accessBlock.interpret(0).numChunks();
     for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
     {
         fillingLevel = maxFillingLevel;
@@ -216,11 +212,7 @@ TEST_CASE("AccessBlock.create")
         // We are a bit sloppy here: Technically speaking, we would have to flip the hierarchical bit fields in all
         // pages for a consistent state. But as we have already flipped all the high-level bits these pages won't be
         // considered anyways.
-        PageInterpretation<pageSize> page(
-            accessBlock.pages[index1],
-            accessBlock.pageTable._chunkSizes[index1],
-            accessBlock.pageTable._bitMasks[index1],
-            accessBlock.pageTable._fillingLevels[index1]);
+        auto page = accessBlock.interpret(index1);
         auto bitField = page.bitField();
         for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField.depth) - 1; ++i)
         {
@@ -267,13 +259,7 @@ TEST_CASE("AccessBlock.create")
             fillingLevel = 0U;
         }
         // But we show some mercy and make one chunk available.
-        PageInterpretation<pageSize>(
-            accessBlock.pages[pageIndex],
-            accessBlock.pageTable._chunkSizes[pageIndex],
-            accessBlock.pageTable._bitMasks[pageIndex],
-            accessBlock.pageTable._fillingLevels[pageIndex])
-            .bitField()
-            .set(chunkIndex, false);
+        accessBlock.interpret(pageIndex).bitField().set(chunkIndex, false);
 
         auto* pointer = accessBlock.create(chunkSize);
 
