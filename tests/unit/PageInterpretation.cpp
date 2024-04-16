@@ -53,9 +53,8 @@ TEST_CASE("PageInterpretation")
     constexpr size_t pageSize = 1024U;
     uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
     DataPage<pageSize> data{};
-    BitMask mask{};
     uint32_t fillingLevel{};
-    PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+    PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
     SECTION("refers to the same data it was created with.")
     {
@@ -75,7 +74,7 @@ TEST_CASE("PageInterpretation")
     SECTION("detects correctly if page should contain bitfield.")
     {
         uint32_t localChunkSize = GENERATE(8U, 128U);
-        PageInterpretation<pageSize> localPage{data, localChunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> localPage{data, localChunkSize, fillingLevel};
         CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }
 
@@ -89,6 +88,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("finds first free chunk.")
     {
+        BitMask& mask{page.topLevelMask()};
         mask.flip();
         size_t const index = GENERATE(0, 2);
         mask.flip(index);
@@ -106,6 +106,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("returns nullopt if all chunks are full.")
     {
+        BitMask& mask{page.topLevelMask()};
         mask.flip();
         CHECK(page.firstFreeChunk() == std::nullopt);
     }
@@ -120,7 +121,7 @@ TEST_CASE("PageInterpretation")
     SECTION("recognises if there is a bit field at the end.")
     {
         uint32_t localChunkSize = 1U;
-        PageInterpretation<pageSize> localPage{data, localChunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> localPage{data, localChunkSize, fillingLevel};
         CHECK(localPage.bitField()._levels != nullptr);
         CHECK(localPage.bitField()._depth == 1U);
     }
@@ -142,13 +143,12 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
-    BitMask mask{};
 
     SECTION("knows correct bit field depths for depth 0.")
     {
         uint32_t const numChunks = BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -157,7 +157,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize - 1;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -167,7 +167,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -177,7 +177,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -188,7 +188,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -199,7 +199,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize
             = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 2U);
     }
@@ -211,7 +211,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)
                               - BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask))
             / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         CHECK(page.bitFieldDepth() == 3U);
     }
@@ -226,13 +226,12 @@ TEST_CASE("PageInterpretation.create")
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
-    BitMask mask{};
 
     SECTION("regardless of hierarchy")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         SECTION("returns a pointer to within the data.")
         {
@@ -250,6 +249,7 @@ TEST_CASE("PageInterpretation.create")
 
         SECTION("returns nullptr if everything is full.")
         {
+            BitMask& mask{page.topLevelMask()};
             mask.set();
             auto* pointer = page.create();
             CHECK(pointer == nullptr);
@@ -277,10 +277,11 @@ TEST_CASE("PageInterpretation.create")
     {
         uint32_t const numChunks = BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         SECTION("updates top-level bit field.")
         {
+            BitMask& mask{page.topLevelMask()};
             REQUIRE(mask.none());
             auto* pointer = page.create();
             auto const index = page.chunkNumberOf(pointer);
@@ -292,10 +293,11 @@ TEST_CASE("PageInterpretation.create")
     {
         uint32_t const numChunks = BitMaskSize * BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         SECTION("recovers from not finding a free chunk in a lower level.")
         {
+            BitMask& mask{page.topLevelMask()};
             auto tree = page.bitField();
             uint32_t const index = 2 * BitMaskSize + 1;
             for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
@@ -321,13 +323,12 @@ TEST_CASE("PageInterpretation.destroy")
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
-    BitMask mask{};
 
     SECTION("regardless of hierarchy")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
         auto* pointer = page.create();
 
         SECTION("throws if given an invalid pointer.")
@@ -416,11 +417,10 @@ TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
-    BitMask mask{};
 
     uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
     uint32_t chunkSize = pageSize / numChunks;
-    PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+    PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
     auto* pointer = page.create();
 
     SECTION("cleans up in bit field region of page when page is abandoned.")

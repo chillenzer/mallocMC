@@ -83,6 +83,26 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
         }
 
+        PageInterpretation(DataPage<T_pageSize>& data, uint32_t& chunkSize, uint32_t& fillingLevel)
+            : _data(data)
+            , _chunkSize(chunkSize)
+            , _topLevelMask(*(PageInterpretation<T_pageSize>::bitFieldStart(data, chunkSize) - 1))
+            , _fillingLevel(fillingLevel)
+        {
+        }
+
+        [[nodiscard]] auto topLevelMask() const -> BitMask&
+        {
+            return _topLevelMask;
+        }
+
+        static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t chunkSize) -> BitMask*
+        {
+            BitMask mask{};
+            uint32_t fillingLevel{};
+            return PageInterpretation<T_pageSize>(data, chunkSize, mask, fillingLevel).bitFieldStart();
+        }
+
         [[nodiscard]] auto numChunks() const -> uint32_t
         {
             return selfConsistentNumChunks(T_pageSize, _chunkSize);

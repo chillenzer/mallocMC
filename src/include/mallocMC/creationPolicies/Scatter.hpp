@@ -78,16 +78,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto interpret(size_t const pageIndex)
         {
-            BitMask mask;
-            PageInterpretation<T_pageSize> page(
-                pages[pageIndex],
-                pageTable._chunkSizes[pageIndex],
-                mask,
-                pageTable._fillingLevels[pageIndex]);
             return PageInterpretation<T_pageSize>(
                 pages[pageIndex],
                 pageTable._chunkSizes[pageIndex],
-                *(page.bitFieldStart() - 1),
                 pageTable._fillingLevels[pageIndex]);
         }
 
@@ -148,17 +141,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     // TODO(lenz): Increment fillingLevel, so everybody is informed that we're interest.
                     pageTable._chunkSizes[index] = numBytes;
 
-                    BitMask mask;
-                    auto page = PageInterpretation<T_pageSize>(
-                        pages[index],
-                        pageTable._chunkSizes[index],
-                        mask,
-                        pageTable._fillingLevels[index]);
                     return std::optional<PageInterpretation<T_pageSize>>{
                         std::in_place_t{},
                         pages[index],
                         pageTable._chunkSizes[index],
-                        *(page.bitFieldStart() - 1),
                         pageTable._fillingLevels[index]};
                 }
             }
