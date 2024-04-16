@@ -60,7 +60,7 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     {
         fillingLevel = maxFillingLevel;
     }
-    for(auto& bitMask : accessBlock.pageTable._bitMasks)
+    for(auto& bitMask : accessBlock.bitMasks())
     {
         bitMask.set();
     }
@@ -171,7 +171,7 @@ TEST_CASE("AccessBlock.create")
     {
         constexpr const uint32_t chunkSize = 32U;
         fillWith(accessBlock, chunkSize);
-        for(auto& bitMask : accessBlock.pageTable._bitMasks)
+        for(auto& bitMask : accessBlock.bitMasks())
         {
             // reverse previous filling
             bitMask.flip();
@@ -187,7 +187,8 @@ TEST_CASE("AccessBlock.create")
         const uint32_t index1 = GENERATE(0, 1, 2, 3);
         const uint32_t index2 = GENERATE(0, 1, 2, 3);
         accessBlock.pageTable._fillingLevels[index1] -= 1;
-        accessBlock.pageTable._bitMasks[index1].flip(index2);
+        accessBlock.bitMasks()[index1].flip(index2);
+
 
         void* result = accessBlock.create(chunkSize);
         REQUIRE(result != nullptr);
@@ -207,7 +208,7 @@ TEST_CASE("AccessBlock.create")
         const uint32_t index3 = GENERATE(0, 1, 2, 3);
 
         accessBlock.pageTable._fillingLevels[index1] -= 1;
-        accessBlock.pageTable._bitMasks[index1].flip(index2);
+        accessBlock.bitMasks()[index1].flip(index2);
 
         // We are a bit sloppy here: Technically speaking, we would have to flip the hierarchical bit fields in all
         // pages for a consistent state. But as we have already flipped all the high-level bits these pages won't be
@@ -297,17 +298,16 @@ TEST_CASE("AccessBlock (destroying)")
         SUCCEED("Just check that you can do this at all.");
     }
 
-    SECTION("resets one bit upon destroy without hierarchy.")
+    SECTION("frees up the page upon destroying the last element without hierarchy.")
     {
         constexpr const uint32_t numBytes = 32U;
         void* pointer = accessBlock.create(numBytes);
-        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        auto pageIndex = indexOf(pointer, std::begin(accessBlock.pages), pageSize);
         auto chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-        REQUIRE(accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
+        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
 
         accessBlock.destroy(pointer);
-
-        CHECK(!accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
+        CHECK(accessBlock.pageTable._chunkSizes[pageIndex] == 0U);
     }
 
     SECTION("resets one bit without touching others upon destroy without hierarchy.")
@@ -317,17 +317,17 @@ TEST_CASE("AccessBlock (destroying)")
         void* untouchedPointer = accessBlock.create(numBytes);
         auto const untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
         auto const untouchedChunkIndex = indexOf(untouchedPointer, &accessBlock.pages[untouchedPageIndex], numBytes);
-        REQUIRE(accessBlock.pageTable._bitMasks[untouchedPageIndex][untouchedChunkIndex]);
+        REQUIRE(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
 
         void* pointer = accessBlock.create(numBytes);
         auto const pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
         auto const chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-        REQUIRE(accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
+        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
 
         accessBlock.destroy(pointer);
 
-        CHECK(accessBlock.pageTable._bitMasks[untouchedPageIndex][untouchedChunkIndex]);
-        CHECK(!accessBlock.pageTable._bitMasks[pageIndex][chunkIndex]);
+        CHECK(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
+        CHECK(!accessBlock.bitMasks()[pageIndex][chunkIndex]);
     }
 
     SECTION("decreases one filling level upon destroy without hierarchy.")

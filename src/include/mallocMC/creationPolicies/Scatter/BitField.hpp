@@ -54,6 +54,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         // situated somewhere else.
         uint32_t depth{0U};
 
+        [[nodiscard]] auto headNode() const -> BitMask&
+        {
+            return head;
+        }
+
         // Return a pointer to the level-th level in the tree.
         auto operator[](uint32_t level) const -> BitMask*
         {

@@ -54,6 +54,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     }
 
     template<size_t T_blockSize, size_t T_pageSize>
+    struct BitMasksWrapper;
+
+    template<size_t T_blockSize, size_t T_pageSize>
     struct AccessBlock
     {
         [[nodiscard]] constexpr static auto numPages() -> size_t
@@ -81,6 +84,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 pageTable._chunkSizes[pageIndex],
                 pageTable._bitMasks[pageIndex],
                 pageTable._fillingLevels[pageIndex]);
+        }
+
+        auto bitMasks()
+        {
+            return BitMasksWrapper<T_blockSize, T_pageSize>{*this};
         }
 
         auto create(uint32_t numBytes) -> void*
@@ -178,4 +186,59 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             interpret(pageIndex).destroy(pointer);
         }
     };
+
+    // TODO(lenz): The structs below are drafts part of an on-going refactoring. They would need significant hardening
+    // to appear in a production version of this code.
+    template<size_t T_blockSize, size_t T_pageSize>
+    struct BitMasksIterator;
+
+    template<size_t T_blockSize, size_t T_pageSize>
+    struct BitMasksWrapper
+    {
+        AccessBlock<T_blockSize, T_pageSize>& accessBlock;
+
+        auto operator[](size_t const index) -> BitMask&
+        {
+            return accessBlock.interpret(index).bitField().headNode();
+        }
+
+        auto begin() -> BitMasksIterator<T_blockSize, T_pageSize>
+        {
+            return {*this, 0};
+        }
+
+        auto end() -> BitMasksIterator<T_blockSize, T_pageSize>
+        {
+            return {*this, accessBlock.numPages()};
+        }
+    };
+
+    template<size_t T_blockSize, size_t T_pageSize>
+    struct BitMasksIterator
+    {
+        BitMasksWrapper<T_blockSize, T_pageSize>& wrapper;
+        size_t index{0U};
+
+        auto operator++()
+        {
+            ++index;
+            return *this;
+        }
+
+        auto operator==(BitMasksIterator<T_blockSize, T_pageSize> const other)
+        {
+            return index == other.index;
+        }
+
+        auto operator!=(BitMasksIterator<T_blockSize, T_pageSize> const other)
+        {
+            return index != other.index;
+        }
+        auto operator*() -> BitMask&
+        {
+            return wrapper[index];
+        }
+    };
+
+
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
