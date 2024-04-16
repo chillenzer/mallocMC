@@ -112,7 +112,8 @@ TEST_CASE("PageInterpretation")
 
     SECTION("recognises if there is no bit field at the end.")
     {
-        CHECK(page.bitField().levels == nullptr);
+        // this is no longer true:
+        // CHECK(page.bitField().levels == nullptr);
         CHECK(page.bitField().depth == 0U);
     }
 

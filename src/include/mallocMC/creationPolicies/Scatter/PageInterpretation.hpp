@@ -181,10 +181,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitFieldStart() const -> BitMask*
         {
-            if(!hasBitField())
-            {
-                return nullptr;
-            }
             return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
         }
 

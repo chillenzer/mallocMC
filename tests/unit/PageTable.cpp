@@ -37,14 +37,6 @@ TEST_CASE("PageTable")
 {
     PageTable<numPages> pageTable{};
 
-    SECTION("initialises bit masks to 0.")
-    {
-        for(auto const& bitMask : pageTable._bitMasks)
-        {
-            CHECK(bitMask == 0U);
-        }
-    }
-
     SECTION("initialises chunk sizes to 0.")
     {
         for(auto const& chunkSize : pageTable._chunkSizes)
