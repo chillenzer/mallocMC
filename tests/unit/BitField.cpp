@@ -97,7 +97,7 @@ TEST_CASE("BitFieldTree")
         uint32_t const index = GENERATE(0, 3);
         head.flip(index);
 
-        BitFieldTree tree{head, nullptr, 0U};
+        BitFieldTree tree{std::begin(data), 0U};
 
         CHECK(firstFreeBit(tree) == index);
     }
@@ -115,7 +115,7 @@ TEST_CASE("BitFieldTree")
         }
         main[firstLevelIndex].flip(secondLevelIndex);
 
-        BitFieldTree tree{head, &(main[0]), 1U};
+        BitFieldTree tree{std::begin(data), 1U};
 
         CHECK(firstFreeBit(tree) == firstLevelIndex * BitMaskSize + secondLevelIndex);
     }
@@ -136,7 +136,7 @@ TEST_CASE("BitFieldTree")
         main[firstLevelIndex].flip(secondLevelIndex);
         main[BitMaskSize * (1 + firstLevelIndex) + secondLevelIndex].flip(thirdLevelIndex);
 
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
 
         CHECK(
             firstFreeBit(tree) == BitMaskSize * (BitMaskSize * firstLevelIndex + secondLevelIndex) + thirdLevelIndex);
@@ -144,7 +144,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("sets top-level mask bits for depth 0.")
     {
-        BitFieldTree tree{head, nullptr, 0U};
+        BitFieldTree tree{std::begin(data), 0U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
@@ -155,7 +155,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("sets lowest-level mask bits for depth not 0.")
     {
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
 
         tree.set(index);
@@ -171,7 +171,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("sets bits in top-level mask as appropriate for depth 1.")
     {
-        BitFieldTree tree{head, &(main[0]), 1U};
+        BitFieldTree tree{std::begin(data), 1U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
@@ -188,7 +188,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("sets bits in higher-level mask as appropriate for depth 2.")
     {
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
 
         for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
@@ -213,7 +213,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("unsets top-level mask bits for depth 0.")
     {
-        BitFieldTree tree{head, nullptr, 0U};
+        BitFieldTree tree{std::begin(data), 0U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
@@ -226,7 +226,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("unsets lowest-level mask bits for depth not 0.")
     {
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
 
         tree.set(index);
@@ -249,7 +249,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("unsets bits in higher-level mask as appropriate for depth 2.")
     {
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
         uint32_t index = 3U;
         uint32_t unsetIndex = 0;
 
@@ -287,7 +287,7 @@ TEST_CASE("BitFieldTree")
 
     SECTION("recovers from incorrect higher-level bits when finding a free bit.")
     {
-        BitFieldTree tree{head, &(main[0]), 2U};
+        BitFieldTree tree{std::begin(data), 2U};
         uint32_t const index = 7 * BitMaskSize * BitMaskSize + 5;
 
         for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
