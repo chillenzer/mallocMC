@@ -86,22 +86,24 @@ TEST_CASE("treeVolume")
 
 TEST_CASE("BitFieldTree")
 {
+    // This is potentially larger than we actually need but that's okay:
+    BitMask data[1 + BitMaskSize * (1 + BitMaskSize)]{};
+    BitMask& head{data[0]};
+    std::span<BitMask, BitMaskSize * (1 + BitMaskSize)> main{&data[1], BitMaskSize * (1 + BitMaskSize)};
+
     SECTION("knows its first free bit with depth 0.")
     {
-        BitMask mask{};
-        mask.flip();
+        head.flip();
         uint32_t const index = GENERATE(0, 3);
-        mask.flip(index);
+        head.flip(index);
 
-        BitFieldTree tree{mask, nullptr, 0U};
+        BitFieldTree tree{head, nullptr, 0U};
 
         CHECK(firstFreeBit(tree) == index);
     }
 
     SECTION("knows its first free bit with depth 1.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize]{};
         uint32_t const firstLevelIndex = GENERATE(0, 3);
         uint32_t const secondLevelIndex = GENERATE(2, 5);
 
@@ -120,8 +122,6 @@ TEST_CASE("BitFieldTree")
 
     SECTION("knows its first free bit with depth 2.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
         uint32_t const firstLevelIndex = GENERATE(0, 5);
         uint32_t const secondLevelIndex = GENERATE(2, 7);
         uint32_t const thirdLevelIndex = GENERATE(3, 11);
@@ -144,20 +144,17 @@ TEST_CASE("BitFieldTree")
 
     SECTION("sets top-level mask bits for depth 0.")
     {
-        BitMask head{};
         BitFieldTree tree{head, nullptr, 0U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree.head[i] == (i == index));
+            CHECK(tree._head[i] == (i == index));
         }
     }
 
     SECTION("sets lowest-level mask bits for depth not 0.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
         BitFieldTree tree{head, &(main[0]), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
 
@@ -167,15 +164,13 @@ TEST_CASE("BitFieldTree")
         {
             for(uint32_t j = 0; j < BitMaskSize; ++j)
             {
-                CHECK(tree[tree.depth][i][j] == (i * BitMaskSize + j == index));
+                CHECK(tree[tree._depth][i][j] == (i * BitMaskSize + j == index));
             }
         }
     }
 
     SECTION("sets bits in top-level mask as appropriate for depth 1.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize];
         BitFieldTree tree{head, &(main[0]), 1U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
 
@@ -187,14 +182,12 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree.head[i] == (i == index));
+            CHECK(tree._head[i] == (i == index));
         }
     }
 
     SECTION("sets bits in higher-level mask as appropriate for depth 2.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)];
         BitFieldTree tree{head, &(main[0]), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
 
@@ -206,7 +199,7 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree.head[i] == (i == index));
+            CHECK(tree._head[i] == (i == index));
             if(i == index)
             {
                 CHECK(tree[1U][i].all());
@@ -220,22 +213,19 @@ TEST_CASE("BitFieldTree")
 
     SECTION("unsets top-level mask bits for depth 0.")
     {
-        BitMask head{};
         BitFieldTree tree{head, nullptr, 0U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1);
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            REQUIRE(tree.head[i] == (i == index));
+            REQUIRE(tree._head[i] == (i == index));
         }
         tree.set(index, false);
-        CHECK(tree.head.none());
+        CHECK(tree._head.none());
     }
 
     SECTION("unsets lowest-level mask bits for depth not 0.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)]{};
         BitFieldTree tree{head, &(main[0]), 2U};
         uint32_t index = GENERATE(0, 1, BitMaskSize - 1, BitMaskSize * BitMaskSize - 1);
 
@@ -245,22 +235,20 @@ TEST_CASE("BitFieldTree")
         {
             for(uint32_t j = 0; j < BitMaskSize; ++j)
             {
-                REQUIRE(tree[tree.depth][i][j] == (i * BitMaskSize + j == index));
+                REQUIRE(tree[tree._depth][i][j] == (i * BitMaskSize + j == index));
             }
         }
 
         tree.set(index, false);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree[tree.depth][i].none());
+            CHECK(tree[tree._depth][i].none());
         }
     }
 
 
     SECTION("unsets bits in higher-level mask as appropriate for depth 2.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)];
         BitFieldTree tree{head, &(main[0]), 2U};
         uint32_t index = 3U;
         uint32_t unsetIndex = 0;
@@ -273,7 +261,7 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            REQUIRE(tree.head[i] == (i == index));
+            REQUIRE(tree._head[i] == (i == index));
             if(i == index)
             {
                 REQUIRE(tree[1U][i].all());
@@ -294,20 +282,18 @@ TEST_CASE("BitFieldTree")
         {
             CHECK(tree[1U][i].none());
         }
-        CHECK(tree.head.none());
+        CHECK(tree._head.none());
     }
 
     SECTION("recovers from incorrect higher-level bits when finding a free bit.")
     {
-        BitMask head{};
-        BitMask main[BitMaskSize * (1 + BitMaskSize)];
         BitFieldTree tree{head, &(main[0]), 2U};
         uint32_t const index = 7 * BitMaskSize * BitMaskSize + 5;
 
         for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
         {
             // fill up lowest level but don't tell the higher levels, so that we get into a neatly inconsistent state
-            tree[tree.depth][i].set();
+            tree[tree._depth][i].set();
         }
         tree.set(index, false);
         CHECK(firstFreeBit(tree) == index);

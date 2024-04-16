@@ -71,7 +71,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t& _fillingLevel;
 
         // this is needed to instantiate this in-place in an std::optional
-        PageInterpretation<T_pageSize>(
+        PageInterpretation(
             DataPage<T_pageSize>& data,
             uint32_t& chunkSize,
             BitMask& topLevelMask,
@@ -160,14 +160,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto isAllocated(uint32_t const chunkIndex) -> bool
         {
             auto tree = bitField();
-            return tree[tree.depth][chunkIndex / _chunkSize][chunkIndex % _chunkSize];
+            return tree[tree._depth][chunkIndex / _chunkSize][chunkIndex % _chunkSize];
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
             auto tree = bitField();
             auto const index = firstFreeBit(tree);
-            if(index < noFreeBitFound(tree.depth))
+            if(index < noFreeBitFound(tree._depth))
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
             }

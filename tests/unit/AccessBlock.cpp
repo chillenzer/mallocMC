@@ -215,11 +215,11 @@ TEST_CASE("AccessBlock.create")
         // considered anyways.
         auto page = accessBlock.interpret(index1);
         auto bitField = page.bitField();
-        for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField.depth) - 1; ++i)
+        for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField._depth) - 1; ++i)
         {
-            bitField.levels[i].set();
+            bitField._levels[i].set();
         }
-        bitField[bitField.depth][index2].flip(index3);
+        bitField[bitField._depth][index2].flip(index3);
 
 
         void* result = accessBlock.create(chunkSize);

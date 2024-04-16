@@ -50,16 +50,24 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         // This class is about to be removed. But until it is, we'll document that this weird structure of separate
         // head and levels is a relict of the original idea of storing the top-level bit mask in the AccessBlock and
         // the potential further bit masks in the page itself.
-        BitMask& head; // NOLINT(*ref*member*)
-        BitMask* levels{nullptr};
+        BitMask& _head; // NOLINT(*ref*member*)
+        BitMask* _levels{nullptr};
         // CAUTION: This might be slightly unintuitive but `depth` refers to the number of levels below `head` (or the
         // number of edges down to a leave). This is convenient due to our weird storage situation where the head is
         // situated somewhere else.
-        uint32_t depth{0U};
+        uint32_t _depth{0U};
+
+        BitFieldTree(BitMask& head, BitMask* levels, uint32_t depth) : _head(head), _levels(levels), _depth(depth)
+        {
+        }
+
+        BitFieldTree(BitMask* data, uint32_t depth) : _head(data[0]), _levels(&data[1]), _depth(depth)
+        {
+        }
 
         [[nodiscard]] auto headNode() const -> BitMask&
         {
-            return head;
+            return _head;
         }
 
         // Return a pointer to the level-th level in the tree.
@@ -67,21 +75,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(level == 0)
             {
-                return &head;
+                return &_head;
             }
             // We subtract one because the head node is stored separately.
-            return &levels[treeVolume<BitMaskSize>(level - 1) - 1];
+            return &_levels[treeVolume<BitMaskSize>(level - 1) - 1];
         }
 
         // Set the bit corresponding to chunk `index`. If that fills the corresponding bit mask, the function takes
         // care of propagating up the information.
         void set(uint32_t const index, bool value = true)
         {
-            auto& mask = this->operator[](depth)[index / BitMaskSize];
+            auto& mask = this->operator[](_depth)[index / BitMaskSize];
             mask.set(index % BitMaskSize, value);
-            if(depth > 0 && (value == mask.all()))
+            if(_depth > 0 && (value == mask.all()))
             {
-                BitFieldTree{head, levels, depth - 1U}.set(index / BitMaskSize, value);
+                BitFieldTree{_head, _levels, _depth - 1U}.set(index / BitMaskSize, value);
             }
         }
     };
@@ -107,11 +115,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
         // TODO(lenz): Allow for arbitrary starting point for hashing.
-        uint32_t indexOnLevel[tree.depth + 2];
+        uint32_t indexOnLevel[tree._depth + 2];
         indexOnLevel[0] = 0U;
         uint32_t startIndex = 0U;
 
-        for(uint32_t currentDepth = 0U; currentDepth <= tree.depth; currentDepth++)
+        for(uint32_t currentDepth = 0U; currentDepth <= tree._depth; currentDepth++)
         {
             const auto index = firstFreeBit(tree[currentDepth][indexOnLevel[currentDepth]], startIndex);
 
@@ -119,7 +127,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 if(currentDepth == 0)
                 {
-                    return noFreeBitFound(tree.depth);
+                    return noFreeBitFound(tree._depth);
                 }
                 startIndex = indexOnLevel[currentDepth] + 1;
                 // move up twice because the next iteration step will execute currentDepth++, so we're effectively
@@ -132,6 +140,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 indexOnLevel[currentDepth + 1] = (BitMaskSize * indexOnLevel[currentDepth]) + index;
             }
         }
-        return indexOnLevel[tree.depth + 1];
+        return indexOnLevel[tree._depth + 1];
     }
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

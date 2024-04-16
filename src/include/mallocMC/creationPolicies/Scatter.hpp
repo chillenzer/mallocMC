@@ -79,7 +79,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto interpret(size_t const pageIndex)
         {
             BitMask mask;
-            auto page = PageInterpretation<T_pageSize>(
+            PageInterpretation<T_pageSize> page(
                 pages[pageIndex],
                 pageTable._chunkSizes[pageIndex],
                 mask,
