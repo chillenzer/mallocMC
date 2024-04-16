@@ -98,6 +98,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
     {
+        // TODO(lenz): Allow for arbitrary starting point for hashing.
         uint32_t indexOnLevel[tree.depth + 2];
         indexOnLevel[0] = 0U;
         uint32_t startIndex = 0U;

@@ -108,7 +108,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto chunk = firstFreeChunk();
             if(chunk)
             {
+                // TODO(lenz): Don't do this anymore, this will have been already handled by AccessBlock.choosePage.
                 atomicAdd(_fillingLevel, 1U);
+                // TODO(lenz): Move this into firstFreeChunk().
                 bitField().set(chunk.value().index);
                 return chunk.value().pointer;
             }
@@ -128,9 +130,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 bitField().set(chunkIndex, false);
                 atomicAdd(_fillingLevel, -1);
+                // TODO(lenz): this should use the return from atomicAdd
                 if(_fillingLevel == 0U)
                 {
+                    // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
+                    // TODO(lenz): this should be atomic CAS
                     _chunkSize = 0U;
+                    // TODO(lenz): Clean up full range of possible bitfield.
                 }
             }
         }
@@ -138,6 +144,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         auto isValidDestruction(uint32_t const chunkIndex) -> bool
         {
+            // TODO(lenz): Only enable these checks in debug mode.
             if(chunkIndex < 0 || chunkIndex >= numChunks())
             {
                 throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};

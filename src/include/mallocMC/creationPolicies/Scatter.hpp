@@ -50,7 +50,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline auto computeHash([[maybe_unused]] uint32_t const numBytes) -> size_t
     {
-        return 0;
+        return 42U; // NOLINT(*magic*)
     }
 
     template<size_t T_blockSize, size_t T_pageSize>
@@ -101,7 +101,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
             // TODO(lenz): This loop is dangerous. If we'd happen to be in an inconsistent state, this would get us
             // into an infinite loop. Check if we can solve this more elegantly.
-            while(auto page = choosePage(numBytes, startIndex))
+            while(auto page = choosePage(
+                      numBytes,
+                      startIndex /*TODO: should get also "originalStart", so we know when we're done*/))
             {
                 auto pointer = page.value().create();
                 if(pointer != nullptr)
@@ -121,6 +123,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto index = (startIndex + i) % numPages();
                 if(thisPageIsAppropriate(index, numBytes))
                 {
+                    // TODO(lenz): Increment fillingLevel, so everybody is informed that we're interest.
                     pageTable._chunkSizes[index] = numBytes;
                     return std::optional<PageInterpretation<T_pageSize>>{
                         std::in_place_t{},
@@ -172,10 +175,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 pageTable._bitMasks[pageIndex],
                 pageTable._fillingLevels[pageIndex]};
 
-            --page._fillingLevel;
-
-            auto chunkIndex = page.chunkNumberOf(pointer);
-            page._topLevelMask.set(chunkIndex, false);
+            page.destroy(pointer);
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

@@ -382,3 +382,18 @@ TEST_CASE("AccessBlock (destroying)")
         CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
     }
 }
+
+TEST_CASE("AccessBlock.destroy (failing)", "[!shouldfail]")
+{
+    AccessBlock<blockSize, pageSize> accessBlock;
+
+    SECTION("multiple pages is half-baked.")
+    {
+        FAIL("Doesn't yet set chunk size, filling level, etc.");
+    }
+
+    SECTION("can destroy multiple pages.")
+    {
+        FAIL("Not yet implemented.");
+    }
+}

@@ -306,7 +306,7 @@ TEST_CASE("PageInterpretation.create")
             tree.set(index, false);
             REQUIRE(mask.none());
             auto* pointer = page.create();
-            CHECK(indexOf(pointer, page._data.data, chunkSize) == index);
+            CHECK(indexOf(pointer, std::begin(page._data.data), chunkSize) == index);
         }
     }
 }
@@ -403,23 +403,43 @@ TEST_CASE("PageInterpretation.destroy")
             page.destroy(pointer);
             CHECK(page._chunkSize == 0U);
         }
+    }
+}
 
-        SECTION("cleans up in bit field region of page when page is abandoned.")
+TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
+{
+    uint32_t fillingLevel{};
+    // Such that we can fit up to four levels of hierarchy in there:
+    constexpr size_t const pageSize
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
+    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
+    DataPage<pageSize>& data{*actualData};
+    BitMask mask{};
+
+    uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
+    uint32_t chunkSize = pageSize / numChunks;
+    PageInterpretation<pageSize> page{data, chunkSize, mask, fillingLevel};
+    auto* pointer = page.create();
+
+    SECTION("cleans up in bit field region of page when page is abandoned.")
+    {
+        // This test does not really do anything and no such functionality is implemented currently because in a
+        // single-threaded environment this is a trivial condition (as long as you use the create()/destroy()
+        // interface). This might change once we enter multi-threaded realms.
+        // TODO(lenz): Come back to this and check if this still holds true in the final implementation.
+
+        // This is the only allocation on this page, so page is abandoned afterwards.
+        page.destroy(pointer);
+
+        // TODO(lenz): Check for off-by-one error in lower bound.
+        for(size_t i = pageSize - 1; i >= pageSize - page.maxBitFieldSize(); i--)
         {
-            // This test does not really do anything and no such functionality is implemented currently because in a
-            // single-threaded environment this is a trivial condition (as long as you use the create()/destroy()
-            // interface). This might change once we enter multi-threaded realms.
-            // TODO(lenz): Come back to this and check if this still holds true in the final implementation.
-
-            // This is the only allocation on this page, so page is abandoned afterwards.
-            page.destroy(pointer);
-
-            // TODO(lenz): Check for off-by-one error in lower bound.
-            for(size_t i = pageSize - 1; i >= pageSize - page.maxBitFieldSize(); i--)
-            {
-                CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
-            }
+            CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
         }
+
+        FAIL("Not yet implemented, needs to check what happens when a smaller chunkSize, i.e. more metadata, is "
+             "used next time.");
     }
 }
 

@@ -27,7 +27,6 @@
 
 #pragma once
 
-#include <cstddef>
 #include <iterator>
 #include <type_traits>
 
@@ -65,7 +64,7 @@ namespace mallocMC
         return counter;
     }
 
-    inline auto indexOf(void* const pointer, void* start, size_t const stepSize) -> size_t
+    inline auto indexOf(void* const pointer, void* const start, ssize_t const stepSize) -> ssize_t
     {
         return std::distance(reinterpret_cast<char*>(start), reinterpret_cast<char*>(pointer)) / stepSize;
     }
