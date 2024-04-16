@@ -196,7 +196,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitField() const -> BitFieldTree
         {
-            return BitFieldTree{_topLevelMask, bitFieldStart(), bitFieldDepth()};
+            return BitFieldTree{topLevelMask(), bitFieldStart(), bitFieldDepth()};
         }
 
         [[nodiscard]] auto bitFieldStart() const -> BitMask*
@@ -223,7 +223,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
         {
             uint32_t tmpChunkSize = 1U;
-            return PageInterpretation<T_pageSize>{_data, tmpChunkSize, _topLevelMask, _fillingLevel}.bitFieldSize();
+            return PageInterpretation<T_pageSize>{_data, tmpChunkSize, _fillingLevel}.bitFieldSize();
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t

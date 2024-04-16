@@ -356,9 +356,9 @@ TEST_CASE("PageInterpretation.destroy")
 
         SECTION("only ever unsets bits in top-level bit mask.")
         {
-            auto count = page._topLevelMask.count();
+            auto count = page.topLevelMask().count();
             page.destroy(pointer);
-            CHECK(page._topLevelMask.count() <= count);
+            CHECK(page.topLevelMask().count() <= count);
         }
 
         SECTION("unsets correct bit in lowest-level bit mask.")
