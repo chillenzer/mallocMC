@@ -217,7 +217,7 @@ TEST_CASE("AccessBlock.create")
         {
             bitField._levels[i].set();
         }
-        bitField[bitField._depth][index2].flip(index3);
+        bitField.level(bitField._depth)[index2].flip(index3);
 
 
         void* result = accessBlock.create(chunkSize);

@@ -71,7 +71,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         // Return a pointer to the level-th level in the tree.
-        auto level(uint32_t index) const -> BitMask*
+        [[nodiscard]] auto level(uint32_t index) const -> BitMask*
         {
             if(index == 0)
             {
@@ -81,21 +81,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return &_levels[treeVolume<BitMaskSize>(index - 1) - 1];
         }
 
-        auto operator[](uint32_t index) const -> BitMask*
-        {
-            return level(index);
-        }
-
         [[nodiscard]] auto get(uint32_t index) const -> bool
         {
-            return this->operator[](_depth)[index / BitMaskSize][index % BitMaskSize];
+            return level(_depth)[index / BitMaskSize][index % BitMaskSize];
         }
 
         // Set the bit corresponding to chunk `index`. If that fills the corresponding bit mask, the function takes
         // care of propagating up the information.
         void set(uint32_t const index, bool value = true)
         {
-            auto& mask = this->operator[](_depth)[index / BitMaskSize];
+            auto& mask = level(_depth)[index / BitMaskSize];
             mask.set(index % BitMaskSize, value);
             if(_depth > 0 && (value == mask.all()))
             {
@@ -131,7 +126,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         for(uint32_t currentDepth = 0U; currentDepth <= tree._depth; currentDepth++)
         {
-            const auto index = firstFreeBit(tree[currentDepth][indexOnLevel[currentDepth]], startIndex);
+            const auto index = firstFreeBit(tree.level(currentDepth)[indexOnLevel[currentDepth]], startIndex);
 
             if(index == noFreeBitFound(0))
             {

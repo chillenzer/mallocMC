@@ -304,7 +304,7 @@ TEST_CASE("PageInterpretation.create")
             {
                 // We fill only the lowest level leaving the upper ones empty, so the PageInterpretation will fail to
                 // find a free bit on the first attempt and has to recover from it.
-                tree[tree._depth][i].set();
+                tree.level(tree._depth)[i].set();
             }
             tree.set(index, false);
             REQUIRE(mask.none());
@@ -371,14 +371,14 @@ TEST_CASE("PageInterpretation.destroy")
             auto const index = mallocMC::indexOf(pointer, &page._data, chunkSize);
             for(uint32_t i = 0; i < numChunks; ++i)
             {
-                REQUIRE(tree[tree._depth][i / BitMaskSize][i % BitMaskSize] == (i == index));
+                REQUIRE(tree.level(tree._depth)[i / BitMaskSize][i % BitMaskSize] == (i == index));
             }
 
             page.destroy(pointer);
 
             for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
             {
-                CHECK(tree[tree._depth][i].none());
+                CHECK(tree.level(tree._depth)[i].none());
             }
         }
 

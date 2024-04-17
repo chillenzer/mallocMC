@@ -150,7 +150,7 @@ TEST_CASE("BitFieldTree")
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree._head[i] == (i == index));
+            CHECK(tree.headNode()[i] == (i == index));
         }
     }
 
@@ -165,7 +165,7 @@ TEST_CASE("BitFieldTree")
         {
             for(uint32_t j = 0; j < BitMaskSize; ++j)
             {
-                CHECK(tree[tree._depth][i][j] == (i * BitMaskSize + j == index));
+                CHECK(tree.level(tree._depth)[i][j] == (i * BitMaskSize + j == index));
             }
         }
     }
@@ -183,7 +183,7 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree._head[i] == (i == index));
+            CHECK(tree.headNode()[i] == (i == index));
         }
     }
 
@@ -200,14 +200,14 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree._head[i] == (i == index));
+            CHECK(tree.headNode()[i] == (i == index));
             if(i == index)
             {
-                CHECK(tree[1U][i].all());
+                CHECK(tree.level(1U)[i].all());
             }
             else
             {
-                CHECK(tree[1U][i].none());
+                CHECK(tree.level(1U)[i].none());
             }
         }
     }
@@ -219,10 +219,10 @@ TEST_CASE("BitFieldTree")
         tree.set(index);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            REQUIRE(tree._head[i] == (i == index));
+            REQUIRE(tree.headNode()[i] == (i == index));
         }
         tree.set(index, false);
-        CHECK(tree._head.none());
+        CHECK(tree.headNode().none());
     }
 
     SECTION("unsets lowest-level mask bits for depth not 0.")
@@ -236,14 +236,14 @@ TEST_CASE("BitFieldTree")
         {
             for(uint32_t j = 0; j < BitMaskSize; ++j)
             {
-                REQUIRE(tree[tree._depth][i][j] == (i * BitMaskSize + j == index));
+                REQUIRE(tree.level(tree._depth)[i][j] == (i * BitMaskSize + j == index));
             }
         }
 
         tree.set(index, false);
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree[tree._depth][i].none());
+            CHECK(tree.level(tree._depth)[i].none());
         }
     }
 
@@ -262,14 +262,14 @@ TEST_CASE("BitFieldTree")
 
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            REQUIRE(tree._head[i] == (i == index));
+            REQUIRE(tree.headNode()[i] == (i == index));
             if(i == index)
             {
-                REQUIRE(tree[1U][i].all());
+                REQUIRE(tree.level(1U)[i].all());
             }
             else
             {
-                REQUIRE(tree[1U][i].none());
+                REQUIRE(tree.level(1U)[i].none());
             }
         }
 
@@ -281,9 +281,9 @@ TEST_CASE("BitFieldTree")
         }
         for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
-            CHECK(tree[1U][i].none());
+            CHECK(tree.level(1U)[i].none());
         }
-        CHECK(tree._head.none());
+        CHECK(tree.headNode().none());
     }
 
     SECTION("recovers from incorrect higher-level bits when finding a free bit.")
@@ -294,7 +294,7 @@ TEST_CASE("BitFieldTree")
         for(uint32_t i = 0; i < BitMaskSize * BitMaskSize; ++i)
         {
             // fill up lowest level but don't tell the higher levels, so that we get into a neatly inconsistent state
-            tree[tree._depth][i].set();
+            tree.level(tree._depth)[i].set();
         }
         tree.set(index, false);
         CHECK(firstFreeBit(tree) == index);
