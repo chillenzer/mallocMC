@@ -153,9 +153,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
         {
-            return (pageTable._chunkSizes[index] == numBytes
-                    && pageTable._fillingLevels[index] < interpret(index).numChunks())
-                || pageTable._chunkSizes[index] == 0U;
+            // The order is important here: If chunk size is 0, we are not able to determine numChunks(). So, we only
+            // want to check the filling level after we've checked for the chunk size.
+            return pageTable._chunkSizes[index] == 0U
+                || (pageTable._chunkSizes[index] == numBytes
+                    && pageTable._fillingLevels[index] < interpret(index).numChunks());
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>

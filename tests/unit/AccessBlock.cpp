@@ -27,7 +27,6 @@
 
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
-#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include <algorithm>
 #include <catch2/catch.hpp>
@@ -44,8 +43,8 @@ using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
-// bitmask, chunksize, filling level
-constexpr size_t pteSize = 4 + 4 + 8;
+// bitmask, chunksize
+constexpr size_t pteSize = 4 + 4;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
 
 template<size_t T_blockSize, size_t T_pageSize>
@@ -213,8 +212,7 @@ TEST_CASE("AccessBlock.create")
         // We are a bit sloppy here: Technically speaking, we would have to flip the hierarchical bit fields in all
         // pages for a consistent state. But as we have already flipped all the high-level bits these pages won't be
         // considered anyways.
-        auto page = accessBlock.interpret(index1);
-        auto bitField = page.bitField();
+        auto bitField = accessBlock.interpret(index1).bitField();
         for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField._depth) - 1; ++i)
         {
             bitField._levels[i].set();

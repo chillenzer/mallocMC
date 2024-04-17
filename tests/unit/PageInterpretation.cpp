@@ -130,7 +130,7 @@ TEST_CASE("PageInterpretation")
     {
         // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
         // field size should be
-        CHECK(page.maxBitFieldSize() == 32U * sizeof(BitMask));
+        CHECK(page.maxBitFieldSize() == (1U + 32U) * sizeof(BitMask));
     }
 }
 
@@ -356,9 +356,13 @@ TEST_CASE("PageInterpretation.destroy")
 
         SECTION("only ever unsets bits in top-level bit mask.")
         {
-            auto count = page.topLevelMask().count();
+            // We extract the position of the mask before destroying the pointer because technically speaking the whole
+            // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
+            // free the page.
+            auto mask = page.topLevelMask();
+            auto count = mask.count();
             page.destroy(pointer);
-            CHECK(page.topLevelMask().count() <= count);
+            CHECK(mask.count() <= count);
         }
 
         SECTION("unsets correct bit in lowest-level bit mask.")

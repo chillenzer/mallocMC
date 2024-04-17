@@ -37,7 +37,7 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t pageTableEntrySize = 4U + 4U + sizeof(BitMask);
+    constexpr const uint32_t pageTableEntrySize = 4U + 4U;
 
     // Computing the number of chunks is not quite trivial: We have to take into account the space for the hierarchical
     // bit field at the end of the page, the size of which again depends on the number of chunks. So, we kind of solve
@@ -67,40 +67,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         DataPage<T_pageSize>& _data;
         uint32_t& _chunkSize;
-        BitMask& _topLevelMask;
         uint32_t& _fillingLevel;
 
         // this is needed to instantiate this in-place in an std::optional
-        PageInterpretation(
-            DataPage<T_pageSize>& data,
-            uint32_t& chunkSize,
-            BitMask& topLevelMask,
-            uint32_t& fillingLevel)
-            : _data(data)
-            , _chunkSize(chunkSize)
-            , _topLevelMask(topLevelMask)
-            , _fillingLevel(fillingLevel)
-        {
-        }
-
         PageInterpretation(DataPage<T_pageSize>& data, uint32_t& chunkSize, uint32_t& fillingLevel)
             : _data(data)
             , _chunkSize(chunkSize)
-            , _topLevelMask(*(PageInterpretation<T_pageSize>::bitFieldStart(data, chunkSize) - 1))
             , _fillingLevel(fillingLevel)
         {
         }
 
         [[nodiscard]] auto topLevelMask() const -> BitMask&
         {
-            return _topLevelMask;
+            return *PageInterpretation<T_pageSize>::bitFieldStart(_data, _chunkSize);
         }
 
         static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t chunkSize) -> BitMask*
         {
-            BitMask mask{};
             uint32_t fillingLevel{};
-            return PageInterpretation<T_pageSize>(data, chunkSize, mask, fillingLevel).bitFieldStart();
+            return PageInterpretation<T_pageSize>(data, chunkSize, fillingLevel).bitFieldStart();
         }
 
         [[nodiscard]] auto numChunks() const -> uint32_t
@@ -196,7 +181,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitField() const -> BitFieldTree
         {
-            return BitFieldTree{topLevelMask(), bitFieldStart(), bitFieldDepth()};
+            return BitFieldTree{bitFieldStart(), bitFieldDepth()};
         }
 
         [[nodiscard]] auto bitFieldStart() const -> BitMask*
@@ -206,12 +191,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
-            if(!hasBitField())
-            {
-                return 0U;
-            }
-            auto tmp = sizeof(BitMask) * (treeVolume<BitMaskSize>(bitFieldDepth()) - 1);
-            return tmp;
+            return sizeof(BitMask) * treeVolume<BitMaskSize>(bitFieldDepth());
         }
 
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t
