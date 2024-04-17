@@ -31,6 +31,7 @@
 
 #include <bitset>
 #include <cstdint>
+#include <span>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -97,11 +98,56 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 BitFieldTree{_head, _levels, _depth - 1U}.set(index / BitMaskSize, value);
             }
         }
+
+        [[nodiscard]] auto size() const -> size_t
+        {
+            return treeVolume<BitMaskSize>(_depth) - 1;
+        }
     };
 
-    constexpr inline auto noFreeBitFound(uint32_t const depth) -> uint32_t
+    struct BitFieldFlat
     {
-        return powInt(BitMaskSize, depth + 1);
+        std::span<BitMask> data;
+
+        [[nodiscard]] auto get(uint32_t index) const -> bool
+        {
+            return data[index / BitMaskSize][index % BitMaskSize];
+        }
+
+        void set(uint32_t const index, bool value = true)
+        {
+            data[index / BitMaskSize].set(index % BitMaskSize, value);
+        }
+
+        [[nodiscard]] auto begin() const
+        {
+            return std::begin(data);
+        }
+
+        [[nodiscard]] auto end() const
+        {
+            return std::end(data);
+        }
+
+        [[nodiscard]] auto size() const
+        {
+            return data.size() * BitMaskSize;
+        }
+    };
+
+    constexpr inline auto noFreeBitFound(BitFieldTree const& tree) -> uint32_t
+    {
+        return powInt(BitMaskSize, tree._depth + 1);
+    }
+
+    constexpr inline auto noFreeBitFound(BitMask const& /*unused*/) -> uint32_t
+    {
+        return BitMaskSize;
+    }
+
+    constexpr inline auto noFreeBitFound(BitFieldFlat const& field) -> uint32_t
+    {
+        return field.size();
     }
 
     [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask, uint32_t const startIndex = 0) -> uint32_t
@@ -114,7 +160,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return i;
             }
         }
-        return noFreeBitFound(0);
+        return noFreeBitFound(mask);
     }
 
     inline auto firstFreeBit(BitFieldTree tree) -> uint32_t
@@ -128,11 +174,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             const auto index = firstFreeBit(tree.level(currentDepth)[indexOnLevel[currentDepth]], startIndex);
 
-            if(index == noFreeBitFound(0))
+            if(index == noFreeBitFound(BitMask{}))
             {
                 if(currentDepth == 0)
                 {
-                    return noFreeBitFound(tree._depth);
+                    return noFreeBitFound(tree);
                 }
                 startIndex = indexOnLevel[currentDepth] + 1;
                 // move up twice because the next iteration step will execute currentDepth++, so we're effectively
@@ -147,4 +193,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
         return indexOnLevel[tree._depth + 1];
     }
+
+    inline auto firstFreeBit(BitFieldFlat field) -> uint32_t
+    {
+        for(uint32_t i = 0; i < field.size(); ++i)
+        {
+            if(!field.get(i))
+            {
+                return i;
+            }
+        }
+        return noFreeBitFound(field);
+    }
+
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

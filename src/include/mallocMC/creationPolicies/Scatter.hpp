@@ -201,7 +201,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto operator[](size_t const index) -> BitMask&
         {
-            return accessBlock.interpret(index).bitField().headNode();
+            return *accessBlock.interpret(index).bitField().begin();
         }
 
         auto begin() -> BitMasksIterator<T_blockSize, T_pageSize>

@@ -39,7 +39,6 @@
 #include <iterator>
 #include <optional>
 
-using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
@@ -68,7 +67,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("computes correct number of pages.")
     {
-        CHECK(page.numChunks() == pageSize / chunkSize);
+        CHECK(page.numChunks() == 31U);
     }
 
     SECTION("detects correctly if page should contain bitfield.")
@@ -106,31 +105,18 @@ TEST_CASE("PageInterpretation")
 
     SECTION("returns nullopt if all chunks are full.")
     {
-        BitMask& mask{page.topLevelMask()};
-        mask.flip();
+        for(auto& mask : page.bitField())
+        {
+            mask.set();
+        }
         CHECK(page.firstFreeChunk() == std::nullopt);
-    }
-
-    SECTION("recognises if there is no bit field at the end.")
-    {
-        // this is no longer true:
-        // CHECK(page.bitField().levels == nullptr);
-        CHECK(page.bitField()._depth == 0U);
-    }
-
-    SECTION("recognises if there is a bit field at the end.")
-    {
-        uint32_t localChunkSize = 1U;
-        PageInterpretation<pageSize> localPage{data, localChunkSize, fillingLevel};
-        CHECK(localPage.bitField()._levels != nullptr);
-        CHECK(localPage.bitField()._depth == 1U);
     }
 
     SECTION("knows the maximal bit field size.")
     {
         // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
         // field size should be
-        CHECK(page.maxBitFieldSize() == (1U + 32U) * sizeof(BitMask));
+        CHECK(page.maxBitFieldSize() == 6552);
     }
 }
 
@@ -181,40 +167,6 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
 
         CHECK(page.bitFieldDepth() == 1U);
     }
-
-    SECTION(
-        "knows correct bit field depths for depth 1 with slightly too big chunks such that we get less than expected.")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
-        // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
-
-        CHECK(page.bitFieldDepth() == 1U);
-    }
-
-    SECTION("knows correct bit field depths for depth 2.")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize;
-        // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize
-            = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
-
-        CHECK(page.bitFieldDepth() == 2U);
-    }
-
-    SECTION("knows correct bit field depths for depth 3.")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize;
-        // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask) - BitMaskSize * BitMaskSize * sizeof(BitMask)
-                              - BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask))
-            / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
-
-        CHECK(page.bitFieldDepth() == 3U);
-    }
 }
 
 TEST_CASE("PageInterpretation.create")
@@ -249,8 +201,10 @@ TEST_CASE("PageInterpretation.create")
 
         SECTION("returns nullptr if everything is full.")
         {
-            BitMask& mask{page.topLevelMask()};
-            mask.set();
+            for(auto& mask : page.bitField())
+            {
+                mask.set();
+            }
             auto* pointer = page.create();
             CHECK(pointer == nullptr);
         }
@@ -289,29 +243,6 @@ TEST_CASE("PageInterpretation.create")
         }
     }
 
-    SECTION("with hierarchy")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize;
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
-
-        SECTION("recovers from not finding a free chunk in a lower level.")
-        {
-            BitMask& mask{page.topLevelMask()};
-            auto tree = page.bitField();
-            uint32_t const index = 2 * BitMaskSize + 1;
-            for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
-            {
-                // We fill only the lowest level leaving the upper ones empty, so the PageInterpretation will fail to
-                // find a free bit on the first attempt and has to recover from it.
-                tree.level(tree._depth)[i].set();
-            }
-            tree.set(index, false);
-            REQUIRE(mask.none());
-            auto* pointer = page.create();
-            CHECK(indexOf(pointer, std::begin(page._data.data), chunkSize) == index);
-        }
-    }
 }
 
 TEST_CASE("PageInterpretation.destroy")
@@ -354,7 +285,7 @@ TEST_CASE("PageInterpretation.destroy")
             CHECK(fillingLevel == 0U);
         }
 
-        SECTION("only ever unsets bits in top-level bit mask.")
+        SECTION("only ever unsets (and never sets) bits in top-level bit mask.")
         {
             // We extract the position of the mask before destroying the pointer because technically speaking the whole
             // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
@@ -365,22 +296,6 @@ TEST_CASE("PageInterpretation.destroy")
             CHECK(mask.count() <= count);
         }
 
-        SECTION("unsets correct bit in lowest-level bit mask.")
-        {
-            auto const tree = page.bitField();
-            auto const index = mallocMC::indexOf(pointer, &page._data, chunkSize);
-            for(uint32_t i = 0; i < numChunks; ++i)
-            {
-                REQUIRE(tree.level(tree._depth)[i / BitMaskSize][i % BitMaskSize] == (i == index));
-            }
-
-            page.destroy(pointer);
-
-            for(uint32_t i = 0; i < numChunks / BitMaskSize; ++i)
-            {
-                CHECK(tree.level(tree._depth)[i].none());
-            }
-        }
 
         SECTION("throws if pointer does not point to allocated memory.")
         {

@@ -38,8 +38,6 @@
 using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
-using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
@@ -54,14 +52,20 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     {
         tmpChunkSize = chunkSize;
     }
+
     auto maxFillingLevel = accessBlock.interpret(0).numChunks();
     for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
     {
         fillingLevel = maxFillingLevel;
     }
-    for(auto& bitMask : accessBlock.bitMasks())
+
+    for(size_t i = 0; i < accessBlock.numPages(); ++i)
     {
-        bitMask.set();
+        auto page = accessBlock.interpret(i);
+        for(auto& mask : page.bitField())
+        {
+            mask.set();
+        }
     }
 }
 
@@ -71,7 +75,7 @@ TEST_CASE("AccessBlock (reporting)")
 
     SECTION("has pages.")
     {
-        // This check is mainly leftovers from TDD. Keep them as long as `pages` is public interface.
+        // This check is mainly leftovers from TDD. Keep it as long as `pages` is public interface.
         CHECK(accessBlock.pages); // NOLINT(*-array-*decay)
     }
 
@@ -195,36 +199,6 @@ TEST_CASE("AccessBlock.create")
         CHECK(
             std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
             == static_cast<long>(index1 * pageSize + index2 * chunkSize));
-    }
-
-    SECTION("finds last remaining chunk for creation with hierarchical bit fields.")
-    {
-        constexpr const uint32_t chunkSize = 1U;
-        fillWith(accessBlock, chunkSize);
-
-        const uint32_t index1 = GENERATE(0, 1, 2);
-        const uint32_t index2 = GENERATE(0, 1, 2, 3);
-        const uint32_t index3 = GENERATE(0, 1, 2, 3);
-
-        accessBlock.pageTable._fillingLevels[index1] -= 1;
-        accessBlock.bitMasks()[index1].flip(index2);
-
-        // We are a bit sloppy here: Technically speaking, we would have to flip the hierarchical bit fields in all
-        // pages for a consistent state. But as we have already flipped all the high-level bits these pages won't be
-        // considered anyways.
-        auto bitField = accessBlock.interpret(index1).bitField();
-        for(uint32_t i = 0; i < treeVolume<BitMaskSize>(bitField._depth) - 1; ++i)
-        {
-            bitField._levels[i].set();
-        }
-        bitField.level(bitField._depth)[index2].flip(index3);
-
-
-        void* result = accessBlock.create(chunkSize);
-        REQUIRE(result != nullptr);
-        CHECK(
-            std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
-            == static_cast<long int>(index1 * pageSize + (index2 * BitMaskSize + index3) * chunkSize));
     }
 
     SECTION("increases filling level upon creation.")

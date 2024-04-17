@@ -37,29 +37,6 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    // Computing the number of chunks is not quite trivial: We have to take into account the space for the hierarchical
-    // bit field at the end of the page, the size of which again depends on the number of chunks. So, we kind of solve
-    // this self-consistently by making a naive estimate and checking if
-    inline constexpr auto selfConsistentNumChunks(
-        size_t const pageSize,
-        uint32_t const chunkSize,
-        uint32_t const depth = 0U) -> uint32_t
-    {
-        auto naiveEstimate = pageSize / chunkSize;
-        auto bitsAvailable = powInt(BitMaskSize, depth + 1);
-        if(naiveEstimate <= bitsAvailable)
-        {
-            return naiveEstimate;
-        }
-
-        // otherwise let's check how the situation looks with the next level of bit field hierarchy added:
-        auto numBitsInNextLevel = bitsAvailable * BitMaskSize;
-        // we count memory in bytes not bits:
-        auto bitFieldSpaceRequirement = numBitsInNextLevel / 8U; // NOLINT(*magic*)
-        auto remainingPageSize = pageSize - bitFieldSpaceRequirement;
-        return selfConsistentNumChunks(remainingPageSize, chunkSize, depth + 1);
-    }
-
     template<size_t T_pageSize>
     struct PageInterpretation
     {
@@ -88,7 +65,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto numChunks() const -> uint32_t
         {
-            return selfConsistentNumChunks(T_pageSize, _chunkSize);
+            return BitMaskSize * T_pageSize / (BitMaskSize * _chunkSize + sizeof(BitMask));
         }
 
         [[nodiscard]] auto dataSize() const -> size_t
@@ -169,16 +146,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto field = bitField();
             auto const index = firstFreeBit(field);
-            if(index < noFreeBitFound(field._depth))
+            if(index < noFreeBitFound(field))
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
             }
             return std::nullopt;
         }
 
-        [[nodiscard]] auto bitField() const -> BitFieldTree
+        [[nodiscard]] auto bitField() const -> BitFieldFlat
         {
-            return BitFieldTree{bitFieldStart(), bitFieldDepth()};
+            return BitFieldFlat{{bitFieldStart(), ceilingDivision(numChunks(), BitMaskSize)}};
         }
 
         [[nodiscard]] auto bitFieldStart() const -> BitMask*
@@ -188,7 +165,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
-            return sizeof(BitMask) * treeVolume<BitMaskSize>(bitFieldDepth());
+            return sizeof(BitMask) * numChunks();
         }
 
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t
