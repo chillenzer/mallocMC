@@ -43,7 +43,6 @@ using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
-using mallocMC::CreationPolicies::ScatterAlloc::treeVolume;
 using std::distance;
 
 
@@ -124,8 +123,8 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
 {
     uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
+        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -174,7 +173,7 @@ TEST_CASE("PageInterpretation.create")
     uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -182,7 +181,7 @@ TEST_CASE("PageInterpretation.create")
     SECTION("regardless of hierarchy")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
-        uint32_t chunkSize = pageSize / numChunks;
+        uint32_t chunkSize = (pageSize - numChunks / sizeof(BitMask)) / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
 
         SECTION("returns a pointer to within the data.")
@@ -242,15 +241,14 @@ TEST_CASE("PageInterpretation.create")
             CHECK(mask[index]);
         }
     }
-
 }
 
 TEST_CASE("PageInterpretation.destroy")
 {
     uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
+        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -331,8 +329,8 @@ TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
 {
     uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + treeVolume<BitMaskSize>(4) * sizeof(BitMask);
+    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
+        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
