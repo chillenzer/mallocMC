@@ -71,14 +71,24 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         // Return a pointer to the level-th level in the tree.
-        auto operator[](uint32_t level) const -> BitMask*
+        auto level(uint32_t index) const -> BitMask*
         {
-            if(level == 0)
+            if(index == 0)
             {
                 return &_head;
             }
             // We subtract one because the head node is stored separately.
-            return &_levels[treeVolume<BitMaskSize>(level - 1) - 1];
+            return &_levels[treeVolume<BitMaskSize>(index - 1) - 1];
+        }
+
+        auto operator[](uint32_t index) const -> BitMask*
+        {
+            return level(index);
+        }
+
+        [[nodiscard]] auto get(uint32_t index) const -> bool
+        {
+            return this->operator[](_depth)[index / BitMaskSize][index % BitMaskSize];
         }
 
         // Set the bit corresponding to chunk `index`. If that fills the corresponding bit mask, the function takes

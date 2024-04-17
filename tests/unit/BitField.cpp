@@ -27,6 +27,7 @@
 
 #include <catch2/catch.hpp>
 #include <cstdint>
+#include <iterator>
 #include <mallocMC/creationPolicies/Scatter/BitField.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldTree;
@@ -297,5 +298,22 @@ TEST_CASE("BitFieldTree")
         }
         tree.set(index, false);
         CHECK(firstFreeBit(tree) == index);
+    }
+
+    SECTION("provides a get function to access chunk indices directly.")
+    {
+        BitFieldTree tree{std::begin(data), 2U};
+        uint32_t index = GENERATE(1U, 42U);
+        CHECK(tree.get(index) == false);
+        tree.set(index);
+        CHECK(tree.get(index) == true);
+    }
+
+    SECTION("provides a levels function to access individual levels directly.")
+    {
+        BitFieldTree tree{std::begin(data), 2U};
+        CHECK(tree.level(0) == &tree.headNode());
+        CHECK(tree.level(1) == &data[1]);
+        CHECK(tree.level(2) == &data[1 + BitMaskSize]);
     }
 }

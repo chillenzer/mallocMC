@@ -37,8 +37,6 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t pageTableEntrySize = 4U + 4U;
-
     // Computing the number of chunks is not quite trivial: We have to take into account the space for the hierarchical
     // bit field at the end of the page, the size of which again depends on the number of chunks. So, we kind of solve
     // this self-consistently by making a naive estimate and checking if
@@ -164,15 +162,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     public:
         auto isAllocated(uint32_t const chunkIndex) -> bool
         {
-            auto tree = bitField();
-            return tree[tree._depth][chunkIndex / _chunkSize][chunkIndex % _chunkSize];
+            return bitField().get(chunkIndex);
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
-            auto tree = bitField();
-            auto const index = firstFreeBit(tree);
-            if(index < noFreeBitFound(tree._depth))
+            auto field = bitField();
+            auto const index = firstFreeBit(field);
+            if(index < noFreeBitFound(field._depth))
             {
                 return std::optional<Chunk>({index, this->operator[](index)});
             }

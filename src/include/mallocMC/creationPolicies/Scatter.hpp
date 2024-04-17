@@ -40,6 +40,8 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
+    constexpr const uint32_t pageTableEntrySize = 4U + 4U;
+
     template<size_t T_numPages>
     struct PageTable
     {
