@@ -41,10 +41,13 @@ using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
-// bitmask, chunksize
+// Page table entry size = sizeof(chunkSize) + sizeof(fillingLevel):
 constexpr size_t pteSize = 4 + 4;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
 
+// Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
+// behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
+// regardless of the underlying access optimisations etc.
 template<size_t T_blockSize, size_t T_pageSize>
 void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
 {
@@ -221,7 +224,7 @@ TEST_CASE("AccessBlock.create")
     SECTION("recovers from not finding a free chunk in page.")
     {
         uint32_t const chunkSize = 32U;
-        uint32_t const pageIndex = GENERATE(0, 2);
+        uint32_t const pageIndex = GENERATE(1, 2);
         uint32_t const chunkIndex = GENERATE(2, 3, 13);
         fillWith(accessBlock, chunkSize);
 
@@ -258,8 +261,10 @@ TEST_CASE("AccessBlock.create")
     }
 }
 
-TEST_CASE("AccessBlock (destroying)")
+TEST_CASE("AccessBlock.destroy")
 {
+    // TODO(lenz): Remove reference to .bitmasks() and check that these tests did the correct thing after all.
+
     AccessBlock<blockSize, pageSize> accessBlock;
 
     SECTION("destroys a previously created pointer.")
@@ -343,8 +348,6 @@ TEST_CASE("AccessBlock (destroying)")
 
 TEST_CASE("AccessBlock.destroy (failing)", "[!shouldfail]")
 {
-    AccessBlock<blockSize, pageSize> accessBlock;
-
     SECTION("multiple pages is half-baked.")
     {
         FAIL("Doesn't yet set chunk size, filling level, etc.");

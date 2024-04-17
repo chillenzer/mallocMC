@@ -359,6 +359,11 @@ TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
         FAIL("Not yet implemented, needs to check what happens when a smaller chunkSize, i.e. more metadata, is "
              "used next time.");
     }
+
+    SECTION("initialises invalid bits to filled.")
+    {
+        FAIL("does not handle cases where numChunks is not a multiple of the BitMaskSize.");
+    }
 }
 
 // NOLINTEND(*widening*)
