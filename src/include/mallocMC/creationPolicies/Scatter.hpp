@@ -95,24 +95,29 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(numBytes > T_pageSize)
             {
-                return handleMultiplePages(numBytes);
+                return createOverMultiplePages(numBytes);
             }
-            return handleSinglePage(numBytes);
+            return createChunk(numBytes);
         }
 
     private:
-        auto handleMultiplePages(uint32_t const numBytes) -> void*
+        auto createOverMultiplePages(uint32_t const numBytes) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
             auto chunk = createContiguousPages(numPagesNeeded);
             if(chunk)
             {
+                for(uint32_t i = 0; i < numPagesNeeded; ++i)
+                {
+                    pageTable._chunkSizes[chunk.value().index + i] = numBytes;
+                    pageTable._fillingLevels[chunk.value().index + i] = 1U;
+                }
                 return chunk.value().pointer;
             }
             return nullptr;
         }
 
-        auto handleSinglePage(uint32_t const numBytes) -> void*
+        auto createChunk(uint32_t const numBytes) -> void*
         {
             auto startIndex = computeHash(numBytes);
 
@@ -185,7 +190,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
             }
-            interpret(pageIndex).destroy(pointer);
+            if(pageTable._chunkSizes[pageIndex] > T_pageSize)
+            {
+                destroyOverMultiplePages(pageIndex);
+            }
+            else
+            {
+                interpret(pageIndex).destroy(pointer);
+            }
+        }
+
+    private:
+        void destroyOverMultiplePages(size_t const pageIndex)
+        {
+            auto numPagesNeeded = ceilingDivision(pageTable._chunkSizes[pageIndex], T_pageSize);
+            for(uint32_t i = 0; i < numPagesNeeded; ++i)
+            {
+                pageTable._chunkSizes[pageIndex + i] = 0U;
+                pageTable._fillingLevels[pageIndex + i] = 0U;
+            }
         }
     };
 

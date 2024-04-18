@@ -249,6 +249,30 @@ TEST_CASE("AccessBlock.create")
         CHECK(indexOf(accessBlock.create(2U * pageSize), &accessBlock.pages[0], pageSize) == 0);
     }
 
+    SECTION("sets correct chunk size for larger than page size.")
+    {
+        auto pagesNeeded = 2U;
+        auto chunkSize = pagesNeeded * pageSize;
+        auto* pointer = accessBlock.create(chunkSize);
+        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        {
+            CHECK(accessBlock.interpret(index + i)._chunkSize == chunkSize);
+        }
+    }
+
+    SECTION("sets correct filling level for larger than page size.")
+    {
+        auto pagesNeeded = 2U;
+        auto chunkSize = pagesNeeded * pageSize;
+        auto* pointer = accessBlock.create(chunkSize);
+        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        {
+            CHECK(accessBlock.interpret(index + i)._fillingLevel == 1U);
+        }
+    }
+
     SECTION("finds contiguous memory for larger than page size.")
     {
         constexpr size_t localNumPages = 5U;
@@ -344,17 +368,26 @@ TEST_CASE("AccessBlock.destroy")
         void* pointer = nullptr;
         CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
     }
-}
-
-TEST_CASE("AccessBlock.destroy (failing)", "[!shouldfail]")
-{
-    SECTION("multiple pages is half-baked.")
-    {
-        FAIL("Doesn't yet set chunk size, filling level, etc.");
-    }
 
     SECTION("can destroy multiple pages.")
     {
-        FAIL("Not yet implemented.");
+        auto pagesNeeded = 2U;
+        auto chunkSize = pagesNeeded * pageSize;
+        auto* pointer = accessBlock.create(chunkSize);
+        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
+
+        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        {
+            REQUIRE(accessBlock.interpret(index + i)._chunkSize == chunkSize);
+            REQUIRE(accessBlock.interpret(index + i)._fillingLevel == 1U);
+        }
+
+        accessBlock.destroy(pointer);
+
+        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        {
+            CHECK(accessBlock.interpret(index + i)._chunkSize == 0U);
+            CHECK(accessBlock.interpret(index + i)._fillingLevel == 0U);
+        }
     }
 }
