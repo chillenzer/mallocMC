@@ -32,6 +32,7 @@
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 
@@ -113,6 +114,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 // TODO(lenz): this should use the return from atomicAdd
                 if(_fillingLevel == 0U)
                 {
+                    memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
                     // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
                     // TODO(lenz): this should be atomic CAS
                     _chunkSize = 0U;
@@ -176,8 +178,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
         {
-            uint32_t tmpChunkSize = 1U;
-            return PageInterpretation<T_pageSize>{_data, tmpChunkSize, _fillingLevel}.bitFieldSize();
+            return T_pageSize / BitMaskSize * sizeof(BitMask);
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t

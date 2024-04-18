@@ -30,12 +30,12 @@
 // NOLINTBEGIN(*widening*)
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
-#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
 #include <catch2/catch.hpp>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <optional>
 
@@ -115,7 +115,7 @@ TEST_CASE("PageInterpretation")
     {
         // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
         // field size should be
-        CHECK(page.maxBitFieldSize() == 6552);
+        CHECK(page.maxBitFieldSize() == 256);
     }
 }
 
@@ -322,8 +322,22 @@ TEST_CASE("PageInterpretation.destroy")
             page.destroy(pointer);
             CHECK(page._chunkSize == 0U);
         }
+
+        SECTION("cleans up in bit field region of page when page is abandoned.")
+        {
+            memset(std::begin(data.data), 255U, page.numChunks() * chunkSize);
+            // This is the only allocation on this page, so the page is abandoned afterwards.
+            page.destroy(pointer);
+
+            // TODO(lenz): Check for off-by-one error in lower bound.
+            for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
+            {
+                CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
+            }
+        }
     }
 }
+
 
 TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
 {
@@ -340,25 +354,6 @@ TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
     PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
     auto* pointer = page.create();
 
-    SECTION("cleans up in bit field region of page when page is abandoned.")
-    {
-        // This test does not really do anything and no such functionality is implemented currently because in a
-        // single-threaded environment this is a trivial condition (as long as you use the create()/destroy()
-        // interface). This might change once we enter multi-threaded realms.
-        // TODO(lenz): Come back to this and check if this still holds true in the final implementation.
-
-        // This is the only allocation on this page, so page is abandoned afterwards.
-        page.destroy(pointer);
-
-        // TODO(lenz): Check for off-by-one error in lower bound.
-        for(size_t i = pageSize - 1; i >= pageSize - page.maxBitFieldSize(); i--)
-        {
-            CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
-        }
-
-        FAIL("Not yet implemented, needs to check what happens when a smaller chunkSize, i.e. more metadata, is "
-             "used next time.");
-    }
 
     SECTION("initialises invalid bits to filled.")
     {
