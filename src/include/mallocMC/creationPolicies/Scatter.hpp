@@ -145,9 +145,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto index = (startIndex + i) % numPages();
                 if(thisPageIsAppropriate(index, numBytes))
                 {
-                    // TODO(lenz): Increment fillingLevel, so everybody is informed that we're interest.
-                    pageTable._chunkSizes[index] = numBytes;
-
                     return std::optional<PageInterpretation<T_pageSize>>{
                         std::in_place_t{},
                         pages[index],
@@ -162,9 +159,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             // The order is important here: If chunk size is 0, we are not able to determine numChunks(). So, we only
             // want to check the filling level after we've checked for the chunk size.
-            return pageTable._chunkSizes[index] == 0U
-                || (pageTable._chunkSizes[index] == numBytes
-                    && pageTable._fillingLevels[index] < interpret(index).numChunks());
+            auto oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
+            auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
+            if(oldChunkSize != 0U && oldChunkSize != numBytes)
+            {
+                atomicSub(pageTable._fillingLevels[index], 1U);
+                return false;
+            }
+            return static_cast<bool>(oldFilling < interpret(index).numChunks());
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>

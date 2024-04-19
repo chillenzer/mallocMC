@@ -69,9 +69,30 @@ namespace mallocMC
         return std::distance(reinterpret_cast<char*>(start), reinterpret_cast<char*>(pointer)) / stepSize;
     }
 
-    template<typename T, typename U>
-    inline auto atomicAdd(T& lhs, U const& rhs)
+    template<typename T>
+    inline auto atomicAdd(T& lhs, T const& rhs)
     {
+        auto result = lhs;
         lhs += rhs;
+        return result;
+    }
+
+    template<typename T>
+    inline auto atomicSub(T& lhs, T const& rhs)
+    {
+        auto result = lhs;
+        lhs -= rhs;
+        return result;
+    }
+
+    template<typename T>
+    inline auto atomicCAS(T& target, T const& cmp, T const& val)
+    {
+        auto result = target;
+        if(target == cmp)
+        {
+            target = val;
+        }
+        return result;
     }
 } // namespace mallocMC

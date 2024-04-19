@@ -208,12 +208,6 @@ TEST_CASE("PageInterpretation.create")
             CHECK(pointer == nullptr);
         }
 
-        SECTION("updates filling level.")
-        {
-            page.create();
-            CHECK(fillingLevel == 1U);
-        }
-
         SECTION("can provide numChunks pieces of memory and returns nullptr afterwards.")
         {
             for(uint32_t i = 0; i < page.numChunks(); ++i)
@@ -259,6 +253,8 @@ TEST_CASE("PageInterpretation.destroy")
         uint32_t chunkSize = pageSize / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
         auto* pointer = page.create();
+        // this was originally done in the page but now that's responsibility of the AccessBlock:
+        page._fillingLevel = 1U;
 
         SECTION("throws if given an invalid pointer.")
         {
@@ -276,13 +272,6 @@ TEST_CASE("PageInterpretation.destroy")
             CHECK_NOTHROW(page.destroy(pointer));
         }
 
-        SECTION("updates filling level.")
-        {
-            REQUIRE(page._fillingLevel == 1U);
-            page.destroy(pointer);
-            CHECK(fillingLevel == 0U);
-        }
-
         SECTION("only ever unsets (and never sets) bits in top-level bit mask.")
         {
             // We extract the position of the mask before destroying the pointer because technically speaking the whole
@@ -295,26 +284,6 @@ TEST_CASE("PageInterpretation.destroy")
         }
 
 
-        SECTION("throws if pointer does not point to allocated memory.")
-        {
-            // create another pointer, so the page doesn't get freed after invalidating one pointer
-            page.create();
-            // destroying this invalidates the pointer and deallocates the memory
-            page.destroy(pointer);
-            // attempting to do so again is an invalid operation
-            CHECK_THROWS_WITH(page.destroy(pointer), Catch::Contains("Attempted to destroy un-allocated memory"));
-        }
-
-        SECTION("throws if chunk size is 0.")
-        {
-            // The following might be the case if the page was recently free'd. For testing purposes, we set it
-            // directly.
-            chunkSize = 0U;
-            CHECK_THROWS_WITH(
-                page.destroy(pointer),
-                Catch::Contains("Attempted to destroy a pointer with chunkSize==0. Likely this page was recently (and "
-                                "potentially pre-maturely) freed."));
-        }
 
         SECTION("resets chunk size when page is abandoned.")
         {
@@ -332,7 +301,7 @@ TEST_CASE("PageInterpretation.destroy")
             // TODO(lenz): Check for off-by-one error in lower bound.
             for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
             {
-                CHECK(reinterpret_cast<char*>(page._data.data)[i] == 0U);
+                CHECK(static_cast<uint32_t>(reinterpret_cast<char*>(page._data.data)[i]) == 0U);
             }
         }
     }

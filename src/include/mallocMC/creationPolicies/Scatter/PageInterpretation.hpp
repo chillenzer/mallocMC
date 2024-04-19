@@ -89,8 +89,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto chunk = firstFreeChunk();
             if(chunk)
             {
-                // TODO(lenz): Don't do this anymore, this will have been already handled by AccessBlock.choosePage.
-                atomicAdd(_fillingLevel, 1U);
                 // TODO(lenz): Move this into firstFreeChunk().
                 bitField().set(chunk.value().index);
                 return chunk.value().pointer;
@@ -110,7 +108,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(isValidDestruction(chunkIndex))
             {
                 bitField().set(chunkIndex, false);
-                atomicAdd(_fillingLevel, -1);
+                atomicSub(_fillingLevel, 1U);
                 // TODO(lenz): this should use the return from atomicAdd
                 if(_fillingLevel == 0U)
                 {
