@@ -83,14 +83,13 @@ TEST_CASE("Threaded AccessBlock.create")
         void* pointer1 = nullptr;
         void* pointer2 = nullptr;
         constexpr uint32_t const chunkSize = 32U;
-        auto create = [&accessBlock](void* pointer) { pointer = accessBlock.create(chunkSize); };
+        auto create = [&accessBlock](void** pointer) { *pointer = accessBlock.create(chunkSize); };
 
-        auto thread1 = std::thread(create, pointer1);
-        auto thread2 = std::thread(create, pointer2);
+        auto thread1 = std::thread(create, &pointer1);
+        auto thread2 = std::thread(create, &pointer2);
         thread1.join();
         thread2.join();
 
-        std::cout << pointer1 << ", " << pointer2 << std::endl;
         CHECK(accessBlock.create(32U) != accessBlock.create(32U));
     }
     //

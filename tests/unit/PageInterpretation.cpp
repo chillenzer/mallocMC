@@ -284,7 +284,6 @@ TEST_CASE("PageInterpretation.destroy")
         }
 
 
-
         SECTION("resets chunk size when page is abandoned.")
         {
             // this is the only allocation on this page, so page is abandoned afterwards
@@ -310,20 +309,6 @@ TEST_CASE("PageInterpretation.destroy")
 
 TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
 {
-    uint32_t fillingLevel{};
-    // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
-        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
-    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
-    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
-    DataPage<pageSize>& data{*actualData};
-
-    uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
-    uint32_t chunkSize = pageSize / numChunks;
-    PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
-    auto* pointer = page.create();
-
-
     SECTION("initialises invalid bits to filled.")
     {
         FAIL("does not handle cases where numChunks is not a multiple of the BitMaskSize.");

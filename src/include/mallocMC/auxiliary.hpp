@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <iterator>
 #include <type_traits>
 
@@ -72,27 +73,23 @@ namespace mallocMC
     template<typename T>
     inline auto atomicAdd(T& lhs, T const& rhs)
     {
-        auto result = lhs;
-        lhs += rhs;
-        return result;
+        auto val = std::atomic_ref(lhs) += rhs;
+        // different convention: returns the result, not the previous value
+        return val - rhs;
     }
 
     template<typename T>
     inline auto atomicSub(T& lhs, T const& rhs)
     {
-        auto result = lhs;
-        lhs -= rhs;
-        return result;
+        auto val = std::atomic_ref(lhs) -= rhs;
+        // different convention: returns the result, not the previous value
+        return val + rhs;
     }
 
     template<typename T>
-    inline auto atomicCAS(T& target, T const& cmp, T const& val)
+    inline auto atomicCAS(T& target, T cmp, T val)
     {
-        auto result = target;
-        if(target == cmp)
-        {
-            target = val;
-        }
-        return result;
+        std::atomic_ref(target).compare_exchange_strong(cmp, val);
+        return cmp;
     }
 } // namespace mallocMC

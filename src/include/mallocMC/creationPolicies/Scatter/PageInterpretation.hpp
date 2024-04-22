@@ -125,7 +125,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto isValidDestruction(uint32_t const chunkIndex) -> bool
         {
             // TODO(lenz): Only enable these checks in debug mode.
-            if(chunkIndex < 0 || chunkIndex >= numChunks())
+            if(chunkIndex >= numChunks())
             {
                 throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};
             }

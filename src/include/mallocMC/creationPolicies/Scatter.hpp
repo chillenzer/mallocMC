@@ -161,12 +161,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // want to check the filling level after we've checked for the chunk size.
             auto oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
             auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
-            if(oldChunkSize != 0U && oldChunkSize != numBytes)
+            if((oldChunkSize != 0U && oldChunkSize != numBytes) || oldFilling >= interpret(index).numChunks())
             {
                 atomicSub(pageTable._fillingLevels[index], 1U);
                 return false;
             }
-            return static_cast<bool>(oldFilling < interpret(index).numChunks());
+            return true;
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
@@ -178,7 +178,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                        &pageTable._chunkSizes[index + numPagesNeeded],
                        [](auto const val) { return val == 0U; }))
                 {
-                    return std::optional<Chunk>({index, &pages[index]});
+                    return std::optional<Chunk>({static_cast<uint32_t>(index), &pages[index]});
                 };
             }
             return std::nullopt;
@@ -188,7 +188,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto destroy(void* const pointer) -> void
         {
             auto const pageIndex = indexOf(pointer, pages, T_pageSize);
-            if(pageIndex > numPages() || pageIndex < 0)
+            if(pageIndex > static_cast<ssize_t>(numPages()) || pageIndex < 0)
             {
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
             }

@@ -68,12 +68,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-    constexpr inline auto noFreeBitFound(BitMask const& /*unused*/) -> uint32_t
+    inline auto noFreeBitFound(BitMask const& /*unused*/) -> uint32_t
     {
         return BitMaskSize;
     }
 
-    constexpr inline auto noFreeBitFound(BitFieldFlat const& field) -> uint32_t
+    inline auto noFreeBitFound(BitFieldFlat const& field) -> uint32_t
     {
         return field.size();
     }
