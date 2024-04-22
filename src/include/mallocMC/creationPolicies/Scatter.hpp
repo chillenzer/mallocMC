@@ -197,20 +197,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             else
             {
-                interpret(pageIndex).destroy(pointer);
-                auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
-                if(oldFilling == 1U)
-                {
-                    interpret(pageIndex).cleanup();
-                    // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
-                    // TODO(lenz): this should be atomic CAS
-                    pageTable._chunkSizes[pageIndex] = 0U;
-                    // TODO(lenz): Clean up full range of possible bitfield.
-                }
+                destroyChunk(pointer, pageIndex);
             }
         }
 
     private:
+        void destroyChunk(void* pointer, uint32_t const pageIndex)
+        {
+            interpret(pageIndex).destroy(pointer);
+            auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
+            if(oldFilling == 1U)
+            {
+                interpret(pageIndex).cleanup();
+                // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
+                // TODO(lenz): this should be atomic CAS
+                pageTable._chunkSizes[pageIndex] = 0U;
+                // TODO(lenz): Clean up full range of possible bitfield.
+            }
+        }
+
         void destroyOverMultiplePages(size_t const pageIndex)
         {
             auto numPagesNeeded = ceilingDivision(pageTable._chunkSizes[pageIndex], T_pageSize);
