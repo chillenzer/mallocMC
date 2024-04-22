@@ -80,10 +80,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto interpret(size_t const pageIndex)
         {
-            return PageInterpretation<T_pageSize>(
-                pages[pageIndex],
-                pageTable._chunkSizes[pageIndex],
-                pageTable._fillingLevels[pageIndex]);
+            return PageInterpretation<T_pageSize>(pages[pageIndex], pageTable._chunkSizes[pageIndex]);
         }
 
         auto bitMasks()
@@ -148,25 +145,27 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     return std::optional<PageInterpretation<T_pageSize>>{
                         std::in_place_t{},
                         pages[index],
-                        pageTable._chunkSizes[index],
-                        pageTable._fillingLevels[index]};
+                        pageTable._chunkSizes[index]};
                 }
             }
             return std::nullopt;
         }
 
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
+
         {
-            // The order is important here: If chunk size is 0, we are not able to determine numChunks(). So, we only
-            // want to check the filling level after we've checked for the chunk size.
+            auto tmp = numBytes;
             auto oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
-            auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
-            if((oldChunkSize != 0U && oldChunkSize != numBytes) || oldFilling >= interpret(index).numChunks())
+            if(oldFilling < PageInterpretation<T_pageSize>{pages[index], tmp}.numChunks())
             {
-                atomicSub(pageTable._fillingLevels[index], 1U);
-                return false;
+                auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
+                if((oldChunkSize == 0U || oldChunkSize == numBytes))
+                {
+                    return true;
+                }
             }
-            return true;
+            atomicSub(pageTable._fillingLevels[index], 1U);
+            return false;
         }
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
@@ -199,6 +198,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             else
             {
                 interpret(pageIndex).destroy(pointer);
+                auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
+                if(oldFilling == 1U)
+                {
+                    interpret(pageIndex).cleanup();
+                    // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
+                    // TODO(lenz): this should be atomic CAS
+                    pageTable._chunkSizes[pageIndex] = 0U;
+                    // TODO(lenz): Clean up full range of possible bitfield.
+                }
             }
         }
 

@@ -42,14 +42,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     struct PageInterpretation
     {
         DataPage<T_pageSize>& _data;
-        uint32_t& _chunkSize;
-        uint32_t& _fillingLevel;
+        uint32_t _chunkSize;
 
         // this is needed to instantiate this in-place in an std::optional
-        PageInterpretation(DataPage<T_pageSize>& data, uint32_t& chunkSize, uint32_t& fillingLevel)
-            : _data(data)
-            , _chunkSize(chunkSize)
-            , _fillingLevel(fillingLevel)
+        PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize) : _data(data), _chunkSize(chunkSize)
         {
         }
 
@@ -60,8 +56,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t chunkSize) -> BitMask*
         {
-            uint32_t fillingLevel{};
-            return PageInterpretation<T_pageSize>(data, chunkSize, fillingLevel).bitFieldStart();
+            return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
         [[nodiscard]] auto numChunks() const -> uint32_t
@@ -108,18 +103,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(isValidDestruction(chunkIndex))
             {
                 bitField().set(chunkIndex, false);
-                atomicSub(_fillingLevel, 1U);
                 // TODO(lenz): this should use the return from atomicAdd
-                if(_fillingLevel == 0U)
-                {
-                    memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
-                    // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
-                    // TODO(lenz): this should be atomic CAS
-                    _chunkSize = 0U;
-                    // TODO(lenz): Clean up full range of possible bitfield.
-                }
             }
         }
+
+        auto cleanup() -> void
+        {
+            memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
+            // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
+            // TODO(lenz): this should be atomic CAS
+        }
+
 
     private:
         auto isValidDestruction(uint32_t const chunkIndex) -> bool

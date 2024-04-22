@@ -269,7 +269,7 @@ TEST_CASE("AccessBlock.create")
         auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
         for(uint32_t i = 0; i < pagesNeeded; ++i)
         {
-            CHECK(accessBlock.interpret(index + i)._fillingLevel == 1U);
+            CHECK(accessBlock.pageTable._fillingLevels[index + i] == 1U);
         }
     }
 
@@ -378,16 +378,28 @@ TEST_CASE("AccessBlock.destroy")
 
         for(uint32_t i = 0; i < pagesNeeded; ++i)
         {
-            REQUIRE(accessBlock.interpret(index + i)._chunkSize == chunkSize);
-            REQUIRE(accessBlock.interpret(index + i)._fillingLevel == 1U);
+            REQUIRE(accessBlock.pageTable._chunkSizes[index + i] == chunkSize);
+            REQUIRE(accessBlock.pageTable._fillingLevels[index + i] == 1U);
         }
 
         accessBlock.destroy(pointer);
 
         for(uint32_t i = 0; i < pagesNeeded; ++i)
         {
-            CHECK(accessBlock.interpret(index + i)._chunkSize == 0U);
-            CHECK(accessBlock.interpret(index + i)._fillingLevel == 0U);
+            CHECK(accessBlock.pageTable._chunkSizes[index + i] == 0U);
+            CHECK(accessBlock.pageTable._fillingLevels[index + i] == 0U);
         }
+    }
+
+    SECTION("resets chunk size when page is abandoned.")
+    {
+        constexpr const uint32_t numBytes = 32U;
+        void* pointer = accessBlock.create(numBytes);
+        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
+        REQUIRE(accessBlock.pageTable._chunkSizes[pageIndex] == numBytes);
+
+        // this is the only allocation on this page, so page is abandoned afterwards
+        accessBlock.destroy(pointer);
+        CHECK(accessBlock.pageTable._chunkSizes[pageIndex] == 0U);
     }
 }

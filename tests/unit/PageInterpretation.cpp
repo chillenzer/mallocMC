@@ -51,8 +51,7 @@ TEST_CASE("PageInterpretation")
     constexpr size_t pageSize = 1024U;
     uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
     DataPage<pageSize> data{};
-    uint32_t fillingLevel{};
-    PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+    PageInterpretation<pageSize> page{data, chunkSize};
 
     SECTION("refers to the same data it was created with.")
     {
@@ -72,7 +71,7 @@ TEST_CASE("PageInterpretation")
     SECTION("detects correctly if page should contain bitfield.")
     {
         uint32_t localChunkSize = GENERATE(8U, 128U);
-        PageInterpretation<pageSize> localPage{data, localChunkSize, fillingLevel};
+        PageInterpretation<pageSize> localPage{data, localChunkSize};
         CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
     }
 
@@ -121,7 +120,6 @@ TEST_CASE("PageInterpretation")
 
 TEST_CASE("PageInterpretation.bitFieldDepth")
 {
-    uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
         + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
@@ -133,7 +131,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -142,7 +140,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
     {
         uint32_t const numChunks = BitMaskSize - 1;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         CHECK(page.bitFieldDepth() == 0U);
     }
@@ -152,7 +150,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -162,7 +160,7 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
         uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
         // choose chunk size such that bit field fits behind it:
         uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         CHECK(page.bitFieldDepth() == 1U);
     }
@@ -170,7 +168,6 @@ TEST_CASE("PageInterpretation.bitFieldDepth")
 
 TEST_CASE("PageInterpretation.create")
 {
-    uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize
         = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + BitMaskSize * sizeof(BitMask);
@@ -182,7 +179,7 @@ TEST_CASE("PageInterpretation.create")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
         uint32_t chunkSize = (pageSize - numChunks / sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         SECTION("returns a pointer to within the data.")
         {
@@ -224,7 +221,7 @@ TEST_CASE("PageInterpretation.create")
     {
         uint32_t const numChunks = BitMaskSize;
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
 
         SECTION("updates top-level bit field.")
         {
@@ -239,7 +236,6 @@ TEST_CASE("PageInterpretation.create")
 
 TEST_CASE("PageInterpretation.destroy")
 {
-    uint32_t fillingLevel{};
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
         + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
@@ -251,10 +247,8 @@ TEST_CASE("PageInterpretation.destroy")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
         uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize, fillingLevel};
+        PageInterpretation<pageSize> page{data, chunkSize};
         auto* pointer = page.create();
-        // this was originally done in the page but now that's responsibility of the AccessBlock:
-        page._fillingLevel = 1U;
 
         SECTION("throws if given an invalid pointer.")
         {
@@ -284,18 +278,10 @@ TEST_CASE("PageInterpretation.destroy")
         }
 
 
-        SECTION("resets chunk size when page is abandoned.")
-        {
-            // this is the only allocation on this page, so page is abandoned afterwards
-            page.destroy(pointer);
-            CHECK(page._chunkSize == 0U);
-        }
-
-        SECTION("cleans up in bit field region of page when page is abandoned.")
+        SECTION("cleans up in bit field region of page.")
         {
             memset(std::begin(data.data), 255U, page.numChunks() * chunkSize);
-            // This is the only allocation on this page, so the page is abandoned afterwards.
-            page.destroy(pointer);
+            page.cleanup();
 
             // TODO(lenz): Check for off-by-one error in lower bound.
             for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
