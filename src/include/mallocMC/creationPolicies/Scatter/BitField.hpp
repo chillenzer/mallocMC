@@ -27,8 +27,6 @@
 
 #pragma once
 
-#include "mallocMC/auxiliary.hpp"
-
 #include <bitset>
 #include <cstdint>
 #include <span>
@@ -36,7 +34,50 @@
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
     constexpr const uint32_t BitMaskSize = 32U;
-    using BitMask = std::bitset<BitMaskSize>;
+
+    struct BitMask
+    {
+        std::bitset<BitMaskSize> mask;
+        auto operator[](auto const& index) const
+        {
+            return mask[index];
+        }
+
+        auto set()
+        {
+            return mask.set();
+        }
+
+        auto set(auto const& index, bool value = true)
+        {
+            return mask.set(index, value);
+        }
+
+        auto flip()
+        {
+            return mask.flip();
+        }
+
+        auto flip(auto const& index)
+        {
+            return mask.flip(index);
+        }
+
+        auto operator==(auto const& other) const
+        {
+            return (mask == other);
+        }
+
+        [[nodiscard]] auto none() const
+        {
+            return mask.none();
+        }
+
+        [[nodiscard]] auto count() const
+        {
+            return mask.count();
+        }
+    };
 
     struct BitFieldFlat
     {
