@@ -87,9 +87,39 @@ namespace mallocMC
     }
 
     template<typename T>
-    inline auto atomicCAS(T& target, T cmp, T val)
+    inline auto atomicCAS(T& target, T cmp, T const& val)
     {
         std::atomic_ref(target).compare_exchange_strong(cmp, val);
         return cmp;
+    }
+
+    template<typename T>
+    inline auto atomicStore(T& target, T const& value)
+    {
+        std::atomic_ref(target).store(value);
+    }
+
+    template<typename T>
+    inline auto atomicXor(T& target, T const& value)
+    {
+        std::atomic_ref(target).fetch_xor(value);
+    }
+
+    template<typename T>
+    inline auto atomicOr(T& target, T const& value)
+    {
+        std::atomic_ref(target).fetch_or(value);
+    }
+
+    template<typename T>
+    inline auto atomicAnd(T& target, T const& value)
+    {
+        std::atomic_ref(target).fetch_and(value);
+    }
+
+    template<typename T>
+    inline auto atomicLoad(T const& target)
+    {
+        return std::atomic_ref(target).load();
     }
 } // namespace mallocMC

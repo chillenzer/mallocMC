@@ -27,40 +27,55 @@
 
 #pragma once
 
-#include <bitset>
+#include "mallocMC/auxiliary.hpp"
+
 #include <cstdint>
 #include <span>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
     constexpr const uint32_t BitMaskSize = 32U;
+    template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>>
+    using BitMaskStorageType = uint32_t;
+    // As the name hopefully suggests, this is all ones in 32-bit unsigned representation:
+    // This is a very difficult way to say 2^32 - 1 that's supposed to avoid overflow:
+    constexpr const BitMaskStorageType<> allOnes = (powInt(2U, BitMaskSize - 1U) - 1U) * 2U + 1U;
+
+    inline auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
+    {
+        return 1 << index;
+    }
 
     struct BitMask
     {
-        std::bitset<BitMaskSize> mask;
+        BitMaskStorageType<> mask{};
         auto operator[](auto const& index) const
         {
-            return mask[index];
+            return (atomicLoad(mask) & singleBit(index)) != 0U;
         }
 
         auto set()
         {
-            return mask.set();
+            atomicStore(mask, allOnes);
         }
 
         auto set(auto const& index, bool value = true)
         {
-            return mask.set(index, value);
+            if(value)
+            {
+                return atomicOr(mask, singleBit(index));
+            }
+            return atomicAnd(mask, allOnes - singleBit(index));
         }
 
         auto flip()
         {
-            return mask.flip();
+            return atomicXor(mask, allOnes);
         }
 
         auto flip(auto const& index)
         {
-            return mask.flip(index);
+            return atomicXor(mask, singleBit(index));
         }
 
         auto operator==(auto const& other) const
@@ -68,14 +83,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return (mask == other);
         }
 
-        [[nodiscard]] auto none() const
+        // clang-format off
+        auto operator<=> (BitMask const& other) const
+        // clang-format on
         {
-            return mask.none();
+            return (mask - other.mask);
         }
 
-        [[nodiscard]] auto count() const
+        [[nodiscard]] auto none() const
         {
-            return mask.count();
+            return mask == 0U;
+        }
+
+        [[nodiscard]] auto all() const
+        {
+            return mask == allOnes;
         }
     };
 

@@ -28,12 +28,9 @@
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 
-#include <algorithm>
 #include <catch2/catch.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
-#include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <thread>
 

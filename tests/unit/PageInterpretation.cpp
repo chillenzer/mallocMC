@@ -114,7 +114,7 @@ TEST_CASE("PageInterpretation")
     {
         // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
         // field size should be
-        CHECK(page.maxBitFieldSize() == 256);
+        CHECK(page.maxBitFieldSize() == BitMaskSize * sizeof(BitMask));
     }
 }
 
@@ -178,7 +178,17 @@ TEST_CASE("PageInterpretation.create")
     SECTION("regardless of hierarchy")
     {
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
-        uint32_t chunkSize = (pageSize - numChunks / sizeof(BitMask)) / numChunks;
+        uint32_t chunkSize{0U};
+        // this is a bit weird because we have to make sure that we are always handling full bit masks (until the
+        // handling of partially filled bit masks is implemented)
+        if(numChunks == BitMaskSize * BitMaskSize)
+        {
+            chunkSize = 1024U;
+        }
+        else if(numChunks == BitMaskSize)
+        {
+            chunkSize = 32771U;
+        }
         PageInterpretation<pageSize> page{data, chunkSize};
 
         SECTION("returns a pointer to within the data.")
@@ -272,9 +282,9 @@ TEST_CASE("PageInterpretation.destroy")
             // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
             // free the page.
             auto mask = page.topLevelMask();
-            auto count = mask.count();
+            auto value = mask;
             page.destroy(pointer);
-            CHECK(mask.count() <= count);
+            CHECK(mask <= value);
         }
 
 
