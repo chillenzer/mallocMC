@@ -26,17 +26,17 @@
 */
 
 #include "mallocMC/auxiliary.hpp"
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 
+#include <algorithm>
 #include <catch2/catch.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <thread>
 
 using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 
 constexpr size_t pageSize = 1024;
 constexpr size_t numPages = 4;
@@ -71,55 +71,55 @@ void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     }
 }
 
-TEST_CASE("Threaded AccessBlock.create")
+struct Runner
+{
+    std::vector<std::thread> threads{};
+
+    template<typename... T>
+    auto run(T... pars) -> Runner&
+    {
+        threads.emplace_back(pars...);
+        return *this;
+    }
+
+    auto join()
+    {
+        std::for_each(std::begin(threads), std::end(threads), [](auto& thread) { thread.join(); });
+    }
+};
+
+TEST_CASE("Threaded AccessBlock")
 {
     AccessBlock<blockSize, pageSize> accessBlock;
     auto create = [&accessBlock](void** pointer, auto chunkSize) { *pointer = accessBlock.create(chunkSize); };
+    auto destroy = [&accessBlock](void* pointer) { accessBlock.destroy(pointer); };
+    void* pointer1 = nullptr;
+    void* pointer2 = nullptr;
+    constexpr uint32_t const chunkSize1 = 32U;
+    constexpr uint32_t const chunkSize2 = 512U;
 
     SECTION("creates second memory somewhere else.")
     {
-        void* pointer1 = nullptr;
-        void* pointer2 = nullptr;
-        constexpr uint32_t const chunkSize = 32U;
-
-        auto thread1 = std::thread(create, &pointer1, chunkSize);
-        auto thread2 = std::thread(create, &pointer2, chunkSize);
-        thread1.join();
-        thread2.join();
-
-        CHECK(accessBlock.create(32U) != accessBlock.create(32U));
+        Runner{}.run(create, &pointer1, chunkSize1).run(create, &pointer2, chunkSize1).join();
+        CHECK(pointer1 != pointer2);
     }
 
     SECTION("creates memory of different chunk size in different pages.")
     {
-        void* pointer1 = nullptr;
-        void* pointer2 = nullptr;
-
-        auto thread1 = std::thread(create, &pointer1, 32U);
-        auto thread2 = std::thread(create, &pointer2, 512U);
-        thread1.join();
-        thread2.join();
-
+        Runner{}.run(create, &pointer1, chunkSize1).run(create, &pointer2, chunkSize2).join();
         CHECK(
             indexOf(pointer1, &accessBlock.pages[0], pageSize) != indexOf(pointer2, &accessBlock.pages[0], pageSize));
     }
 
     SECTION("creates partly for insufficient memory with same chunk size.")
     {
-        constexpr uint32_t const chunkSize = 32U;
-        fillWith(accessBlock, chunkSize);
-
-        void* pointer1 = nullptr;
-        void* pointer2 = nullptr;
+        fillWith(accessBlock, chunkSize1);
 
         // This is a pointer to the first chunk of the first page. It is valid because we have manually filled up the
         // complete accessBlock. So, we're effectively opening one slot:
         accessBlock.destroy(reinterpret_cast<void*>(&accessBlock));
 
-        auto thread1 = std::thread(create, &pointer1, chunkSize);
-        auto thread2 = std::thread(create, &pointer2, chunkSize);
-        thread1.join();
-        thread2.join();
+        Runner{}.run(create, &pointer1, chunkSize1).run(create, &pointer2, chunkSize1).join();
 
         // Chained comparisons are not supported by Catch2:
         if(pointer1 != nullptr)
