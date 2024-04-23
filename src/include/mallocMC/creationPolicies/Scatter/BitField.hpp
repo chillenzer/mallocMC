@@ -48,6 +48,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct BitMask
     {
+        // Convention: We start counting from the right, i.e., if mask[0] == 1 and all others are 0, then mask = 0...01
         BitMaskStorageType<> mask{};
         auto operator[](auto const& index) const
         {
