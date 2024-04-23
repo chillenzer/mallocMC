@@ -80,7 +80,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto interpret(size_t const pageIndex)
         {
-            return PageInterpretation<T_pageSize>(pages[pageIndex], pageTable._chunkSizes[pageIndex]);
+            return interpret(pageIndex, pageTable._chunkSizes[pageIndex]);
+        }
+
+        auto interpret(size_t const pageIndex, uint32_t const chunkSize)
+        {
+            return PageInterpretation<T_pageSize>(pages[pageIndex], chunkSize);
         }
 
         auto bitMasks()
@@ -142,21 +147,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto index = (startIndex + i) % numPages();
                 if(thisPageIsAppropriate(index, numBytes))
                 {
-                    return std::optional<PageInterpretation<T_pageSize>>{
-                        std::in_place_t{},
-                        pages[index],
-                        pageTable._chunkSizes[index]};
+                    return std::optional<PageInterpretation<T_pageSize>>{std::in_place_t{}, pages[index], numBytes};
                 }
             }
             return std::nullopt;
         }
 
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
-
         {
-            auto tmp = numBytes;
             auto oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
-            if(oldFilling < PageInterpretation<T_pageSize>{pages[index], tmp}.numChunks())
+            if(oldFilling < interpret(index, numBytes).numChunks())
             {
                 auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
                 if((oldChunkSize == 0U || oldChunkSize == numBytes))
