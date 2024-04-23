@@ -111,6 +111,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return data[index / BitMaskSize][index % BitMaskSize];
         }
 
+        [[nodiscard]] auto operator[](uint32_t index) const -> BitMask&
+        {
+            return data[index];
+        }
+
         void set(uint32_t const index, bool value = true)
         {
             data[index / BitMaskSize].set(index % BitMaskSize, value);
@@ -126,9 +131,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::end(data);
         }
 
-        [[nodiscard]] auto size() const
+        [[nodiscard]] auto numMasks() const
         {
-            return data.size() * BitMaskSize;
+            return data.size();
+        }
+
+        [[nodiscard]] auto numBits() const
+        {
+            return numMasks() * BitMaskSize;
         }
     };
 
@@ -139,7 +149,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline auto noFreeBitFound(BitFieldFlat const& field) -> uint32_t
     {
-        return field.size();
+        return field.numBits();
     }
 
     [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask, uint32_t const startIndex = 0) -> uint32_t
@@ -157,11 +167,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline auto firstFreeBit(BitFieldFlat field) -> uint32_t
     {
-        for(uint32_t i = 0; i < field.size(); ++i)
+        for(uint32_t i = 0; i < field.numMasks(); ++i)
         {
-            if(!field.get(i))
+            auto index = firstFreeBit(field[i]);
+            if(index < noFreeBitFound(BitMask{}))
             {
-                return i;
+                return index + BitMaskSize * i;
             }
         }
         return noFreeBitFound(field);
