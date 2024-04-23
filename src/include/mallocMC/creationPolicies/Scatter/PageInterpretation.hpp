@@ -34,7 +34,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
-#include <stdexcept>
+#include <unistd.h>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -95,15 +95,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(_chunkSize == 0)
             {
+#ifdef DEBUG
                 throw std::runtime_error{
                     "Attempted to destroy a pointer with chunkSize==0. Likely this page was recently "
                     "(and potentially pre-maturely) freed."};
+#endif // DEBUG
+                return;
             }
             auto chunkIndex = chunkNumberOf(pointer);
             if(isValidDestruction(chunkIndex))
             {
                 bitField().set(chunkIndex, false);
-                // TODO(lenz): this should use the return from atomicAdd
             }
         }
 
@@ -121,11 +123,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // TODO(lenz): Only enable these checks in debug mode.
             if(chunkIndex >= numChunks())
             {
+#ifdef DEBUG
                 throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};
+#endif // DEBUG
+                return false;
             }
             if(!isAllocated(chunkIndex))
             {
+#ifdef DEBUG
                 throw std::runtime_error{"Attempted to destroy un-allocated memory."};
+#endif // DEBUG
+                return false;
             }
             return true;
         }

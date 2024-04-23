@@ -134,6 +134,13 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(pointer1 != pointer2);
     }
 
+    SECTION("destroys two pointers.")
+    {
+        pointer1 = accessBlock.create(chunkSize1);
+        pointer2 = accessBlock.create(chunkSize2);
+        Runner{}.run(destroy, pointer1).run(destroy, pointer1).join();
+    }
+
     // TEST_CASE("AccessBlock.destroy")
     //{
     //    // TODO(lenz): Remove reference to .bitmasks() and check that these tests did the correct thing after all.

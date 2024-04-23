@@ -260,6 +260,7 @@ TEST_CASE("PageInterpretation.destroy")
         PageInterpretation<pageSize> page{data, chunkSize};
         auto* pointer = page.create();
 
+#ifdef DEBUG
         SECTION("throws if given an invalid pointer.")
         {
             pointer = nullptr;
@@ -275,6 +276,7 @@ TEST_CASE("PageInterpretation.destroy")
             pointer = reinterpret_cast<void*>(reinterpret_cast<char*>(pointer) + chunkSize / 2);
             CHECK_NOTHROW(page.destroy(pointer));
         }
+#endif // DEBUG
 
         SECTION("only ever unsets (and never sets) bits in top-level bit mask.")
         {

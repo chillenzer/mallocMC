@@ -80,7 +80,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto interpret(size_t const pageIndex)
         {
-            return interpret(pageIndex, pageTable._chunkSizes[pageIndex]);
+            return interpret(pageIndex, atomicLoad(pageTable._chunkSizes[pageIndex]));
         }
 
         auto interpret(size_t const pageIndex, uint32_t const chunkSize)
@@ -191,7 +191,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
             }
-            if(pageTable._chunkSizes[pageIndex] > T_pageSize)
+            auto const chunkSize = atomicLoad(pageTable._chunkSizes[pageIndex]);
+            if(chunkSize > T_pageSize)
             {
                 destroyOverMultiplePages(pageIndex);
             }
@@ -204,15 +205,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         void destroyChunk(void* pointer, uint32_t const pageIndex)
         {
-            interpret(pageIndex).destroy(pointer);
+            auto page = interpret(pageIndex);
+            page.destroy(pointer);
             auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
             if(oldFilling == 1U)
             {
-                interpret(pageIndex).cleanup();
-                // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
-                // TODO(lenz): this should be atomic CAS
-                pageTable._chunkSizes[pageIndex] = 0U;
-                // TODO(lenz): Clean up full range of possible bitfield.
+                auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 0U, page.numChunks());
+                if(latestFilling == 0U)
+                {
+                    page.cleanup();
+                    atomicStore(pageTable._chunkSizes[pageIndex], 0U);
+                    atomicStore(pageTable._fillingLevels[pageIndex], 0U);
+                }
+                else
+                {
+                    atomicStore(pageTable._fillingLevels[pageIndex], latestFilling);
+                }
             }
         }
 
