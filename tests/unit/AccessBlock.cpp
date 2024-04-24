@@ -293,7 +293,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
                     CHECK(not accessBlock.isValid(pointer));
                 }
 
-                SECTION("thereby invalidating it.")
+                SECTION("thereby freeing up their pages.")
                 {
                     CHECK(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
                 }

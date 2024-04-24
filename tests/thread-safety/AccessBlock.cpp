@@ -48,28 +48,21 @@ constexpr size_t blockSize = numPages * (pageSize + pteSize);
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
 // regardless of the underlying access optimisations etc.
 template<size_t T_blockSize, size_t T_pageSize>
-void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
+auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
 {
-    for(auto& tmpChunkSize : accessBlock.pageTable._chunkSizes)
-    {
-        tmpChunkSize = chunkSize;
-    }
-
-    auto maxFillingLevel = accessBlock.interpret(0).numChunks();
-    for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
-    {
-        fillingLevel = maxFillingLevel;
-    }
-
-    for(size_t i = 0; i < accessBlock.numPages(); ++i)
-    {
-        auto page = accessBlock.interpret(i);
-        for(auto& mask : page.bitField())
+    std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize));
+    std::generate(
+        std::begin(pointers),
+        std::end(pointers),
+        [&accessBlock, chunkSize]()
         {
-            mask.set();
-        }
-    }
+            void* pointer = accessBlock.create(chunkSize);
+            REQUIRE(pointer != nullptr);
+            return pointer;
+        });
+    return pointers;
 }
+
 
 struct Runner
 {
@@ -107,8 +100,7 @@ TEST_CASE("Threaded AccessBlock")
     SECTION("creates memory of different chunk size in different pages.")
     {
         Runner{}.run(create, &pointer1, chunkSize1).run(create, &pointer2, chunkSize2).join();
-        CHECK(
-            indexOf(pointer1, &accessBlock.pages[0], pageSize) != indexOf(pointer2, &accessBlock.pages[0], pageSize));
+        CHECK(accessBlock.pageIndex(pointer1) != accessBlock.pageIndex(pointer2));
     }
 
     SECTION("creates partly for insufficient memory with same chunk size.")

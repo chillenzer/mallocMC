@@ -28,7 +28,6 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
@@ -59,26 +58,66 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     }
 
     template<size_t T_blockSize, size_t T_pageSize>
-    struct BitMasksWrapper;
-
-    template<size_t T_blockSize, size_t T_pageSize>
-    struct AccessBlock
+    class AccessBlock
     {
+    public:
         [[nodiscard]] constexpr static auto numPages() -> size_t
         {
             return T_blockSize / (T_pageSize + pageTableEntrySize);
         }
 
-        [[nodiscard]] constexpr static auto dataSize() -> size_t
+        [[nodiscard]] auto getAvailableSlots(uint32_t const chunkSize) -> size_t
         {
-            return numPages() * T_pageSize;
+            if(chunkSize < T_pageSize)
+            {
+                return getAvailableChunks(chunkSize);
+            }
+            return getAvailableMultiPages(chunkSize);
         }
 
-        [[nodiscard]] constexpr static auto metadataSize() -> size_t
+        auto pageIndex(void* pointer) const -> size_t
         {
-            return numPages() * pageTableEntrySize;
+            return indexOf(pointer, pages, T_pageSize);
         }
 
+        auto isValid(void* pointer) -> bool
+        {
+            auto const index = pageIndex(pointer);
+            if(pageTable._chunkSizes[index] >= T_pageSize)
+            {
+                return true;
+            }
+            return pageTable._chunkSizes[index] == 0U ? false : interpret(index).isValid(pointer);
+        }
+
+        auto create(uint32_t numBytes) -> void*
+        {
+            if(numBytes >= T_pageSize)
+            {
+                return createOverMultiplePages(numBytes);
+            }
+            return createChunk(numBytes);
+        }
+
+        auto destroy(void* const pointer) -> void
+        {
+            auto const pageIndex = indexOf(pointer, pages, T_pageSize);
+            if(pageIndex > static_cast<ssize_t>(numPages()) || pageIndex < 0)
+            {
+                throw std::runtime_error{"Attempted to destroy invalid pointer."};
+            }
+            auto const chunkSize = atomicLoad(pageTable._chunkSizes[pageIndex]);
+            if(chunkSize > T_pageSize)
+            {
+                destroyOverMultiplePages(pageIndex);
+            }
+            else
+            {
+                destroyChunk(pointer, pageIndex);
+            }
+        }
+
+    private:
         DataPage<T_pageSize> pages[numPages()];
         PageTable<numPages()> pageTable;
 
@@ -92,22 +131,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return PageInterpretation<T_pageSize>(pages[pageIndex], chunkSize);
         }
 
-        auto bitMasks()
-        {
-            return BitMasksWrapper<T_blockSize, T_pageSize>{*this};
-        }
-
-
-        [[nodiscard]] auto getAvailableSlots(uint32_t const chunkSize) -> size_t
-        {
-            if(chunkSize < T_pageSize)
-            {
-                return getAvailableChunks(chunkSize);
-            }
-            return getAvailableMultiPages(chunkSize);
-        }
-
-    private:
         [[nodiscard]] auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
         {
             // This is not thread-safe!
@@ -135,36 +158,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 pointers.push_back(pointer);
             }
-            std::for_each(std::begin(pointers), std::end(pointers), [this](auto p) { destroy(p); });
+            std::for_each(std::begin(pointers), std::end(pointers), [this](auto ptr) { destroy(ptr); });
             return pointers.size();
         }
 
-    public:
-        auto pageIndex(void* pointer) const -> size_t
-        {
-            return indexOf(pointer, pages, T_pageSize);
-        }
-
-        auto isValid(void* pointer) -> bool
-        {
-            auto const index = pageIndex(pointer);
-            if(pageTable._chunkSizes[index] >= T_pageSize)
-            {
-                return true;
-            }
-            return pageTable._chunkSizes[index] == 0U ? false : interpret(index).isValid(pointer);
-        }
-
-        auto create(uint32_t numBytes) -> void*
-        {
-            if(numBytes >= T_pageSize)
-            {
-                return createOverMultiplePages(numBytes);
-            }
-            return createChunk(numBytes);
-        }
-
-    private:
         auto createOverMultiplePages(uint32_t const numBytes) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
@@ -249,26 +246,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-    public:
-        auto destroy(void* const pointer) -> void
-        {
-            auto const pageIndex = indexOf(pointer, pages, T_pageSize);
-            if(pageIndex > static_cast<ssize_t>(numPages()) || pageIndex < 0)
-            {
-                throw std::runtime_error{"Attempted to destroy invalid pointer."};
-            }
-            auto const chunkSize = atomicLoad(pageTable._chunkSizes[pageIndex]);
-            if(chunkSize > T_pageSize)
-            {
-                destroyOverMultiplePages(pageIndex);
-            }
-            else
-            {
-                destroyChunk(pointer, pageIndex);
-            }
-        }
-
-    private:
         void destroyChunk(void* pointer, uint32_t const pageIndex)
         {
             auto page = interpret(pageIndex);
@@ -300,59 +277,4 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
     };
-
-    // TODO(lenz): The structs below are drafts part of an on-going refactoring. They would need significant hardening
-    // to appear in a production version of this code.
-    template<size_t T_blockSize, size_t T_pageSize>
-    struct BitMasksIterator;
-
-    template<size_t T_blockSize, size_t T_pageSize>
-    struct BitMasksWrapper
-    {
-        AccessBlock<T_blockSize, T_pageSize>& accessBlock;
-
-        auto operator[](size_t const index) -> BitMask&
-        {
-            return *accessBlock.interpret(index).bitField().begin();
-        }
-
-        auto begin() -> BitMasksIterator<T_blockSize, T_pageSize>
-        {
-            return {*this, 0};
-        }
-
-        auto end() -> BitMasksIterator<T_blockSize, T_pageSize>
-        {
-            return {*this, accessBlock.numPages()};
-        }
-    };
-
-    template<size_t T_blockSize, size_t T_pageSize>
-    struct BitMasksIterator
-    {
-        BitMasksWrapper<T_blockSize, T_pageSize>& wrapper;
-        size_t index{0U};
-
-        auto operator++()
-        {
-            ++index;
-            return *this;
-        }
-
-        auto operator==(BitMasksIterator<T_blockSize, T_pageSize> const other)
-        {
-            return index == other.index;
-        }
-
-        auto operator!=(BitMasksIterator<T_blockSize, T_pageSize> const other)
-        {
-            return index != other.index;
-        }
-        auto operator*() -> BitMask&
-        {
-            return wrapper[index];
-        }
-    };
-
-
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
