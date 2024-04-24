@@ -205,19 +205,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // we want to allocate 2 pages:
             if(accessBlock.numPages() > 1U)
             {
-                // Let's fill up everything first:
-                std::vector<void*> pointers(accessBlock.numPages());
-                std::generate(
-                    std::begin(pointers),
-                    std::end(pointers),
-                    [&accessBlock]()
-                    {
-                        // so we really exactly block one page:
-                        void* pointer = accessBlock.create(pageSize);
-                        REQUIRE(pointer != nullptr);
-                        return pointer;
-                    });
-
+                auto pointers = fillWith(accessBlock, pageSize);
                 // Now, we free two contiguous chunks such that there is one deterministic spot wherefrom our request
                 // can be served.
                 size_t index = GENERATE(0U, 1U, 5U);
@@ -246,6 +234,70 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         {
             accessBlock.destroy(pointer);
             CHECK(not accessBlock.isValid(pointer));
+        }
+
+        SECTION("the whole page if last pointer is destroyed.")
+        {
+            REQUIRE(chunkSize != pageSize);
+            REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages() - 1);
+            accessBlock.destroy(pointer);
+            CHECK(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
+        }
+
+        SECTION("not the whole page if there still exists a valid pointer.")
+        {
+            REQUIRE(chunkSize != pageSize);
+            auto unOccupiedPages = accessBlock.numPages();
+            void* newPointer{nullptr};
+            // We can't be sure which page is used for any allocation, so we allocate again and again until we have hit
+            // a page that already has an allocation:
+            while(accessBlock.getAvailableSlots(pageSize) != unOccupiedPages)
+            {
+                unOccupiedPages = accessBlock.getAvailableSlots(pageSize);
+                newPointer = accessBlock.create(chunkSize);
+            }
+            accessBlock.destroy(newPointer);
+            CHECK(accessBlock.getAvailableSlots(pageSize) == unOccupiedPages);
+        }
+
+        SECTION("one slot without touching the others.")
+        {
+            // this won't be touched:
+            accessBlock.create(chunkSize);
+            auto originalSlots = accessBlock.getAvailableSlots(chunkSize);
+            accessBlock.destroy(pointer);
+            CHECK(accessBlock.getAvailableSlots(chunkSize) == originalSlots + 1U);
+        }
+
+        SECTION("no invalid pointer but throws instead.")
+        {
+            pointer = nullptr;
+            CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
+        }
+
+        SECTION("pointer for larger than page size")
+        {
+            if(accessBlock.numPages() > 1U)
+            {
+                accessBlock.destroy(pointer);
+                REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
+
+                pointer = accessBlock.create(2U * pageSize);
+                REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages() - 2);
+                REQUIRE(accessBlock.isValid(pointer));
+
+                accessBlock.destroy(pointer);
+
+                SECTION("thereby invalidating it.")
+                {
+                    CHECK(not accessBlock.isValid(pointer));
+                }
+
+                SECTION("thereby invalidating it.")
+                {
+                    CHECK(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
+                }
+            }
         }
     }
 }
