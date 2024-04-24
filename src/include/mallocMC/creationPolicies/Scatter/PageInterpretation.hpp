@@ -42,7 +42,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     struct PageInterpretation
     {
         DataPage<T_pageSize>& _data;
-        uint32_t _chunkSize;
+        uint32_t const _chunkSize;
 
         // this is needed to instantiate this in-place in an std::optional
         PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize) : _data(data), _chunkSize(chunkSize)
@@ -54,14 +54,19 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return *PageInterpretation<T_pageSize>::bitFieldStart(_data, _chunkSize);
         }
 
-        static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t chunkSize) -> BitMask*
+        static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
         {
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
+        [[nodiscard]] static auto numChunks(uint32_t const chunkSize) -> uint32_t
+        {
+            return BitMaskSize * T_pageSize / (BitMaskSize * chunkSize + sizeof(BitMask));
+        }
+
         [[nodiscard]] auto numChunks() const -> uint32_t
         {
-            return BitMaskSize * T_pageSize / (BitMaskSize * _chunkSize + sizeof(BitMask));
+            return numChunks(_chunkSize);
         }
 
         [[nodiscard]] auto dataSize() const -> size_t
@@ -102,9 +107,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #endif // DEBUG
                 return;
             }
-            auto chunkIndex = chunkNumberOf(pointer);
-            if(isValidDestruction(chunkIndex))
+            if(isValid(pointer))
             {
+                auto chunkIndex = chunkNumberOf(pointer);
                 bitField().set(chunkIndex, false);
             }
         }
@@ -116,9 +121,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // TODO(lenz): this should be atomic CAS
         }
 
+        auto isValid(void* pointer) -> bool
+        {
+            return isValid(chunkNumberOf(pointer));
+        }
 
     private:
-        auto isValidDestruction(uint32_t const chunkIndex) -> bool
+        auto isValid(uint32_t const chunkIndex) -> bool
         {
             // TODO(lenz): Only enable these checks in debug mode.
             if(chunkIndex >= numChunks())
@@ -147,7 +156,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
         {
             auto field = bitField();
-            auto const index = firstFreeBit(field);
+            auto const index = firstFreeBit(field, numChunks());
             if(index < noFreeBitFound(field))
             {
                 return std::optional<Chunk>({index, this->operator[](index)});

@@ -303,14 +303,4 @@ TEST_CASE("PageInterpretation.destroy")
         }
     }
 }
-
-
-TEST_CASE("PageInterpretation.destroy (failing)", "[!shouldfail]")
-{
-    SECTION("initialises invalid bits to filled.")
-    {
-        FAIL("does not handle cases where numChunks is not a multiple of the BitMaskSize.");
-    }
-}
-
 // NOLINTEND(*widening*)

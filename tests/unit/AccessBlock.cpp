@@ -25,381 +25,227 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/auxiliary.hpp"
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
+#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
-#include <algorithm>
 #include <catch2/catch.hpp>
-#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <type_traits>
 
-using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
+using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 
-constexpr size_t pageSize = 1024;
-constexpr size_t numPages = 4;
-// Page table entry size = sizeof(chunkSize) + sizeof(fillingLevel):
-constexpr size_t pteSize = 4 + 4;
-constexpr size_t blockSize = numPages * (pageSize + pteSize);
+constexpr size_t const pageTableEntrySize = 8U;
+constexpr size_t const pageSize1 = 1024U;
+constexpr size_t const pageSize2 = 4096U;
 
-// Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
-// behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
-// regardless of the underlying access optimisations etc.
+using BlockAndPageSizes = std::tuple<
+    // single page:
+    std::tuple<
+        std::integral_constant<size_t, 1U * (pageSize1 + pageTableEntrySize)>,
+        std::integral_constant<size_t, pageSize1>>,
+    // multiple pages:
+    std::tuple<
+        std::integral_constant<size_t, 4U * (pageSize1 + pageTableEntrySize)>,
+        std::integral_constant<size_t, pageSize1>>,
+    // multiple pages with some overhead:
+    std::tuple<
+        std::integral_constant<size_t, 4U * (pageSize1 + pageTableEntrySize) + 100U>,
+        std::integral_constant<size_t, pageSize1>>,
+    // other page size:
+    std::tuple<
+        std::integral_constant<size_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
+        std::integral_constant<size_t, pageSize2>>>;
+
 template<size_t T_blockSize, size_t T_pageSize>
-void fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
+auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
 {
-    for(auto& tmpChunkSize : accessBlock.pageTable._chunkSizes)
-    {
-        tmpChunkSize = chunkSize;
-    }
-
-    auto maxFillingLevel = accessBlock.interpret(0).numChunks();
-    for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
-    {
-        fillingLevel = maxFillingLevel;
-    }
-
-    for(size_t i = 0; i < accessBlock.numPages(); ++i)
-    {
-        auto page = accessBlock.interpret(i);
-        for(auto& mask : page.bitField())
+    std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize));
+    std::generate(
+        std::begin(pointers),
+        std::end(pointers),
+        [&accessBlock, chunkSize]()
         {
-            mask.set();
-        }
-    }
+            void* pointer = accessBlock.create(chunkSize);
+            REQUIRE(pointer != nullptr);
+            return pointer;
+        });
+    return pointers;
 }
 
-TEST_CASE("AccessBlock (reporting)")
+TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 {
-    AccessBlock<blockSize, pageSize> accessBlock;
+    constexpr auto const blockSize = std::get<0>(TestType{}).value;
+    constexpr auto const pageSize = std::get<1>(TestType{}).value;
 
-    SECTION("has pages.")
-    {
-        // This check is mainly leftovers from TDD. Keep it as long as `pages` is public interface.
-        CHECK(accessBlock.pages); // NOLINT(*-array-*decay)
-    }
-
-    SECTION("knows its data size.")
-    {
-        CHECK(accessBlock.dataSize() == numPages * pageSize);
-    }
-
-    SECTION("knows its metadata size.")
-    {
-        CHECK(accessBlock.metadataSize() == numPages * pteSize);
-    }
-
-    SECTION("stores page table after pages.")
-    {
-        CHECK(reinterpret_cast<void*>(accessBlock.pages) < reinterpret_cast<void*>(&accessBlock.pageTable));
-    }
-
-    SECTION("uses an allowed amount of memory.")
-    {
-        CHECK(accessBlock.dataSize() + accessBlock.metadataSize() <= blockSize);
-    }
+    AccessBlock<blockSize, pageSize> accessBlock{};
 
     SECTION("knows its number of pages.")
     {
-        CHECK(accessBlock.numPages() == numPages);
+        // The overhead from the metadata is small enough that this just happens to round down to the correct values.
+        // If you choose weird numbers, it might no longer.
+        CHECK(accessBlock.numPages() == blockSize / pageSize);
     }
 
-    SECTION("correctly reports a different number of pages.")
+    SECTION("knows its available slots.")
     {
-        constexpr size_t localNumPages = 5U;
-        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
-        AccessBlock<localBlockSize, pageSize> localAccessBlock;
-        CHECK(localAccessBlock.numPages() == localNumPages);
-    }
-}
+        uint32_t const chunkSize = GENERATE(1U, 2U, 32U, 57U, 1024U);
+        // This is not exactly true. It is only true because the largest chunk size we chose above is exactly the size
+        // of one page. In general, this number would be fractional for larger than page size chunks but I don't want
+        // to bother right now:
+        size_t slotsPerPage = chunkSize < pageSize ? PageInterpretation<pageSize>::numChunks(chunkSize) : 1U;
 
-TEST_CASE("AccessBlock.create")
-{
-    AccessBlock<blockSize, pageSize> accessBlock;
-
-    SECTION("does not return nullptr if memory is available.")
-    {
-        // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is most
-        // likely not exactly the nullptr. We just leave this in as it currently doesn't hurt anybody to keep it.
-        CHECK(accessBlock.create(32U) != nullptr);
-    }
-
-    SECTION("creates memory that can be written to and read from.")
-    {
-        uint32_t const arbitraryValue = 42;
-        auto* ptr = static_cast<uint32_t*>(accessBlock.create(4U));
-        *ptr = arbitraryValue;
-        CHECK(*ptr == arbitraryValue);
-    }
-
-    SECTION("creates second memory somewhere else.")
-    {
-        CHECK(accessBlock.create(32U) != accessBlock.create(32U));
-    }
-
-    SECTION("creates memory with same chunk size in same page (if there is no other).")
-    {
-        constexpr size_t localNumPages = 1U;
-        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
-        constexpr const uint32_t chunkSize = 32U;
-        AccessBlock<localBlockSize, pageSize> localAccessBlock{};
-        void* result1 = localAccessBlock.create(chunkSize);
-        REQUIRE(result1 != nullptr);
-        void* result2 = localAccessBlock.create(chunkSize);
-        REQUIRE(result2 != nullptr);
-        CHECK(indexOf(result1, &accessBlock.pages[0], pageSize) == indexOf(result2, &accessBlock.pages[0], pageSize));
-    }
-
-    SECTION("creates memory of different chunk size in different pages.")
-    {
-        CHECK(
-            indexOf(accessBlock.create(32U), &accessBlock.pages[0], pageSize)
-            != indexOf(accessBlock.create(512U), &accessBlock.pages[0], pageSize));
-    }
-
-    SECTION("fails to create memory if there's no page with fitting chunk size")
-    {
-        constexpr size_t localNumPages = 1U;
-        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
-        AccessBlock<localBlockSize, pageSize> localAccessBlock;
-        const uint32_t chunkSize = 32U;
-        const uint32_t otherChunkSize = 512U;
-
-        // set the chunk size of the only available page:
-        localAccessBlock.create(chunkSize);
-        CHECK(localAccessBlock.create(otherChunkSize) == nullptr);
-    }
-
-    SECTION("fails to create memory if all pages have full filling level even if bit masks are empty.")
-    {
-        constexpr const uint32_t chunkSize = 32U;
-        fillWith(accessBlock, chunkSize);
-        for(auto& bitMask : accessBlock.bitMasks())
+        uint32_t numOccupied = GENERATE(0U, 1U, 10U);
+        for(uint32_t i = 0; i < numOccupied; ++i)
         {
-            // reverse previous filling
-            bitMask.flip();
+            if(not accessBlock.create(chunkSize))
+            {
+                {
+                }
+                numOccupied--;
+            }
         }
-        CHECK(accessBlock.create(chunkSize) == nullptr);
-    }
 
-    SECTION("finds last remaining chunk for creation without hierarchical bit fields.")
-    {
-        constexpr const uint32_t chunkSize = 32U;
-        fillWith(accessBlock, chunkSize);
-
-        const uint32_t index1 = GENERATE(0, 1, 2, 3);
-        const uint32_t index2 = GENERATE(0, 1, 2, 3);
-        accessBlock.pageTable._fillingLevels[index1] -= 1;
-        accessBlock.bitMasks()[index1].flip(index2);
-
-
-        void* result = accessBlock.create(chunkSize);
-        REQUIRE(result != nullptr);
-
-        CHECK(
-            std::distance(reinterpret_cast<char*>(&accessBlock.pages[0]), reinterpret_cast<char*>(result))
-            == static_cast<long>(index1 * pageSize + index2 * chunkSize));
-    }
-
-    SECTION("increases filling level upon creation.")
-    {
-        REQUIRE(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                0U)
-            == accessBlock.numPages());
-        accessBlock.create(32U);
-        CHECK(
-            std::count(
-                std::begin(accessBlock.pageTable._fillingLevels),
-                std::end(accessBlock.pageTable._fillingLevels),
-                1U)
-            == 1U);
-    }
-
-    SECTION("recovers from not finding a free chunk in page.")
-    {
-        uint32_t const chunkSize = 32U;
-        uint32_t const pageIndex = GENERATE(1, 2);
-        uint32_t const chunkIndex = GENERATE(2, 3, 13);
-        fillWith(accessBlock, chunkSize);
-
-        for(auto& fillingLevel : accessBlock.pageTable._fillingLevels)
+        auto totalSlots = accessBlock.numPages() * slotsPerPage;
+        if(totalSlots > numOccupied)
         {
-            // we lie here and set all filling levels to 0, so accessBlock thinks that the pages are free but they are
-            // not
-            fillingLevel = 0U;
+            CHECK(accessBlock.getAvailableSlots(chunkSize) == totalSlots - numOccupied);
         }
-        // But we show some mercy and make one chunk available.
-        accessBlock.interpret(pageIndex).bitField().set(chunkIndex, false);
-
-        auto* pointer = accessBlock.create(chunkSize);
-
-        CHECK(indexOf(pointer, &accessBlock.pages[0], pageSize) == pageIndex);
-        CHECK(indexOf(pointer, &accessBlock.pages[pageIndex], chunkSize) == chunkIndex);
-    }
-
-    SECTION("can create memory larger than page size.")
-    {
-        // We give a strong guarantee that this searches the first possible block, so we know the index here.
-        CHECK(indexOf(accessBlock.create(2U * pageSize), &accessBlock.pages[0], pageSize) == 0);
-    }
-
-    SECTION("sets correct chunk size for larger than page size.")
-    {
-        auto pagesNeeded = 2U;
-        auto chunkSize = pagesNeeded * pageSize;
-        auto* pointer = accessBlock.create(chunkSize);
-        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
-        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        else
         {
-            CHECK(accessBlock.interpret(index + i)._chunkSize == chunkSize);
+            CHECK(accessBlock.getAvailableSlots(chunkSize) == 0U);
         }
     }
 
-    SECTION("sets correct filling level for larger than page size.")
+    constexpr uint32_t const chunkSize = 32U;
+
+    SECTION("creates")
     {
-        auto pagesNeeded = 2U;
-        auto chunkSize = pagesNeeded * pageSize;
-        auto* pointer = accessBlock.create(chunkSize);
-        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
-        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        SECTION("no nullptr if memory is available.")
         {
-            CHECK(accessBlock.pageTable._fillingLevels[index + i] == 1U);
+            // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is
+            // most likely not exactly the nullptr. We just leave this in as it currently doesn't hurt anybody to keep
+            // it.
+            CHECK(accessBlock.create(chunkSize) != nullptr);
+        }
+
+        SECTION("memory that can be written to and read from.")
+        {
+            uint32_t const arbitraryValue = 42;
+            auto* ptr = static_cast<uint32_t*>(accessBlock.create(chunkSize));
+            *ptr = arbitraryValue;
+            CHECK(*ptr == arbitraryValue);
+        }
+
+        SECTION("second memory somewhere else.")
+        {
+            CHECK(accessBlock.create(chunkSize) != accessBlock.create(chunkSize));
+        }
+
+        SECTION("memory of different chunk size in different pages.")
+        {
+            constexpr uint32_t const chunkSize2 = 512U;
+            REQUIRE(chunkSize != chunkSize2);
+            // To be precise, the second call will actually return a nullptr if there is only a single page (which is
+            // one of the test cases at the time of writing). But that technically passes this test, too.
+            CHECK(
+                accessBlock.pageIndex(accessBlock.create(chunkSize))
+                != accessBlock.pageIndex(accessBlock.create(chunkSize2)));
+        }
+
+        SECTION("nullptr if there's no page with fitting chunk size")
+        {
+            // This requests one chunk of a different chunk size for each page. As a new page is required each time,
+            // all pages have a chunk size set at the end. And none of those is `chunkSize`.
+            for(size_t index = 0; index < accessBlock.numPages(); ++index)
+            {
+                const auto differentChunkSize = chunkSize + 1U + index;
+                REQUIRE(chunkSize != differentChunkSize);
+                accessBlock.create(differentChunkSize);
+            }
+
+            CHECK(accessBlock.create(chunkSize) == nullptr);
+        }
+
+        SECTION("nullptr if all pages have full filling level.")
+        {
+            fillWith(accessBlock, chunkSize);
+            CHECK(accessBlock.create(chunkSize) == nullptr);
+        }
+
+        SECTION("last remaining chunk.")
+        {
+            auto pointers = fillWith(accessBlock, chunkSize);
+            size_t const index = GENERATE(0U, 1U, 42U);
+            void* pointer = pointers[std::min(index, pointers.size() - 1)];
+            accessBlock.destroy(pointer);
+            CHECK(accessBlock.create(chunkSize) == pointer);
+        }
+
+        SECTION("memory larger than page size.")
+        {
+            // We give a strong guarantee that this searches the first possible block, so we know the index here.
+            if(accessBlock.numPages() >= 2U)
+            {
+                CHECK(accessBlock.pageIndex(accessBlock.create(2U * pageSize)) == 0U);
+            }
+        }
+
+        SECTION("nullptr if chunkSize is larger than total available memory in pages.")
+        {
+            // larger than the available memory but in some cases smaller than the block size even after subtracting
+            // the space for the page table:
+            uint32_t const excessiveChunkSize = accessBlock.numPages() * pageSize + 1U;
+            CHECK(accessBlock.create(excessiveChunkSize) == nullptr);
+        }
+
+        SECTION("in the correct place for larger than page size.")
+        {
+            // we want to allocate 2 pages:
+            if(accessBlock.numPages() > 1U)
+            {
+                // Let's fill up everything first:
+                std::vector<void*> pointers(accessBlock.numPages());
+                std::generate(
+                    std::begin(pointers),
+                    std::end(pointers),
+                    [&accessBlock]()
+                    {
+                        // so we really exactly block one page:
+                        void* pointer = accessBlock.create(pageSize);
+                        REQUIRE(pointer != nullptr);
+                        return pointer;
+                    });
+
+                // Now, we free two contiguous chunks such that there is one deterministic spot wherefrom our request
+                // can be served.
+                size_t index = GENERATE(0U, 1U, 5U);
+                index = std::min(index, pointers.size() - 2);
+                accessBlock.destroy(pointers[index]);
+                accessBlock.destroy(pointers[index + 1]);
+
+                // Must be exactly where we free'd the pages:
+                CHECK(accessBlock.pageIndex(accessBlock.create(2U * pageSize)) == index);
+            }
+        }
+
+        SECTION("a pointer and knows it's valid afterwards.")
+        {
+            void* pointer = accessBlock.create(chunkSize);
+            CHECK(accessBlock.isValid(pointer));
         }
     }
 
-    SECTION("finds contiguous memory for larger than page size.")
+    SECTION("destroys")
     {
-        constexpr size_t localNumPages = 5U;
-        constexpr size_t localBlockSize = localNumPages * (pageSize + pteSize);
-        AccessBlock<localBlockSize, pageSize> localAccessBlock;
-        uint32_t const anythingNonzero = 1U;
-        localAccessBlock.pageTable._chunkSizes[1] = anythingNonzero;
-        // We give a strong guarantee that this searches the first possible block, so we know the index here.
-        CHECK(indexOf(localAccessBlock.create(2U * pageSize), &localAccessBlock.pages[0], pageSize) == 2U);
-    }
-}
+        void* pointer = accessBlock.create(chunkSize);
+        REQUIRE(accessBlock.isValid(pointer));
 
-TEST_CASE("AccessBlock.destroy")
-{
-    // TODO(lenz): Remove reference to .bitmasks() and check that these tests did the correct thing after all.
-
-    AccessBlock<blockSize, pageSize> accessBlock;
-
-    SECTION("destroys a previously created pointer.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-        void* pointer = accessBlock.create(numBytes);
-        accessBlock.destroy(pointer);
-        SUCCEED("Just check that you can do this at all.");
-    }
-
-    SECTION("frees up the page upon destroying the last element without hierarchy.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-        void* pointer = accessBlock.create(numBytes);
-        auto pageIndex = indexOf(pointer, std::begin(accessBlock.pages), pageSize);
-        auto chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
-
-        accessBlock.destroy(pointer);
-        CHECK(accessBlock.pageTable._chunkSizes[pageIndex] == 0U);
-    }
-
-    SECTION("resets one bit without touching others upon destroy without hierarchy.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-
-        void* untouchedPointer = accessBlock.create(numBytes);
-        auto const untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
-        auto const untouchedChunkIndex = indexOf(untouchedPointer, &accessBlock.pages[untouchedPageIndex], numBytes);
-        REQUIRE(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
-
-        void* pointer = accessBlock.create(numBytes);
-        auto const pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-        auto const chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
-
-        accessBlock.destroy(pointer);
-
-        CHECK(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
-        CHECK(!accessBlock.bitMasks()[pageIndex][chunkIndex]);
-    }
-
-    SECTION("decreases one filling level upon destroy without hierarchy.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-        void* pointer = accessBlock.create(numBytes);
-        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == 1U);
-
-        accessBlock.destroy(pointer);
-
-        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == 0U);
-    }
-
-    SECTION("decreases one filling level without touching others upon destroy without hierarchy.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-
-        void* untouchedPointer = accessBlock.create(numBytes);
-        auto untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
-        REQUIRE(accessBlock.pageTable._fillingLevels[untouchedPageIndex] == 1U);
-
-        void* pointer = accessBlock.create(numBytes);
-        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-
-        uint32_t fillingLevel = pageIndex == untouchedPageIndex ? 2U : 1U;
-        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel);
-
-        accessBlock.destroy(pointer);
-
-        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel - 1);
-        CHECK(accessBlock.pageTable._fillingLevels[untouchedPageIndex] > 0);
-    }
-
-    SECTION("throws if given an invalid pointer.")
-    {
-        void* pointer = nullptr;
-        CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
-    }
-
-    SECTION("can destroy multiple pages.")
-    {
-        auto pagesNeeded = 2U;
-        auto chunkSize = pagesNeeded * pageSize;
-        auto* pointer = accessBlock.create(chunkSize);
-        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
-
-        for(uint32_t i = 0; i < pagesNeeded; ++i)
+        SECTION("a pointer thereby invalidating it.")
         {
-            REQUIRE(accessBlock.pageTable._chunkSizes[index + i] == chunkSize);
-            REQUIRE(accessBlock.pageTable._fillingLevels[index + i] == 1U);
+            accessBlock.destroy(pointer);
+            CHECK(not accessBlock.isValid(pointer));
         }
-
-        accessBlock.destroy(pointer);
-
-        for(uint32_t i = 0; i < pagesNeeded; ++i)
-        {
-            CHECK(accessBlock.pageTable._chunkSizes[index + i] == 0U);
-            CHECK(accessBlock.pageTable._fillingLevels[index + i] == 0U);
-        }
-    }
-
-    SECTION("resets chunk size when page is abandoned.")
-    {
-        constexpr const uint32_t numBytes = 32U;
-        void* pointer = accessBlock.create(numBytes);
-        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-        REQUIRE(accessBlock.pageTable._chunkSizes[pageIndex] == numBytes);
-
-        // this is the only allocation on this page, so page is abandoned afterwards
-        accessBlock.destroy(pointer);
-        CHECK(accessBlock.pageTable._chunkSizes[pageIndex] == 0U);
     }
 }

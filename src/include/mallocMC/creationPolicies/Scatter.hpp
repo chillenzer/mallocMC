@@ -35,8 +35,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <iterator>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -93,9 +97,67 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return BitMasksWrapper<T_blockSize, T_pageSize>{*this};
         }
 
+
+        [[nodiscard]] auto getAvailableSlots(uint32_t const chunkSize) -> size_t
+        {
+            if(chunkSize < T_pageSize)
+            {
+                return getAvailableChunks(chunkSize);
+            }
+            return getAvailableMultiPages(chunkSize);
+        }
+
+    private:
+        [[nodiscard]] auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
+        {
+            // This is not thread-safe!
+            return std::transform_reduce(
+                std::cbegin(pageTable._chunkSizes),
+                std::cend(pageTable._chunkSizes),
+                std::cbegin(pageTable._fillingLevels),
+                0U,
+                std::plus<size_t>{},
+                [chunkSize](auto const localChunkSize, auto const fillingLevel)
+                {
+                    return chunkSize == localChunkSize or localChunkSize == 0U
+                        ? PageInterpretation<T_pageSize>::numChunks(chunkSize) - fillingLevel
+                        : 0U;
+                });
+        }
+
+        [[nodiscard]] auto getAvailableMultiPages(uint32_t const chunkSize) -> size_t
+        {
+            // This is the most inefficient but simplest and only thread-safe way I could come up with. If we ever
+            // need this in production, we might want to revisit this.
+            void* pointer = nullptr;
+            std::vector<void*> pointers;
+            while((pointer = create(chunkSize)))
+            {
+                pointers.push_back(pointer);
+            }
+            std::for_each(std::begin(pointers), std::end(pointers), [this](auto p) { destroy(p); });
+            return pointers.size();
+        }
+
+    public:
+        auto pageIndex(void* pointer) const -> size_t
+        {
+            return indexOf(pointer, pages, T_pageSize);
+        }
+
+        auto isValid(void* pointer) -> bool
+        {
+            auto const index = pageIndex(pointer);
+            if(pageTable._chunkSizes[index] >= T_pageSize)
+            {
+                return true;
+            }
+            return pageTable._chunkSizes[index] == 0U ? false : interpret(index).isValid(pointer);
+        }
+
         auto create(uint32_t numBytes) -> void*
         {
-            if(numBytes > T_pageSize)
+            if(numBytes >= T_pageSize)
             {
                 return createOverMultiplePages(numBytes);
             }
@@ -106,6 +168,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto createOverMultiplePages(uint32_t const numBytes) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
+            if(numPagesNeeded > numPages())
+            {
+                return nullptr;
+            }
             auto chunk = createContiguousPages(numPagesNeeded);
             if(chunk)
             {
@@ -170,7 +236,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
         {
-            for(size_t index = 0; index < numPages() - numPagesNeeded; ++index)
+            for(size_t index = 0; index < numPages() - (numPagesNeeded - 1); ++index)
             {
                 if(std::all_of(
                        &pageTable._chunkSizes[index],

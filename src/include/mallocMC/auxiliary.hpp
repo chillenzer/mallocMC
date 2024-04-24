@@ -65,9 +65,9 @@ namespace mallocMC
         return counter;
     }
 
-    inline auto indexOf(void* const pointer, void* const start, ssize_t const stepSize) -> ssize_t
+    inline auto indexOf(void const* const pointer, void const* const start, ssize_t const stepSize) -> ssize_t
     {
-        return std::distance(reinterpret_cast<char*>(start), reinterpret_cast<char*>(pointer)) / stepSize;
+        return std::distance(reinterpret_cast<char const*>(start), reinterpret_cast<char const*>(pointer)) / stepSize;
     }
 
     template<typename T>

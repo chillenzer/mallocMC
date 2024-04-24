@@ -165,14 +165,23 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return noFreeBitFound(mask);
     }
 
-    inline auto firstFreeBit(BitFieldFlat field) -> uint32_t
+    inline auto firstFreeBit(BitFieldFlat field, uint32_t numValidBits = 0) -> uint32_t
     {
+        if(numValidBits == 0)
+        {
+            numValidBits = field.numBits();
+        }
         for(uint32_t i = 0; i < field.numMasks(); ++i)
         {
             auto index = firstFreeBit(field[i]);
             if(index < noFreeBitFound(BitMask{}))
             {
-                return index + BitMaskSize * i;
+                auto result = index + BitMaskSize * i;
+                if(result < numValidBits)
+                {
+                    return result;
+                }
+                return noFreeBitFound(field);
             }
         }
         return noFreeBitFound(field);
