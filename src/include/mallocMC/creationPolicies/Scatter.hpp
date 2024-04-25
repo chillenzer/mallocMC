@@ -101,19 +101,19 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto destroy(void* const pointer) -> void
         {
-            auto const pageIndex = indexOf(pointer, pages, T_pageSize);
-            if(pageIndex > static_cast<ssize_t>(numPages()) || pageIndex < 0)
+            auto const index = pageIndex(pointer);
+            if(index > static_cast<ssize_t>(numPages()) || index < 0)
             {
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
             }
-            auto const chunkSize = atomicLoad(pageTable._chunkSizes[pageIndex]);
+            auto const chunkSize = atomicLoad(pageTable._chunkSizes[index]);
             if(chunkSize > T_pageSize)
             {
-                destroyOverMultiplePages(pageIndex);
+                destroyOverMultiplePages(index);
             }
             else
             {
-                destroyChunk(pointer, pageIndex);
+                destroyChunk(pointer, index);
             }
         }
 
@@ -197,7 +197,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 {
                     return pointer;
                 }
-                startIndex = indexOf(&page.value()._data, pages, T_pageSize) + 1;
+                startIndex = pageIndex(&page.value()._data) + 1;
             }
             return nullptr;
         }

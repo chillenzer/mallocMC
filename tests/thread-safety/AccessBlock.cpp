@@ -25,7 +25,6 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/auxiliary.hpp"
 
 #include <algorithm>
 #include <catch2/catch.hpp>
@@ -35,7 +34,6 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <thread>
 
-using mallocMC::indexOf;
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 
 constexpr size_t pageSize = 1024;
@@ -63,7 +61,7 @@ auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
     return pointers;
 }
 
-
+template<bool parallel = true>
 struct Runner
 {
     std::vector<std::thread> threads{};
@@ -72,12 +70,29 @@ struct Runner
     auto run(T... pars) -> Runner&
     {
         threads.emplace_back(pars...);
+        if constexpr(not parallel)
+        {
+            threads.back().join();
+        }
         return *this;
     }
 
     auto join()
     {
-        std::for_each(std::begin(threads), std::end(threads), [](auto& thread) { thread.join(); });
+        if constexpr(parallel)
+        {
+            std::for_each(std::begin(threads), std::end(threads), [](auto& thread) { thread.join(); });
+        }
+    }
+};
+
+struct ContentGenerator
+{
+    uint32_t counter{0U};
+
+    auto operator()() -> uint32_t
+    {
+        return counter++;
     }
 };
 
@@ -126,116 +141,21 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(pointer1 != pointer2);
     }
 
-    SECTION("destroys two pointers.")
+    SECTION("destroys two pointers of different size.")
     {
         pointer1 = accessBlock.create(chunkSize1);
         pointer2 = accessBlock.create(chunkSize2);
-        Runner{}.run(destroy, pointer1).run(destroy, pointer1).join();
+        Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
+        CHECK(not accessBlock.isValid(pointer1));
+        CHECK(not accessBlock.isValid(pointer2));
     }
 
-    // TEST_CASE("AccessBlock.destroy")
-    //{
-    //    // TODO(lenz): Remove reference to .bitmasks() and check that these tests did the correct thing after all.
-    //
-    //    AccessBlock<blockSize, pageSize> accessBlock;
-    //
-    //    SECTION("destroys a previously created pointer.")
-    //    {
-    //        constexpr const uint32_t numBytes = 32U;
-    //        void* pointer = accessBlock.create(numBytes);
-    //        accessBlock.destroy(pointer);
-    //        SUCCEED("Just check that you can do this at all.");
-    //    }
-    //
-    //    SECTION("frees up the page upon destroying the last element without hierarchy.")
-    //    {
-    //        constexpr const uint32_t numBytes = 32U;
-    //        void* pointer = accessBlock.create(numBytes);
-    //        auto pageIndex = indexOf(pointer, std::begin(accessBlock.pages), pageSize);
-    //        auto chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-    //        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
-    //
-    //        accessBlock.destroy(pointer);
-    //        CHECK(accessBlock.pageTable._chunkSizes[pageIndex] == 0U);
-    //    }
-    //
-    //    SECTION("resets one bit without touching others upon destroy without hierarchy.")
-    //    {
-    //        constexpr const uint32_t numBytes = 32U;
-    //
-    //        void* untouchedPointer = accessBlock.create(numBytes);
-    //        auto const untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
-    //        auto const untouchedChunkIndex = indexOf(untouchedPointer, &accessBlock.pages[untouchedPageIndex],
-    //        numBytes); REQUIRE(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
-    //
-    //        void* pointer = accessBlock.create(numBytes);
-    //        auto const pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-    //        auto const chunkIndex = indexOf(pointer, &accessBlock.pages[pageIndex], numBytes);
-    //        REQUIRE(accessBlock.bitMasks()[pageIndex][chunkIndex]);
-    //
-    //        accessBlock.destroy(pointer);
-    //
-    //        CHECK(accessBlock.bitMasks()[untouchedPageIndex][untouchedChunkIndex]);
-    //        CHECK(!accessBlock.bitMasks()[pageIndex][chunkIndex]);
-    //    }
-    //
-    //    SECTION("decreases one filling level upon destroy without hierarchy.")
-    //    {
-    //        constexpr const uint32_t numBytes = 32U;
-    //        void* pointer = accessBlock.create(numBytes);
-    //        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-    //        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == 1U);
-    //
-    //        accessBlock.destroy(pointer);
-    //
-    //        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == 0U);
-    //    }
-    //
-    //    SECTION("decreases one filling level without touching others upon destroy without hierarchy.")
-    //    {
-    //        constexpr const uint32_t numBytes = 32U;
-    //
-    //        void* untouchedPointer = accessBlock.create(numBytes);
-    //        auto untouchedPageIndex = indexOf(untouchedPointer, &accessBlock.pages[0], pageSize);
-    //        REQUIRE(accessBlock.pageTable._fillingLevels[untouchedPageIndex] == 1U);
-    //
-    //        void* pointer = accessBlock.create(numBytes);
-    //        auto pageIndex = indexOf(pointer, &accessBlock.pages[0], pageSize);
-    //
-    //        uint32_t fillingLevel = pageIndex == untouchedPageIndex ? 2U : 1U;
-    //        REQUIRE(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel);
-    //
-    //        accessBlock.destroy(pointer);
-    //
-    //        CHECK(accessBlock.pageTable._fillingLevels[pageIndex] == fillingLevel - 1);
-    //        CHECK(accessBlock.pageTable._fillingLevels[untouchedPageIndex] > 0);
-    //    }
-    //
-    //    SECTION("throws if given an invalid pointer.")
-    //    {
-    //        void* pointer = nullptr;
-    //        CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
-    //    }
-    //
-    //    SECTION("can destroy multiple pages.")
-    //    {
-    //        auto pagesNeeded = 2U;
-    //        auto chunkSize = pagesNeeded * pageSize;
-    //        auto* pointer = accessBlock.create(chunkSize);
-    //        auto index = indexOf(pointer, &accessBlock.pages[0], pageSize);
-    //
-    //        for(uint32_t i = 0; i < pagesNeeded; ++i)
-    //        {
-    //            REQUIRE(accessBlock.interpret(index + i)._chunkSize == chunkSize);
-    //            REQUIRE(accessBlock.interpret(index + i)._fillingLevel == 1U);
-    //        }
-    //
-    //        accessBlock.destroy(pointer);
-    //
-    //        for(uint32_t i = 0; i < pagesNeeded; ++i)
-    //        {
-    //            CHECK(accessBlock.interpret(index + i)._chunkSize == 0U);
-    //            CHECK(accessBlock.interpret(index + i)._fillingLevel == 0U);
-    //        }
-    //    }
+    SECTION("destroys two pointers of same size.")
+    {
+        pointer1 = accessBlock.create(chunkSize1);
+        pointer2 = accessBlock.create(chunkSize1);
+        Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
+        CHECK(not accessBlock.isValid(pointer1));
+        CHECK(not accessBlock.isValid(pointer2));
+    }
 }
