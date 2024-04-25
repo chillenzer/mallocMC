@@ -30,6 +30,7 @@
 // NOLINTBEGIN(*widening*)
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
+#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
@@ -115,6 +116,13 @@ TEST_CASE("PageInterpretation")
         // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
         // field size should be
         CHECK(page.maxBitFieldSize() == BitMaskSize * sizeof(BitMask));
+    }
+
+    SECTION("reports numChunks that fit the page.")
+    {
+        CHECK(
+            page.numChunks() * chunkSize + mallocMC::ceilingDivision(page.numChunks(), BitMaskSize) * sizeof(BitMask)
+            <= pageSize);
     }
 }
 

@@ -152,20 +152,36 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return field.numBits();
     }
 
-    [[nodiscard]] constexpr inline auto firstFreeBit(BitMask const mask, uint32_t const startIndex = 0) -> uint32_t
+    [[nodiscard]] inline auto firstFreeBit(BitMask& mask, uint32_t const startIndex = 0) -> uint32_t
     {
+        // Okay, so this is a little bit weird: The C++ Standard's atomic operations return the value AFTER the
+        // application of the operation while CUDA and Alpaka return the value BEFORE the operation. The commented out
+        // algorithm would work on those systems. The used one is a workaround relying on CAS (which we implemented
+        // with the correct interface).
+
+        BitMaskStorageType<> oldMask = atomicLoad(mask.mask);
         // TODO(lenz): we are not yet caring for performance here...
         for(size_t i = startIndex; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
         {
-            if(not mask[i])
+            BitMaskStorageType<> const singleBit = 1U << i;
+            auto const desiredMask = oldMask | singleBit;
+            if(desiredMask != oldMask)
             {
-                return i;
+                auto const newMask = atomicCAS(mask.mask, oldMask, desiredMask);
+                if(newMask == oldMask)
+                {
+                    return i;
+                }
+                oldMask = newMask;
             }
+            // BitMaskStorageType<> const singleBit = 1U << i;
+            // if((atomicOr(mask.mask, singleBit) && singleBit) == 0U)
+            //     return i;
         }
         return noFreeBitFound(mask);
     }
 
-    inline auto firstFreeBit(BitFieldFlat field, uint32_t numValidBits = 0) -> uint32_t
+    inline auto firstFreeBit(BitFieldFlat& field, uint32_t numValidBits = 0) -> uint32_t
     {
         if(numValidBits == 0)
         {

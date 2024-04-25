@@ -89,8 +89,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto chunk = firstFreeChunk();
             if(chunk)
             {
-                // TODO(lenz): Move this into firstFreeChunk().
-                bitField().set(chunk.value().index);
                 return chunk.value().pointer;
             }
             return nullptr;
