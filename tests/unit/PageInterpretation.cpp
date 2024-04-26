@@ -124,6 +124,14 @@ TEST_CASE("PageInterpretation")
             page.numChunks() * chunkSize + mallocMC::ceilingDivision(page.numChunks(), BitMaskSize) * sizeof(BitMask)
             <= pageSize);
     }
+
+    SECTION("knows correct bit field size.")
+    {
+        uint32_t const numChunks = GENERATE(2, BitMaskSize - 1, BitMaskSize, 2 * BitMaskSize);
+        uint32_t localChunkSize = pageSize / numChunks;
+        PageInterpretation<pageSize> localPage{data, localChunkSize};
+        CHECK(localPage.bitFieldSize() == sizeof(BitMask) * mallocMC::ceilingDivision(numChunks, BitMaskSize));
+    }
 }
 
 TEST_CASE("PageInterpretation.bitFieldDepth")

@@ -97,20 +97,19 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         size_t slotsPerPage = chunkSize < pageSize ? PageInterpretation<pageSize>::numChunks(chunkSize) : 1U;
 
         uint32_t numOccupied = GENERATE(0U, 1U, 10U);
+        uint32_t actualNumOccupied = numOccupied;
         for(uint32_t i = 0; i < numOccupied; ++i)
         {
-            if(not accessBlock.create(chunkSize))
+            if(accessBlock.create(chunkSize) == nullptr)
             {
-                {
-                }
-                numOccupied--;
+                actualNumOccupied--;
             }
         }
 
         auto totalSlots = accessBlock.numPages() * slotsPerPage;
-        if(totalSlots > numOccupied)
+        if(totalSlots > actualNumOccupied)
         {
-            CHECK(accessBlock.getAvailableSlots(chunkSize) == totalSlots - numOccupied);
+            CHECK(accessBlock.getAvailableSlots(chunkSize) == totalSlots - actualNumOccupied);
         }
         else
         {
@@ -222,6 +221,29 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         {
             void* pointer = accessBlock.create(chunkSize);
             CHECK(accessBlock.isValid(pointer));
+        }
+
+        SECTION("the last pointer in page and its allocation does not reach into the bit field.")
+        {
+            auto slots = accessBlock.getAvailableSlots(chunkSize);
+            // Find the last allocation on the first page:
+            auto pointers = fillWith(accessBlock, chunkSize);
+            std::sort(std::begin(pointers), std::end(pointers));
+            auto lastOfPage0 = pointers[slots / accessBlock.numPages() - 1];
+
+            // Free the first bit of the bit field by destroying the first allocation in the first page:
+            accessBlock.destroy(pointers[0]);
+            REQUIRE(not accessBlock.isValid(pointers[0]));
+
+            // Write all ones to the last of the first page: If there is an overlap between the region of the last
+            // chunk and the bit field, our recently free'd first chunk will have its bit set by this operation.
+            char* begin = reinterpret_cast<char*>(lastOfPage0);
+            auto* end = begin + chunkSize;
+            std::fill(begin, end, 255U);
+
+            // Now, we try to allocate one more chunk. It must be the one we free'd before.
+            CHECK(accessBlock.create(chunkSize) == pointers[0]);
+            REQUIRE(accessBlock.isValid(pointers[0]));
         }
     }
 

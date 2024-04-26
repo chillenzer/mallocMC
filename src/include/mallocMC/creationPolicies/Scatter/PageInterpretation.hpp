@@ -59,7 +59,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
-        [[nodiscard]] static auto numChunks(uint32_t const chunkSize) -> uint32_t
+        [[nodiscard]] constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
             return BitMaskSize * T_pageSize / (BitMaskSize * chunkSize + sizeof(BitMask));
         }
@@ -86,12 +86,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto create() -> void*
         {
-            auto chunk = firstFreeChunk();
-            if(chunk)
-            {
-                return chunk.value().pointer;
-            }
-            return nullptr;
+            auto field = bitField();
+            auto const index = firstFreeBit(field, numChunks());
+            return (index < noFreeBitFound(field)) ? this->operator[](index) : nullptr;
         }
 
         auto destroy(void* pointer) -> void
@@ -174,7 +171,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
-            return sizeof(BitMask) * numChunks();
+            return sizeof(BitMask) * ceilingDivision(numChunks(), BitMaskSize);
         }
 
         [[nodiscard]] auto bitFieldDepth() const -> uint32_t

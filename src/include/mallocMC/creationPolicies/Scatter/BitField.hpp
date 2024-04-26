@@ -43,7 +43,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     inline auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
     {
-        return 1 << index;
+        return 1U << index;
     }
 
     struct BitMask
@@ -192,7 +192,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto index = firstFreeBit(field[i]);
             if(index < noFreeBitFound(BitMask{}))
             {
-                auto result = index + BitMaskSize * i;
+                uint32_t result = index + BitMaskSize * i;
                 if(result < numValidBits)
                 {
                     return result;
