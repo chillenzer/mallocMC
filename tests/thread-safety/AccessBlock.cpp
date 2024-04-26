@@ -158,4 +158,44 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(not accessBlock.isValid(pointer1));
         CHECK(not accessBlock.isValid(pointer2));
     }
+
+    SECTION("fills up all blocks in parallel and writes to them.")
+    {
+        auto const content = [&accessBlock]()
+        {
+            std::vector<uint32_t> tmp(accessBlock.getAvailableSlots(chunkSize1));
+            std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
+            return tmp;
+        }();
+
+        std::vector<void*> pointers(content.size());
+        auto runner = Runner{};
+
+        for(size_t i = 0; i < content.size(); ++i)
+        {
+            runner.run(
+                [&accessBlock, i, &content, &pointers]()
+                {
+                    pointers[i] = accessBlock.create(chunkSize1);
+                    auto* begin = reinterpret_cast<uint32_t*>(pointers[i]);
+                    auto* end = begin + chunkSize1 / sizeof(uint32_t);
+                    std::fill(begin, end, content[i]);
+                });
+        }
+
+        runner.join();
+
+        CHECK(std::transform_reduce(
+            std::cbegin(pointers),
+            std::cend(pointers),
+            std::cbegin(content),
+            true,
+            [](auto const lhs, auto const rhs) { return lhs && rhs; },
+            [](void* pointer, uint32_t const value)
+            {
+                auto* start = reinterpret_cast<uint32_t*>(pointer);
+                auto end = start + chunkSize1 / sizeof(uint32_t);
+                return std::all_of(start, end, [value](auto const val) { return val == value; });
+            }));
+    }
 }
