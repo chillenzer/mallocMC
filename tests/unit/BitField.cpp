@@ -119,7 +119,7 @@ TEST_CASE("BitFieldFlat")
     SECTION("knows its first free bit for different numChunks.")
     {
         auto localNumChunks = numChunks / GENERATE(1, 2, 3);
-        std::span localData{data, localNumChunks};
+        std::span localData{data, mallocMC::ceilingDivision(localNumChunks, BitMaskSize)};
         uint32_t const index = GENERATE(0, 1, 10, 12);
         for(auto& mask : localData)
         {

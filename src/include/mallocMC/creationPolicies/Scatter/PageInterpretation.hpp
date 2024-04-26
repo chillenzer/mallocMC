@@ -112,8 +112,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto cleanup() -> void
         {
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
-            // TODO(lenz): First block this page by setting a special value in chunkSize or fillingLevel.
-            // TODO(lenz): this should be atomic CAS
         }
 
         auto isValid(void* pointer) -> bool

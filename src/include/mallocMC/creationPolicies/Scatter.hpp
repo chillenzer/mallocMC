@@ -83,11 +83,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto isValid(void* pointer) -> bool
         {
             auto const index = pageIndex(pointer);
-            if(pageTable._chunkSizes[index] >= T_pageSize)
+            auto chunkSize = atomicLoad(pageTable._chunkSizes[index]);
+            if(chunkSize >= T_pageSize)
             {
                 return true;
             }
-            return pageTable._chunkSizes[index] == 0U ? false : interpret(index).isValid(pointer);
+            return chunkSize == 0U ? false : interpret(index, chunkSize).isValid(pointer);
         }
 
         auto create(uint32_t numBytes) -> void*
