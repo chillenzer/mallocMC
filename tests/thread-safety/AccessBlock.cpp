@@ -226,4 +226,33 @@ TEST_CASE("Threaded AccessBlock")
                 return std::all_of(start, end, [value](auto const val) { return val == value; });
             }));
     }
+
+    SECTION("creates and destroys multiple times.")
+    {
+        std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize1));
+        auto runner = Runner<>{};
+
+        for(size_t i = 0; i < pointers.size(); ++i)
+        {
+            runner.run(
+                [&accessBlock, i, &pointers]()
+                {
+                    for(uint32_t j = 0; j < i; ++j)
+                    {
+                        while(pointers[i] == nullptr)
+                        {
+                            pointers[i] = accessBlock.create(chunkSize1);
+                        }
+                        accessBlock.destroy(pointers[i]);
+                        pointers[i] = nullptr;
+                    }
+                    pointers[i] = accessBlock.create(chunkSize1);
+                });
+        }
+
+        runner.join();
+
+        std::sort(std::begin(pointers), std::end(pointers));
+        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
+    }
 }
