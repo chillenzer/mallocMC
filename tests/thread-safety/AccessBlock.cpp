@@ -141,6 +141,34 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(pointer1 != pointer2);
     }
 
+    SECTION("does not race between clean up and create.")
+    {
+        auto pointers = fillWith(accessBlock, chunkSize1);
+        std::sort(std::begin(pointers), std::end(pointers));
+        // This points to the first chunk of page 0.
+        pointer1 = pointers[0];
+        // Delete all other chunks on page 0.
+        std::for_each(
+            std::begin(pointers) + 1,
+            std::begin(pointers) + pointers.size() / accessBlock.numPages(),
+            destroy);
+        // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
+
+        Runner{}
+            .run(destroy, &pointer1)
+            .run(
+                [&accessBlock, &pointer2]()
+                {
+                    while(pointer2 == nullptr)
+                    {
+                        pointer2 = accessBlock.create(chunkSize1);
+                    }
+                })
+            .join();
+
+        CHECK(accessBlock.pageIndex(pointer1) == accessBlock.pageIndex(pointer2));
+    }
+
     SECTION("destroys two pointers of different size.")
     {
         pointer1 = accessBlock.create(chunkSize1);
