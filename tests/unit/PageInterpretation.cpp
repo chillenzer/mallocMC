@@ -107,9 +107,9 @@ TEST_CASE("PageInterpretation")
 
     SECTION("knows the maximal bit field size.")
     {
-        // pageSize = 1024 with chunks of size one allows for more than 32 but less than 32^2 chunks, so maximal bit
-        // field size should be
-        CHECK(page.maxBitFieldSize() == BitMaskSize * sizeof(BitMask));
+        // 116 allows for 29 bit masks capable of representing 928 1-byte chunks. This would give a total addressable
+        // size of 1044, so in this scenario the last 20 bits of the mask would be invalid.
+        CHECK(page.maxBitFieldSize() == 116U);
     }
 
     SECTION("reports numChunks that fit the page.")

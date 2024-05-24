@@ -129,7 +129,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
     private:
-        // TODO(lenz): On device we might need to have a seperate method to initialise the memory.
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
 

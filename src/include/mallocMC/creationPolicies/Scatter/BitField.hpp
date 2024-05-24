@@ -59,7 +59,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             atomicStore(mask, allOnes);
         }
 
-        // TODO(lenz): Split into two separate methods in order to make the distinction at compile time.
         auto set(auto const index)
         {
             return atomicOr(mask, singleBit(index));
@@ -160,8 +159,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     [[nodiscard]] inline auto firstFreeBit(BitMask& mask, uint32_t const startIndex = 0) -> uint32_t
     {
-        // TODO(lenz): we are not yet caring for performance here...
-        for(uint32_t i = startIndex; i < BitMaskSize; ++i) // NOLINT(altera-unroll-loops)
+        for(uint32_t i = startIndex; i < BitMaskSize; ++i)
         {
             if((atomicOr(mask.mask, singleBit(i)) & singleBit(i)) == 0U)
             {

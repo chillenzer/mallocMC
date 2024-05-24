@@ -107,13 +107,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto isValid(void* pointer) -> bool
         {
+            // This function is neither thread-safe nor particularly performant. It is supposed to be used in tests and
+            // debug mode.
             return isValid(chunkNumberOf(pointer));
         }
 
     private:
         auto isValid(uint32_t const chunkIndex) -> bool
         {
-            // TODO(lenz): Only enable these checks in debug mode.
             if(chunkIndex >= numChunks())
             {
 #ifdef DEBUG
@@ -165,8 +166,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
         {
-            // TODO(lenz): This overestimates because it neglects the missing space due to the bit field itself.
-            return ceilingDivision(T_pageSize, BitMaskSize) * sizeof(BitMask);
+            return PageInterpretation<T_pageSize>{_data, 1U}.bitFieldSize();
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
