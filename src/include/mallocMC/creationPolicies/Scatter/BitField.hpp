@@ -173,13 +173,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
         for(uint32_t i = 0; i < field.numMasks(); ++i)
         {
-            auto index = firstFreeBit(field[i]);
-            if(index < noFreeBitFound(BitMask{}))
+            auto indexInMask = firstFreeBit(field[i]);
+            if(indexInMask < noFreeBitFound(BitMask{}))
             {
-                uint32_t result = index + BitMaskSize * i;
-                if(result < numValidBits)
+                uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
+                if(freeBitIndex < numValidBits)
                 {
-                    return result;
+                    return freeBitIndex;
                 }
                 return noFreeBitFound(field);
             }

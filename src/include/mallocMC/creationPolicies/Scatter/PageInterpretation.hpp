@@ -102,9 +102,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #endif // DEBUG
                 return;
             }
-            if(isValid(pointer))
+            auto chunkIndex = chunkNumberOf(pointer);
+#ifdef DEBUG
+            if(isValid(chunkIndex))
+#endif // DEBUG
             {
-                auto chunkIndex = chunkNumberOf(pointer);
                 bitField().set(chunkIndex, false);
             }
         }

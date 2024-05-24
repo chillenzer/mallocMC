@@ -293,8 +293,10 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 
         SECTION("no invalid pointer but throws instead.")
         {
+#ifdef DEBUG
             pointer = nullptr;
             CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
+#endif // DEBUG
         }
 
         SECTION("pointer for larger than page size")

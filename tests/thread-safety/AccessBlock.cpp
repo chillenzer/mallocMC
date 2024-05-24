@@ -98,7 +98,7 @@ struct ContentGenerator
 
 TEST_CASE("Threaded AccessBlock")
 {
-    AccessBlock<blockSize, pageSize> accessBlock;
+    AccessBlock<blockSize, pageSize> accessBlock{};
     auto create = [&accessBlock](void** pointer, auto chunkSize) { *pointer = accessBlock.create(chunkSize); };
     auto destroy = [&accessBlock](void* pointer) { accessBlock.destroy(pointer); };
     void* pointer1 = nullptr;
@@ -239,6 +239,7 @@ TEST_CASE("Threaded AccessBlock")
                 {
                     for(uint32_t j = 0; j < i; ++j)
                     {
+                        // `.isValid()` is not thread-safe, so we use this direct assessment:
                         while(pointers[i] == nullptr)
                         {
                             pointers[i] = accessBlock.create(chunkSize1);
