@@ -56,7 +56,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
-            return BitMaskSize * T_pageSize / (BitMaskSize * chunkSize + sizeof(BitMask));
+            return BitMaskSize * T_pageSize / (static_cast<size_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
         }
 
         [[nodiscard]] auto numChunks() const -> uint32_t
@@ -98,7 +98,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto cleanup() -> void
         {
-            // TODO(lenz): Check if this operation needs a thread fence around it.
+            // This method is not thread-safe by itself. But it is supposed to be called after acquiring a "lock" in
+            // the form of setting the filling level, so that's fine.
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
         }
 
@@ -162,7 +163,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
         {
-            // TODO: This overestimates because it neglects the missing space due to the bit field itself.
+            // TODO(lenz): This overestimates because it neglects the missing space due to the bit field itself.
             return ceilingDivision(T_pageSize, BitMaskSize) * sizeof(BitMask);
         }
 

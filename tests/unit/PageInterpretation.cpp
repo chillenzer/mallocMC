@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <optional>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
@@ -144,11 +145,11 @@ TEST_CASE("PageInterpretation.create")
         // handling of partially filled bit masks is implemented)
         if(numChunks == BitMaskSize * BitMaskSize)
         {
-            chunkSize = 1024U;
+            chunkSize = 1024U; // NOLINT(*magic-number*)
         }
         else if(numChunks == BitMaskSize)
         {
-            chunkSize = 32771U;
+            chunkSize = 32771U; // NOLINT(*magic-number*)
         }
         PageInterpretation<pageSize> page{data, chunkSize};
 
@@ -253,7 +254,7 @@ TEST_CASE("PageInterpretation.destroy")
 
         SECTION("cleans up in bit field region of page.")
         {
-            memset(std::begin(data.data), 255U, page.numChunks() * chunkSize);
+            memset(std::begin(data.data), std::numeric_limits<char>::max(), page.numChunks() * chunkSize);
             page.cleanup();
 
             // TODO(lenz): Check for off-by-one error in lower bound.
