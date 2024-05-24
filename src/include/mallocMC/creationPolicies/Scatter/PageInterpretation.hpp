@@ -43,9 +43,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
     private:
         DataPage<T_pageSize>& _data;
+        uint32_t const _chunkSize;
 
     public:
-        uint32_t const _chunkSize;
+        [[nodiscard]] auto chunkSize() const -> uint32_t
+        {
+            return _chunkSize;
+        }
 
         // this is needed to instantiate this in-place in an std::optional
         PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize) : _data(data), _chunkSize(chunkSize)

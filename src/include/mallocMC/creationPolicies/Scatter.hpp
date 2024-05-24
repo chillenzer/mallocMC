@@ -274,7 +274,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 // at this point it's guaranteed that the fiilling level is numChunks and thereby locked
                 page.cleanup();
-                atomicCAS(pageTable._chunkSizes[pageIndex], page._chunkSize, 0U);
+                atomicCAS(pageTable._chunkSizes[pageIndex], page.chunkSize(), 0U);
                 // At this point, there might already be another thread (with another chunkSize) on this page but
                 // that's fine. It won't see the full capacity but we can just subtract what we've added before:
                 atomicSub(pageTable._fillingLevels[pageIndex], lock);
