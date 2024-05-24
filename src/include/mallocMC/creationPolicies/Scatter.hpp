@@ -232,8 +232,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
         {
-            auto oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
-            if(oldFilling < interpret(index, numBytes).numChunks())
+            auto const oldFilling = atomicAdd(pageTable._fillingLevels[index], 1U);
+            // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
+            // must be 0, too) or the next check will fail.
+            if(oldFilling < PageInterpretation<T_pageSize>::numChunks(numBytes))
             {
                 auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
                 if((oldChunkSize == 0U || oldChunkSize == numBytes))
@@ -265,20 +267,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // TODO: Take chunk size as argument because we already know this form the level above.
             auto page = interpret(pageIndex);
             page.destroy(pointer);
-            auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
-            if(oldFilling == 1U)
+            // TODO: The "locking" via numChunks currently depends on the chunk size! Use an independent number.
+            auto lock = page.numChunks();
+            auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 1U, lock);
+            if(latestFilling == 1U)
             {
-                auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 0U, page.numChunks());
-                if(latestFilling == 0U)
-                {
-                    page.cleanup();
-                    atomicStore(pageTable._chunkSizes[pageIndex], 0U);
-                    atomicStore(pageTable._fillingLevels[pageIndex], 0U);
-                }
-                else
-                {
-                    atomicStore(pageTable._fillingLevels[pageIndex], latestFilling);
-                }
+                // at this point it's guaranteed that the fiilling level is numChunks and thereby locked
+                page.cleanup();
+                atomicCAS(pageTable._chunkSizes[pageIndex], page._chunkSize, 0U);
+                // At this point, there might already be another thread (with another chunkSize) on this page but
+                // that's fine. It won't see the full capacity but we can just subtract what we've added before:
+                atomicSub(pageTable._fillingLevels[pageIndex], lock);
+            }
+            else
+            {
+                atomicSub(pageTable._fillingLevels[pageIndex], 1U);
             }
         }
 
