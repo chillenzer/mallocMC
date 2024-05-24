@@ -96,25 +96,25 @@ namespace mallocMC
     template<typename T>
     inline auto atomicStore(T& target, T const& value)
     {
-        std::atomic_ref(target).store(value);
+        return std::atomic_ref(target).store(value);
     }
 
     template<typename T>
     inline auto atomicXor(T& target, T const& value)
     {
-        std::atomic_ref(target).fetch_xor(value);
+        return std::atomic_ref(target).fetch_xor(value);
     }
 
     template<typename T>
     inline auto atomicOr(T& target, T const& value)
     {
-        std::atomic_ref(target).fetch_or(value);
+        return std::atomic_ref(target).fetch_or(value);
     }
 
     template<typename T>
     inline auto atomicAnd(T& target, T const& value)
     {
-        std::atomic_ref(target).fetch_and(value);
+        return std::atomic_ref(target).fetch_and(value);
     }
 
     template<typename T>
