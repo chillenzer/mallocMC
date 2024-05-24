@@ -30,6 +30,7 @@
 #include "mallocMC/auxiliary.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <span>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -37,9 +38,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     constexpr const uint32_t BitMaskSize = 32U;
     template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>>
     using BitMaskStorageType = uint32_t;
-    // As the name hopefully suggests, this is all ones in 32-bit unsigned representation:
-    // This is a very difficult way to say 2^32 - 1 that's supposed to avoid overflow:
-    constexpr const BitMaskStorageType<> allOnes = (powInt(2U, BitMaskSize - 1U) - 1U) * 2U + 1U;
+    constexpr const BitMaskStorageType<> allOnes = std::numeric_limits<BitMaskStorageType<BitMaskSize>>::max();
 
     inline auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
     {
@@ -49,8 +48,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     struct BitMask
     {
         // Convention: We start counting from the right, i.e., if mask[0] == 1 and all others are 0, then mask = 0...01
-        BitMaskStorageType<> mask{};
-        auto operator[](auto const& index) const
+        BitMaskStorageType<BitMaskSize> mask{};
+        auto operator[](auto const index) const
         {
             return (atomicLoad(mask) & singleBit(index)) != 0U;
         }
@@ -60,13 +59,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             atomicStore(mask, allOnes);
         }
 
-        auto set(auto const& index, bool value = true)
+        // TODO(lenz): Split into two separate methods in order to make the distinction at compile time.
+        auto set(auto const index, bool value = true)
         {
             if(value)
             {
                 return atomicOr(mask, singleBit(index));
             }
-            return atomicAnd(mask, allOnes - singleBit(index));
+            return atomicAnd(mask, allOnes ^ singleBit(index));
         }
 
         auto flip()
@@ -74,18 +74,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return atomicXor(mask, allOnes);
         }
 
-        auto flip(auto const& index)
+        auto flip(auto const index)
         {
             return atomicXor(mask, singleBit(index));
         }
 
-        auto operator==(auto const& other) const
+        auto operator==(auto const other) const
         {
             return (mask == other);
         }
 
         // clang-format off
-        auto operator<=> (BitMask const& other) const
+        auto operator<=> (BitMask const other) const
         // clang-format on
         {
             return (mask - other.mask);
