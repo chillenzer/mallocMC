@@ -227,6 +227,29 @@ TEST_CASE("Threaded AccessBlock")
             }));
     }
 
+    SECTION("destroys all pointers simultaneously.")
+    {
+        auto const allSlots = accessBlock.getAvailableSlots(chunkSize1);
+        auto const allSlotsOfDifferentSize = accessBlock.getAvailableSlots(chunkSize2);
+        auto pointers = fillWith(accessBlock, chunkSize1);
+        auto runner = Runner{};
+
+        for(auto* pointer : pointers)
+        {
+            runner.run(destroy, pointer);
+        }
+        runner.join();
+
+        CHECK(std::transform_reduce(
+            std::cbegin(pointers),
+            std::cend(pointers),
+            true,
+            [](auto const lhs, auto const rhs) { return lhs && rhs; },
+            [&accessBlock](void* pointer) { return not accessBlock.isValid(pointer); }));
+        CHECK(accessBlock.getAvailableSlots(chunkSize1) == allSlots);
+        CHECK(accessBlock.getAvailableSlots(chunkSize2) == allSlotsOfDifferentSize);
+    }
+
     SECTION("creates and destroys multiple times.")
     {
         std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize1));
