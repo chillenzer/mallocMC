@@ -97,7 +97,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 : interpret(index, chunkSize).isValid(pointer);
         }
 
-        auto create(uint32_t numBytes) -> void*
+        auto create(uint32_t const numBytes) -> void*
         {
             if(numBytes >= T_pageSize)
             {
@@ -117,7 +117,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return;
             }
             auto const chunkSize = atomicLoad(pageTable._chunkSizes[index]);
-            // TODO(lenz): CHECK if > is necessary.
             if(chunkSize >= T_pageSize)
             {
                 destroyOverMultiplePages(index);
@@ -175,7 +174,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto createOverMultiplePages(uint32_t const numBytes) -> void*
         {
-            // TODO(lenz): Document that maximal allocation size must fit into uint32_t.
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
             if(numPagesNeeded > numPages())
             {
