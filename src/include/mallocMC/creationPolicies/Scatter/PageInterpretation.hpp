@@ -161,12 +161,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
-            return sizeof(BitMask) * ceilingDivision(numChunks(), BitMaskSize);
+            return bitFieldSize(_chunkSize);
         }
 
-        [[nodiscard]] auto maxBitFieldSize() -> uint32_t
+        [[nodiscard]] static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
         {
-            return PageInterpretation<T_pageSize>{_data, 1U}.bitFieldSize();
+            return sizeof(BitMask) * ceilingDivision(numChunks(chunkSize), BitMaskSize);
+        }
+
+        [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
+        {
+            return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
