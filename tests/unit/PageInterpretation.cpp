@@ -127,54 +127,6 @@ TEST_CASE("PageInterpretation")
     }
 }
 
-TEST_CASE("PageInterpretation.bitFieldDepth")
-{
-    // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
-        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
-    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
-    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
-    DataPage<pageSize>& data{*actualData};
-
-    SECTION("knows correct bit field depths for depth 0.")
-    {
-        uint32_t const numChunks = BitMaskSize;
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-
-        CHECK(page.bitFieldDepth() == 0U);
-    }
-
-    SECTION("knows correct bit field depths for depth 0 with less chunks.")
-    {
-        uint32_t const numChunks = BitMaskSize - 1;
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-
-        CHECK(page.bitFieldDepth() == 0U);
-    }
-
-    SECTION("knows correct bit field depths for depth 1.")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize;
-        // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-
-        CHECK(page.bitFieldDepth() == 1U);
-    }
-
-    SECTION("knows correct bit field depths for depth 1 with less chunks.")
-    {
-        uint32_t const numChunks = BitMaskSize * BitMaskSize - 1;
-        // choose chunk size such that bit field fits behind it:
-        uint32_t chunkSize = (pageSize - BitMaskSize * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-
-        CHECK(page.bitFieldDepth() == 1U);
-    }
-}
-
 TEST_CASE("PageInterpretation.create")
 {
     // Such that we can fit up to four levels of hierarchy in there:

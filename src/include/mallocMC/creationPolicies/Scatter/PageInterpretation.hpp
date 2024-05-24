@@ -98,7 +98,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto cleanup() -> void
         {
-            // TODO: Check if this operation needs a thread fence around it.
+            // TODO(lenz): Check if this operation needs a thread fence around it.
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
         }
 
@@ -158,12 +158,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
             return sizeof(BitMask) * ceilingDivision(numChunks(), BitMaskSize);
-        }
-
-        [[nodiscard]] auto bitFieldDepth() const -> uint32_t
-        {
-            // We subtract one such that numChunks() == BitMaskSize yields 0.
-            return logInt((numChunks() - 1) / BitMaskSize, BitMaskSize);
         }
 
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
