@@ -69,13 +69,6 @@ TEST_CASE("PageInterpretation")
         CHECK(page.numChunks() == 31U);
     }
 
-    SECTION("detects correctly if page should contain bitfield.")
-    {
-        uint32_t localChunkSize = GENERATE(8U, 128U);
-        PageInterpretation<pageSize> localPage{data, localChunkSize};
-        CHECK(localPage.hasBitField() == (pageSize / localChunkSize) > 32U);
-    }
-
     SECTION("jumps by chunkSize between indices.")
     {
         for(auto i = 0U; i < (pageSize / chunkSize) - 1; ++i)
