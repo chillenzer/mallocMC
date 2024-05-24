@@ -36,7 +36,7 @@
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
     constexpr const uint32_t BitMaskSize = 32U;
-    template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>>
+    template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>> // NOLINT(*magic-number*)
     using BitMaskStorageType = uint32_t;
     constexpr const BitMaskStorageType<> allOnes = std::numeric_limits<BitMaskStorageType<BitMaskSize>>::max();
 
@@ -60,12 +60,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         // TODO(lenz): Split into two separate methods in order to make the distinction at compile time.
-        auto set(auto const index, bool value = true)
+        auto set(auto const index)
         {
-            if(value)
-            {
-                return atomicOr(mask, singleBit(index));
-            }
+            return atomicOr(mask, singleBit(index));
+        }
+
+        auto unset(auto const index)
+        {
             return atomicAnd(mask, allOnes ^ singleBit(index));
         }
 
@@ -116,9 +117,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return data[index];
         }
 
-        void set(uint32_t const index, bool value = true)
+        void set(uint32_t const index) const
         {
-            data[index / BitMaskSize].set(index % BitMaskSize, value);
+            data[index / BitMaskSize].set(index % BitMaskSize);
+        }
+
+        void unset(uint32_t const index) const
+        {
+            data[index / BitMaskSize].unset(index % BitMaskSize);
         }
 
         [[nodiscard]] auto begin() const

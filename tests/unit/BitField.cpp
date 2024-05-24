@@ -29,7 +29,6 @@
 
 #include <catch2/catch.hpp>
 #include <cstdint>
-#include <iterator>
 #include <mallocMC/creationPolicies/Scatter/BitField.hpp>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlat;
@@ -58,7 +57,7 @@ TEST_CASE("BitMask")
     {
         for(size_t i = 0; i < BitMaskSize; ++i)
         {
-            mask.set(i, true);
+            mask.set(i);
             CHECK(mask[i]);
         }
     }
@@ -92,7 +91,7 @@ TEST_CASE("BitFieldFlat")
         {
             mask.set();
         }
-        data[index / BitMaskSize].set(index % BitMaskSize, false);
+        data[index / BitMaskSize].unset(index % BitMaskSize);
 
         BitFieldFlat field{data};
 
@@ -102,7 +101,7 @@ TEST_CASE("BitFieldFlat")
     SECTION("knows its first free bit if later ones are free, too.")
     {
         uint32_t const index = GENERATE(0, 1, numChunks / 2, numChunks - 1);
-        for(auto& mask : std::span{data, index / BitMaskSize})
+        for(auto& mask : std::span{static_cast<BitMask*>(data), index / BitMaskSize})
         {
             mask.set();
         }
@@ -119,13 +118,13 @@ TEST_CASE("BitFieldFlat")
     SECTION("knows its first free bit for different numChunks.")
     {
         auto localNumChunks = numChunks / GENERATE(1, 2, 3);
-        std::span localData{data, mallocMC::ceilingDivision(localNumChunks, BitMaskSize)};
+        std::span localData{static_cast<BitMask*>(data), mallocMC::ceilingDivision(localNumChunks, BitMaskSize)};
         uint32_t const index = GENERATE(0, 1, 10, 12);
         for(auto& mask : localData)
         {
             mask.set();
         }
-        localData[index / BitMaskSize].set(index % BitMaskSize, false);
+        localData[index / BitMaskSize].unset(index % BitMaskSize);
 
         BitFieldFlat field{localData};
 

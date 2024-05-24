@@ -94,7 +94,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(isValid(chunkIndex))
 #endif // DEBUG
             {
-                bitField().set(chunkIndex, false);
+                bitField().unset(chunkIndex);
             }
         }
 

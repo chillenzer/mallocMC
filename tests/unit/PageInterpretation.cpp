@@ -257,7 +257,6 @@ TEST_CASE("PageInterpretation.destroy")
             memset(std::begin(data.data), std::numeric_limits<char>::max(), page.numChunks() * chunkSize);
             page.cleanup();
 
-            // TODO(lenz): Check for off-by-one error in lower bound.
             for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
             {
                 CHECK(data.data[i] == 0U);
