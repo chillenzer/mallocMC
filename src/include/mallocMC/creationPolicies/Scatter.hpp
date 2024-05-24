@@ -210,7 +210,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 {
                     return pointer;
                 }
-                startIndex = pageIndex(&page.value()._data) + 1;
+                startIndex = pageIndex(page.value()[0]) + 1;
             }
             return nullptr;
         }

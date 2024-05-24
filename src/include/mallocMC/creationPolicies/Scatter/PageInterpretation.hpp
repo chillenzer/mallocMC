@@ -41,7 +41,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<size_t T_pageSize>
     struct PageInterpretation
     {
+    private:
         DataPage<T_pageSize>& _data;
+
+    public:
         uint32_t const _chunkSize;
 
         // this is needed to instantiate this in-place in an std::optional

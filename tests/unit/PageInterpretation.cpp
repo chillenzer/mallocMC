@@ -57,7 +57,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("refers to the same data it was created with.")
     {
-        CHECK(&data == &page._data);
+        CHECK(&data == page[0]);
     }
 
     SECTION("returns start of data as first chunk.")
@@ -164,7 +164,7 @@ TEST_CASE("PageInterpretation.create")
         SECTION("returns a pointer to the start of a chunk.")
         {
             auto* pointer = page.create();
-            CHECK(std::distance(&page._data.data[0], reinterpret_cast<char*>(pointer)) % chunkSize == 0U);
+            CHECK(std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer)) % chunkSize == 0U);
         }
 
         SECTION("returns nullptr if everything is full.")
@@ -260,7 +260,7 @@ TEST_CASE("PageInterpretation.destroy")
             // TODO(lenz): Check for off-by-one error in lower bound.
             for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
             {
-                CHECK(static_cast<uint32_t>(reinterpret_cast<char*>(page._data.data)[i]) == 0U);
+                CHECK(data.data[i] == 0U);
             }
         }
     }
