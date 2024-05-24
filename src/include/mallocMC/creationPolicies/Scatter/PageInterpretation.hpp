@@ -111,6 +111,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto cleanup() -> void
         {
+            // TODO: Check if this operation needs a thread fence around it.
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
         }
 
@@ -180,7 +181,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         [[nodiscard]] auto maxBitFieldSize() -> uint32_t
         {
-            return T_pageSize / BitMaskSize * sizeof(BitMask);
+            // TODO: This overestimates because it neglects the missing space due to the bit field itself.
+            return ceilingDivision(T_pageSize, BitMaskSize) * sizeof(BitMask);
         }
 
         [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t

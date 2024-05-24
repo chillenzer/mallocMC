@@ -111,10 +111,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const index = pageIndex(pointer);
             if(index > static_cast<ssize_t>(numPages()) || index < 0)
             {
+#ifdef DEBUG
                 throw std::runtime_error{"Attempted to destroy invalid pointer."};
+#endif // DEBUG
+                return;
             }
             auto const chunkSize = atomicLoad(pageTable._chunkSizes[index]);
-            if(chunkSize > T_pageSize)
+            // TODO(lenz): CHECK if > is necessary.
+            if(chunkSize >= T_pageSize)
             {
                 destroyOverMultiplePages(index);
             }
@@ -125,8 +129,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
     private:
-        DataPage<T_pageSize> pages[numPages()];
-        PageTable<numPages()> pageTable;
+        // TODO(lenz): On device we might need to have a seperate method to initialise the memory.
+        DataPage<T_pageSize> pages[numPages()]{};
+        PageTable<numPages()> pageTable{};
 
         auto interpret(size_t const pageIndex)
         {
@@ -171,6 +176,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto createOverMultiplePages(uint32_t const numBytes) -> void*
         {
+            // TODO(lenz): Document that maximal allocation size must fit into uint32_t.
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
             if(numPagesNeeded > numPages())
             {
@@ -214,6 +220,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             for(size_t i = 0; i < numPages(); ++i)
             {
+                // TODO(lenz): Check if an "if" statement would yield better performance here.
                 auto index = (startIndex + i) % numPages();
                 if(thisPageIsAppropriate(index, numBytes))
                 {
@@ -255,6 +262,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         void destroyChunk(void* pointer, uint32_t const pageIndex)
         {
+            // TODO: Take chunk size as argument because we already know this form the level above.
             auto page = interpret(pageIndex);
             page.destroy(pointer);
             auto oldFilling = atomicSub(pageTable._fillingLevels[pageIndex], 1U);
