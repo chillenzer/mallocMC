@@ -124,7 +124,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             else
             {
-                destroyChunk(pointer, index);
+                destroyChunk(pointer, index, chunkSize);
             }
         }
 
@@ -269,19 +269,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-        void destroyChunk(void* pointer, uint32_t const pageIndex)
+        void destroyChunk(void* pointer, uint32_t const pageIndex, uint32_t const chunkSize)
         {
-            // TODO: Take chunk size as argument because we already know this form the level above.
-            auto page = interpret(pageIndex);
+            auto page = interpret(pageIndex, chunkSize);
             page.destroy(pointer);
-            // TODO: The "locking" via numChunks currently depends on the chunk size! Use an independent number.
+            // TODO(lenz): The "locking" via numChunks currently depends on the chunk size! Use an independent number.
             auto lock = page.numChunks();
             auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 1U, lock);
             if(latestFilling == 1U)
             {
                 // at this point it's guaranteed that the fiilling level is numChunks and thereby locked
                 page.cleanup();
-                atomicCAS(pageTable._chunkSizes[pageIndex], page.chunkSize(), 0U);
+                atomicCAS(pageTable._chunkSizes[pageIndex], chunkSize, 0U);
                 // At this point, there might already be another thread (with another chunkSize) on this page but
                 // that's fine. It won't see the full capacity but we can just subtract what we've added before:
                 atomicSub(pageTable._fillingLevels[pageIndex], lock);
