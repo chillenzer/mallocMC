@@ -36,16 +36,16 @@
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 
-constexpr size_t pageSize = 1024;
+constexpr uint32_t pageSize = 1024;
 constexpr size_t numPages = 4;
 // Page table entry size = sizeof(chunkSize) + sizeof(fillingLevel):
-constexpr size_t pteSize = 4 + 4;
+constexpr uint32_t pteSize = 4 + 4;
 constexpr size_t blockSize = numPages * (pageSize + pteSize);
 
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
 // regardless of the underlying access optimisations etc.
-template<size_t T_blockSize, size_t T_pageSize>
+template<size_t T_blockSize, uint32_t T_pageSize>
 auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
 {
     std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize));

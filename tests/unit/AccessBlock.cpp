@@ -36,29 +36,29 @@
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 
-constexpr size_t const pageTableEntrySize = 8U;
-constexpr size_t const pageSize1 = 1024U;
-constexpr size_t const pageSize2 = 4096U;
+constexpr uint32_t const pageTableEntrySize = 8U;
+constexpr uint32_t const pageSize1 = 1024U;
+constexpr uint32_t const pageSize2 = 4096U;
 
 using BlockAndPageSizes = std::tuple<
     // single page:
     std::tuple<
-        std::integral_constant<size_t, 1U * (pageSize1 + pageTableEntrySize)>,
-        std::integral_constant<size_t, pageSize1>>,
+        std::integral_constant<uint32_t, 1U * (pageSize1 + pageTableEntrySize)>,
+        std::integral_constant<uint32_t, pageSize1>>,
     // multiple pages:
     std::tuple<
-        std::integral_constant<size_t, 4U * (pageSize1 + pageTableEntrySize)>,
-        std::integral_constant<size_t, pageSize1>>,
+        std::integral_constant<uint32_t, 4U * (pageSize1 + pageTableEntrySize)>,
+        std::integral_constant<uint32_t, pageSize1>>,
     // multiple pages with some overhead:
     std::tuple<
-        std::integral_constant<size_t, 4U * (pageSize1 + pageTableEntrySize) + 100U>,
-        std::integral_constant<size_t, pageSize1>>,
+        std::integral_constant<uint32_t, 4U * (pageSize1 + pageTableEntrySize) + 100U>,
+        std::integral_constant<uint32_t, pageSize1>>,
     // other page size:
     std::tuple<
-        std::integral_constant<size_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
-        std::integral_constant<size_t, pageSize2>>>;
+        std::integral_constant<uint32_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
+        std::integral_constant<uint32_t, pageSize2>>>;
 
-template<size_t T_blockSize, size_t T_pageSize>
+template<size_t T_blockSize, uint32_t T_pageSize>
 auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
 {
     std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize));
@@ -94,7 +94,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         // This is not exactly true. It is only true because the largest chunk size we chose above is exactly the size
         // of one page. In general, this number would be fractional for larger than page size chunks but I don't want
         // to bother right now:
-        size_t slotsPerPage = chunkSize < pageSize ? PageInterpretation<pageSize>::numChunks(chunkSize) : 1U;
+        uint32_t slotsPerPage = chunkSize < pageSize ? PageInterpretation<pageSize>::numChunks(chunkSize) : 1U;
 
         uint32_t numOccupied = GENERATE(0U, 1U, 10U);
         uint32_t actualNumOccupied = numOccupied;

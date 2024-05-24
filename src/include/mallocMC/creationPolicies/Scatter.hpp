@@ -57,7 +57,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return 42U; // NOLINT(*magic*)
     }
 
-    template<size_t T_blockSize, size_t T_pageSize>
+    template<size_t T_blockSize, uint32_t T_pageSize>
     class AccessBlock
     {
     public:
