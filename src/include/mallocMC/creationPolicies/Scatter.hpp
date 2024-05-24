@@ -119,7 +119,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const chunkSize = atomicLoad(pageTable._chunkSizes[index]);
             if(chunkSize >= T_pageSize)
             {
-                destroyOverMultiplePages(index);
+                destroyOverMultiplePages(index, chunkSize);
             }
             else
             {
@@ -288,9 +288,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
 
-        void destroyOverMultiplePages(size_t const pageIndex)
+        void destroyOverMultiplePages(size_t const pageIndex, uint32_t const chunkSize)
         {
-            auto numPagesNeeded = ceilingDivision(pageTable._chunkSizes[pageIndex], T_pageSize);
+            auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
                 pageTable._chunkSizes[pageIndex + i] = 0U;
