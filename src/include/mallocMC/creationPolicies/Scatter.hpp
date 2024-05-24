@@ -199,11 +199,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto startIndex = computeHash(numBytes);
 
-            // TODO(lenz): This loop is dangerous. If we'd happen to be in an inconsistent state, this would get us
-            // into an infinite loop. Check if we can solve this more elegantly.
-            while(auto page = choosePage(
-                      numBytes,
-                      startIndex /*TODO: should get also "originalStart", so we know when we're done*/))
+            // Under high pressure, this loop could potentially run for a long time because the information where and
+            // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
+            // consistent state, the loop will terminate once a free chunk is found or when all chunks are filled for
+            // long enough that `choosePage` could verify that each page is filled in a single run.
+            //
+            // The seemingly non-terminating behaviour that we wrap around multiple times can only occur (assuming a
+            // consistent, valid state of the data) when there is high demand for memory such that pages that appear
+            // free to `choosePage` are repeatedly found but then the free chunks scooped away by other threads.
+            //
+            // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
+            // enough to acquire some memory.
+            while(auto page = choosePage(numBytes, startIndex))
             {
                 auto pointer = page.value().create();
                 if(pointer != nullptr)
