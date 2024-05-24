@@ -270,12 +270,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto page = interpret(pageIndex, chunkSize);
             page.destroy(pointer);
-            // TODO(lenz): The "locking" via numChunks currently depends on the chunk size! Use an independent number.
+            // This number depends on the chunk size which will at some point get reset to 0 and might even get set to
+            // another value by another thread before our task is complete here. Naively, one could expect this
+            // "weakens" the lock and makes it unsecure. But not the case and having it like this is a feature, not a
+            // bug, as is proven in the comments below.
             auto lock = page.numChunks();
             auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 1U, lock);
             if(latestFilling == 1U)
             {
-                // at this point it's guaranteed that the fiilling level is numChunks and thereby locked
+                // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
+                // Furthermore, chunkSize cannot have changed because we maintain the invariant that the filling level
+                // is always considered first, so no other thread can have passed that barrier to reset it.
                 page.cleanup();
                 atomicCAS(pageTable._chunkSizes[pageIndex], chunkSize, 0U);
                 // At this point, there might already be another thread (with another chunkSize) on this page but
