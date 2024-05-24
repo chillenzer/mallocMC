@@ -270,7 +270,10 @@ TEST_CASE("Threaded AccessBlock")
                         accessBlock.destroy(pointers[i]);
                         pointers[i] = nullptr;
                     }
-                    pointers[i] = accessBlock.create(chunkSize1);
+                    while(pointers[i] == nullptr)
+                    {
+                        pointers[i] = accessBlock.create(chunkSize1);
+                    }
                 });
         }
 
