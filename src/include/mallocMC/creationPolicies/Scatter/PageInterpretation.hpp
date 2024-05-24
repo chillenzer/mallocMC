@@ -64,11 +64,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numChunks(_chunkSize);
         }
 
-        [[nodiscard]] auto dataSize() const -> size_t
-        {
-            return numChunks() * _chunkSize;
-        }
-
         [[nodiscard]] auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);

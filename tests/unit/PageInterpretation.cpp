@@ -204,8 +204,8 @@ TEST_CASE("PageInterpretation.create")
         {
             auto* pointer = page.create();
             CHECK(
-                std::distance(&page._data.data[0], reinterpret_cast<char*>(pointer))
-                < static_cast<long>(page.dataSize()));
+                std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer))
+                < std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(page.bitFieldStart())));
         }
 
         SECTION("returns a pointer to the start of a chunk.")
