@@ -49,11 +49,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
         }
 
-        [[nodiscard]] auto topLevelMask() const -> BitMask&
-        {
-            return *PageInterpretation<T_pageSize>::bitFieldStart(_data, _chunkSize);
-        }
-
         static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
         {
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();

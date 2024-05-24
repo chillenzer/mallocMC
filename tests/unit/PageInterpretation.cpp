@@ -49,8 +49,8 @@ using std::distance;
 
 TEST_CASE("PageInterpretation")
 {
-    constexpr size_t pageSize = 1024U;
-    uint32_t chunkSize = 32U; // NOLINT(*magic-number*)
+    constexpr size_t const pageSize = 1024U;
+    constexpr uint32_t const chunkSize = 32U;
     DataPage<pageSize> data{};
     PageInterpretation<pageSize> page{data, chunkSize};
 
@@ -86,7 +86,7 @@ TEST_CASE("PageInterpretation")
 
     SECTION("finds first free chunk.")
     {
-        BitMask& mask{page.topLevelMask()};
+        BitMask& mask{page.bitField()[0]};
         mask.flip();
         size_t const index = GENERATE(0, 2);
         mask.flip(index);
@@ -249,9 +249,9 @@ TEST_CASE("PageInterpretation.create")
         uint32_t chunkSize = pageSize / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize};
 
-        SECTION("updates top-level bit field.")
+        SECTION("updates bit field.")
         {
-            BitMask& mask{page.topLevelMask()};
+            BitMask& mask{page.bitField()[0]};
             REQUIRE(mask.none());
             auto* pointer = page.create();
             auto const index = page.chunkNumberOf(pointer);
@@ -299,7 +299,7 @@ TEST_CASE("PageInterpretation.destroy")
             // We extract the position of the mask before destroying the pointer because technically speaking the whole
             // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
             // free the page.
-            auto mask = page.topLevelMask();
+            auto mask = page.bitField()[0];
             auto value = mask;
             page.destroy(pointer);
             CHECK(mask <= value);
