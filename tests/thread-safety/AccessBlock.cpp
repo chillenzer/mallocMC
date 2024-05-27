@@ -30,6 +30,7 @@
 #include <catch2/catch.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <thread>
@@ -324,5 +325,51 @@ TEST_CASE("Threaded AccessBlock")
 
         std::sort(std::begin(pointers), std::end(pointers));
         CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
+    }
+
+    SECTION("can handle oversubscription.")
+    {
+        uint32_t oversubscriptionFactor = 2U;
+        auto availableSlots = accessBlock.getAvailableSlots(chunkSize1);
+
+        // This is oversubscribed but we will only hold keep less 1/oversubscriptionFactor of the memory in the end.
+        std::vector<void*> pointers(oversubscriptionFactor * availableSlots);
+        auto runner = Runner<>{};
+
+        for(size_t i = 0; i < pointers.size(); ++i)
+        {
+            runner.run(
+                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots]()
+                {
+                    for(uint32_t j = 0; j < i; ++j)
+                    {
+                        // `.isValid()` is not thread-safe, so we use this direct assessment:
+                        while(pointers[i] == nullptr)
+                        {
+                            pointers[i] = accessBlock.create(chunkSize1);
+                        }
+                        accessBlock.destroy(pointers[i]);
+                        pointers[i] = nullptr;
+                    }
+
+                    // We only keep some of the memory. In particular, we keep one chunk less than is available, such
+                    // that threads looking for memory after we've finished can still find some.
+                    while(pointers[i] == nullptr and i > (oversubscriptionFactor - 1) * availableSlots + 1)
+                    {
+                        pointers[i] = accessBlock.create(chunkSize1);
+                    }
+                });
+        }
+
+        runner.join();
+
+        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
+        // nullptr.
+        auto beginNonNull = std::begin(pointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
+
+        CHECK(std::all_of(std::begin(pointers), beginNonNull, [](auto const pointer) { return pointer == nullptr; }));
+
+        std::sort(beginNonNull, std::end(pointers));
+        CHECK(std::unique(beginNonNull, std::end(pointers)) == std::end(pointers));
     }
 }
