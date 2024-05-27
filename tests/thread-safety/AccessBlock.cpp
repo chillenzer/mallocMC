@@ -285,28 +285,37 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("creates and destroys multiple times with different sizes.")
     {
-        std::vector<void*> pointers(
-            accessBlock.getAvailableSlots(chunkSize1) / 2 + accessBlock.getAvailableSlots(chunkSize2) / 2);
+        // CAUTION: This test can fail because we are currently using exactly as much space as is available but with
+        // multiple different chunk sizes. That means that if one of them occupies more pages than it minimally needs,
+        // the other one will lack pages to with their respective chunk size. This seems not to be a problem currently
+        // but it might be more of a problem once we move to device and once we include proper scattering.
+
+        // Make sure that num2 > num1.
+        auto num1 = accessBlock.getAvailableSlots(chunkSize1);
+        auto num2 = accessBlock.getAvailableSlots(chunkSize2);
+
+        std::vector<void*> pointers(num1 / 2 + num2 / 2);
         auto runner = Runner<>{};
 
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers]()
+                [&accessBlock, i, &pointers, num2]()
                 {
+                    auto myChunkSize = i % 2 == 1 and i <= num2 ? chunkSize2 : chunkSize1;
                     for(uint32_t j = 0; j < i; ++j)
                     {
                         // `.isValid()` is not thread-safe, so we use this direct assessment:
                         while(pointers[i] == nullptr)
                         {
-                            pointers[i] = accessBlock.create(i % 2 == 0 ? chunkSize1 : chunkSize2);
+                            pointers[i] = accessBlock.create(myChunkSize);
                         }
                         accessBlock.destroy(pointers[i]);
                         pointers[i] = nullptr;
                     }
                     while(pointers[i] == nullptr)
                     {
-                        pointers[i] = accessBlock.create(chunkSize1);
+                        pointers[i] = accessBlock.create(myChunkSize);
                     }
                 });
         }
