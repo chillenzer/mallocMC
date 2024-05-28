@@ -30,12 +30,13 @@
 #include <catch2/catch.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <numeric>
 #include <thread>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 
 constexpr uint32_t pageSize = 1024;
 constexpr size_t numPages = 4;
@@ -371,5 +372,43 @@ TEST_CASE("Threaded AccessBlock")
 
         std::sort(beginNonNull, std::end(pointers));
         CHECK(std::unique(beginNonNull, std::end(pointers)) == std::end(pointers));
+    }
+
+    SECTION("can handle many different chunk sizes.")
+    {
+        auto const chunkSizes = []()
+        {
+            // We want to stay within chunked allocation, so we will always have at least one bit mask present in the
+            // page.
+            std::vector<uint32_t> tmp(pageSize - BitMaskSize);
+            std::iota(std::begin(tmp), std::end(tmp), 1U);
+            return tmp;
+        }();
+
+        std::vector<void*> pointers(numPages);
+        auto runner = Runner<>{};
+
+        for(auto& pointer : pointers)
+        {
+            runner.run(
+                [&accessBlock, &pointer, &chunkSizes]()
+                {
+                    // This is assumed to always succeed. We only need some valid pointer to formulate the loop nicely.
+                    pointer = accessBlock.create(1U);
+                    for(auto chunkSize : chunkSizes)
+                    {
+                        accessBlock.destroy(pointer);
+                        while(pointer == nullptr)
+                        {
+                            pointer = accessBlock.create(chunkSize);
+                        }
+                    }
+                });
+        }
+
+        runner.join();
+
+        std::sort(std::begin(pointers), std::end(pointers));
+        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
     }
 }
