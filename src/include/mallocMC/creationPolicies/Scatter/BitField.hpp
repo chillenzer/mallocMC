@@ -159,6 +159,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     [[nodiscard]] inline auto firstFreeBit(BitMask& mask, uint32_t const startIndex = 0) -> uint32_t
     {
+        // TODO(lenz): Don't iterate through all but guess first and then jump to the next free.
         for(uint32_t i = startIndex; i < BitMaskSize; ++i)
         {
             if((atomicOr(mask.mask, singleBit(i)) & singleBit(i)) == 0U)

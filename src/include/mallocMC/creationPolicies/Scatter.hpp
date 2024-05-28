@@ -39,6 +39,7 @@
 #include <numeric>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -52,9 +53,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    inline auto computeHash([[maybe_unused]] uint32_t const numBytes) -> size_t
+    inline auto computeHash([[maybe_unused]] uint32_t const numBytes, size_t const numPages) -> size_t
     {
-        return 42U; // NOLINT(*magic*)
+        return std::hash<std::thread::id>{}(std::this_thread::get_id()) % numPages; // NOLINT(*magic*)
     }
 
     template<size_t T_blockSize, uint32_t T_pageSize>
@@ -194,7 +195,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         auto createChunk(uint32_t const numBytes) -> void*
         {
-            auto startIndex = computeHash(numBytes);
+            auto startIndex = computeHash(numBytes, numPages());
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -283,6 +284,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 // is always considered first, so no other thread can have passed that barrier to reset it.
                 page.cleanup();
                 atomicCAS(pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+
+                // TODO(lenz): Original version had a thread fence at this point in order to invalidate potentially
+                // cached bit masks. Check if that's necessary!
+
                 // At this point, there might already be another thread (with another chunkSize) on this page but
                 // that's fine. It won't see the full capacity but we can just subtract what we've added before:
                 atomicSub(pageTable._fillingLevels[pageIndex], lock);
