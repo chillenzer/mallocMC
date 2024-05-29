@@ -273,7 +273,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             page.destroy(pointer);
             // This number depends on the chunk size which will at some point get reset to 0 and might even get set to
             // another value by another thread before our task is complete here. Naively, one could expect this
-            // "weakens" the lock and makes it unsecure. But not the case and having it like this is a feature, not a
+            // "weakens" the lock and makes it insecure. But not the case and having it like this is a feature, not a
             // bug, as is proven in the comments below.
             auto lock = page.numChunks();
             auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 1U, lock);
