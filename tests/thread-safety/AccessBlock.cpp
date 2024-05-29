@@ -27,16 +27,28 @@
 
 
 #include <algorithm>
+#include <alpaka/dev/Traits.hpp>
+#include <alpaka/dim/DimIntegralConst.hpp>
+#include <alpaka/example/ExampleDefaultAcc.hpp>
+#include <alpaka/kernel/Traits.hpp>
+#include <alpaka/platform/Traits.hpp>
+#include <alpaka/queue/Properties.hpp>
+#include <alpaka/queue/Traits.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <numeric>
-#include <thread>
+#include <type_traits>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
+
+using Dim = alpaka::DimInt<1>;
+using Idx = std::size_t;
+using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
+
 
 constexpr uint32_t pageSize = 1024;
 constexpr size_t numPages = 4;
@@ -66,23 +78,22 @@ auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
 template<bool parallel = true>
 struct Runner
 {
-    std::vector<std::thread> threads{};
-
-    Runner() =default;
+    Runner() : dev(alpaka::getDevByIdx(platform, 0)){};
     ~Runner() = default;
     Runner(const Runner&) = delete;
     Runner(Runner&&) = delete;
     auto operator=(const Runner&) -> Runner& = delete;
     auto operator=(Runner&&) -> Runner& = delete;
 
+    alpaka::Platform<Acc> const platform = {};
+    alpaka::Dev<alpaka::Platform<Acc>> const dev;
+    alpaka::Queue<Acc, std::conditional_t<parallel, alpaka::NonBlocking, alpaka::Blocking>> queue{dev};
+    alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{1}, Idx{1}};
+
     template<typename T_Functor, typename... T>
     auto run(T_Functor task, T... pars) -> Runner&
     {
-        threads.emplace_back(pars...);
-        if constexpr(not parallel)
-        {
-            threads.back().join();
-        }
+        alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, task, pars...));
         return *this;
     }
 
@@ -90,7 +101,7 @@ struct Runner
     {
         if constexpr(parallel)
         {
-            std::for_each(std::begin(threads), std::end(threads), [](auto& thread) { thread.join(); });
+            alpaka::wait(queue);
         }
     }
 };
@@ -108,8 +119,9 @@ struct ContentGenerator
 TEST_CASE("Threaded AccessBlock")
 {
     AccessBlock<blockSize, pageSize> accessBlock{};
-    auto create = [&accessBlock](void** pointer, auto chunkSize) { *pointer = accessBlock.create(chunkSize); };
-    auto destroy = [&accessBlock](void* pointer) { accessBlock.destroy(pointer); };
+    auto const create
+        = [&accessBlock](Acc const&, void** pointer, auto chunkSize) { *pointer = accessBlock.create(chunkSize); };
+    auto const destroy = [&accessBlock](Acc const&, void* pointer) { accessBlock.destroy(pointer); };
     void* pointer1 = nullptr;
     void* pointer2 = nullptr;
     constexpr uint32_t const chunkSize1 = 32U;
@@ -160,13 +172,13 @@ TEST_CASE("Threaded AccessBlock")
         std::for_each(
             std::begin(pointers) + 1,
             std::begin(pointers) + pointers.size() / accessBlock.numPages(),
-            destroy);
+            [&accessBlock](auto pointer) { accessBlock.destroy(pointer); });
         // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
 
         Runner{}
             .run(destroy, &pointer1)
             .run(
-                [&accessBlock, &pointer2]()
+                [&accessBlock, &pointer2](Acc const&)
                 {
                     while(pointer2 == nullptr)
                     {
@@ -211,7 +223,7 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < content.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &content, &pointers]()
+                [&accessBlock, i, &content, &pointers](Acc const&)
                 {
                     pointers[i] = accessBlock.create(chunkSize1);
                     auto* begin = reinterpret_cast<uint32_t*>(pointers[i]);
@@ -267,7 +279,7 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers]()
+                [&accessBlock, i, &pointers](Acc const&)
                 {
                     for(uint32_t j = 0; j < i; ++j)
                     {
@@ -309,7 +321,7 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers, num2]()
+                [&accessBlock, i, &pointers, num2](Acc const&)
                 {
                     auto myChunkSize = i % 2 == 1 and i <= num2 ? chunkSize2 : chunkSize1;
                     for(uint32_t j = 0; j < i; ++j)
@@ -347,7 +359,7 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots]()
+                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots](Acc const&)
                 {
                     for(uint32_t j = 0; j < i; ++j)
                     {
@@ -398,7 +410,7 @@ TEST_CASE("Threaded AccessBlock")
         for(auto& pointer : pointers)
         {
             runner.run(
-                [&accessBlock, &pointer, &chunkSizes]()
+                [&accessBlock, &pointer, &chunkSizes](Acc const&)
                 {
                     // This is assumed to always succeed. We only need some valid pointer to formulate the loop nicely.
                     pointer = accessBlock.create(1U);
