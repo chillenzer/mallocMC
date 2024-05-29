@@ -68,8 +68,15 @@ struct Runner
 {
     std::vector<std::thread> threads{};
 
-    template<typename... T>
-    auto run(T... pars) -> Runner&
+    Runner() =default;
+    ~Runner() = default;
+    Runner(const Runner&) = delete;
+    Runner(Runner&&) = delete;
+    auto operator=(const Runner&) -> Runner& = delete;
+    auto operator=(Runner&&) -> Runner& = delete;
+
+    template<typename T_Functor, typename... T>
+    auto run(T_Functor task, T... pars) -> Runner&
     {
         threads.emplace_back(pars...);
         if constexpr(not parallel)
