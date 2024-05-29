@@ -248,7 +248,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     return true;
                 }
             }
-            atomicSub(pageTable._fillingLevels[index], 1U);
+            leavePage(index, numBytes);
             return false;
         }
 
@@ -271,18 +271,23 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto page = interpret(pageIndex, chunkSize);
             page.destroy(pointer);
+            leavePage(pageIndex, chunkSize);
+        }
+
+        void leavePage(uint32_t const pageIndex, uint32_t const chunkSize)
+        {
             // This number depends on the chunk size which will at some point get reset to 0 and might even get set to
             // another value by another thread before our task is complete here. Naively, one could expect this
             // "weakens" the lock and makes it insecure. But not the case and having it like this is a feature, not a
             // bug, as is proven in the comments below.
-            auto lock = page.numChunks();
+            auto lock = PageInterpretation<T_pageSize>::numChunks(chunkSize);
             auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 1U, lock);
             if(latestFilling == 1U)
             {
                 // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
                 // Furthermore, chunkSize cannot have changed because we maintain the invariant that the filling level
                 // is always considered first, so no other thread can have passed that barrier to reset it.
-                page.cleanup();
+                PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
                 atomicCAS(pageTable._chunkSizes[pageIndex], chunkSize, 0U);
 
                 // TODO(lenz): Original version had a thread fence at this point in order to invalidate potentially
