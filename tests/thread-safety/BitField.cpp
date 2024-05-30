@@ -25,6 +25,7 @@
   THE SOFTWARE.
 */
 
+#include <alpaka/acc/AccCpuThreads.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
@@ -35,6 +36,16 @@
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using namespace std::chrono_literals;
+
+
+// The following test is a particular regression test which (in its current form) requires to be able to stop a
+// thread from the outside. This is not possible through the alpaka interface. Thus, we resort to running this with
+// `std::jthread` but we have to ensure that the alpaka atomics work. Thus, the ifdef.
+#ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
+
+using Dim = alpaka::DimInt<1>;
+using Idx = std::size_t;
+using Acc = alpaka::AccCpuThreads<Dim, Idx>;
 
 TEST_CASE("Threaded BitMask")
 {
@@ -73,3 +84,10 @@ TEST_CASE("Threaded BitMask")
         noiseThread.request_stop();
     }
 }
+#else
+TEST_CASE("Threaded BitMask", [!should_fail])
+{
+    FAIL("The Threaded BitMask regression test could not run because it is only available with the std::threads "
+         "backend enabled.");
+}
+#endif // ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
