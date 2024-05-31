@@ -81,19 +81,20 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return indexOf(pointer, pages, T_pageSize);
         }
 
-        auto isValid(void* pointer) -> bool
+        template<typename TAcc>
+        auto isValid(TAcc const& acc, void* pointer) -> bool
         {
             if(pointer == nullptr)
             {
                 return false;
             }
             auto const index = pageIndex(pointer);
-            auto chunkSize = atomicLoad(pageTable._chunkSizes[index]);
+            auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
             if(chunkSize >= T_pageSize)
             {
                 return true;
             }
-            return chunkSize == 0U or atomicLoad(pageTable._fillingLevels[index]) == 0U
+            return chunkSize == 0U or atomicLoad(acc, pageTable._fillingLevels[index]) == 0U
                 ? false
                 : interpret(index, chunkSize).isValid(pointer);
         }
@@ -107,7 +108,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return createChunk(numBytes);
         }
 
-        auto destroy(void* const pointer) -> void
+        template<typename TAcc>
+        auto destroy(TAcc const& acc, void* const pointer) -> void
         {
             auto const index = pageIndex(pointer);
             if(index > static_cast<ssize_t>(numPages()) || index < 0)
@@ -117,7 +119,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #endif // DEBUG
                 return;
             }
-            auto const chunkSize = atomicLoad(pageTable._chunkSizes[index]);
+            auto const chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
             if(chunkSize >= T_pageSize)
             {
                 destroyOverMultiplePages(index, chunkSize);
@@ -132,9 +134,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
 
-        auto interpret(size_t const pageIndex)
+        template<typename TAcc>
+        auto interpret(TAcc const& acc, size_t const pageIndex)
         {
-            return interpret(pageIndex, atomicLoad(pageTable._chunkSizes[pageIndex]));
+            return interpret(pageIndex, atomicLoad(acc, pageTable._chunkSizes[pageIndex]));
         }
 
         auto interpret(size_t const pageIndex, uint32_t const chunkSize)
@@ -235,12 +238,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-        auto thisPageIsAppropriate(size_t const index, uint32_t const numBytes) -> bool
+        template<typename TAcc>
+        auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
         {
             bool result = false;
             if(enterPage(index, numBytes))
             {
-                auto oldChunkSize = atomicCAS(pageTable._chunkSizes[index], 0U, numBytes);
+                auto oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
                 result = (oldChunkSize == 0U || oldChunkSize == numBytes);
             }
             else
@@ -273,42 +277,44 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             leavePage(pageIndex, chunkSize);
         }
 
-        auto enterPage(uint32_t const pageIndex, uint32_t const chunkSize) -> bool
+        template<typename TAcc>
+        auto enterPage(TAcc const& acc, uint32_t const pageIndex, uint32_t const chunkSize) -> bool
         {
-            auto const oldFilling = atomicAdd(pageTable._fillingLevels[pageIndex], 1U);
+            auto const oldFilling = atomicAdd(acc, pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
             // must be 0, too) or the next check will fail.
             return oldFilling < PageInterpretation<T_pageSize>::numChunks(chunkSize);
         }
 
-        void leavePage(uint32_t const pageIndex, uint32_t const chunkSize)
+        template<typename TAcc>
+        void leavePage(TAcc const& acc, uint32_t const pageIndex, uint32_t const chunkSize)
         {
             // This outermost atomicSub is an optimisation: We can fast-track this if we are not responsible for the
             // clean-up. Using 0U -> 1U in the atomicCAS and comparison further down would have the same effect (if the
             // else branch contained the simple subtraction). It's a matter of which case shall have one operation
             // less.
-            if(atomicSub(pageTable._fillingLevels[pageIndex], 1U) == 1U)
+            if(atomicSub(acc, pageTable._fillingLevels[pageIndex], 1U) == 1U)
             {
                 // This number depends on the chunk size which will at some point get reset to 0 and might even get set
                 // to another value by another thread before our task is complete here. Naively, one could expect this
                 // "weakens" the lock and makes it insecure. But not the case and having it like this is a feature, not
                 // a bug, as is proven in the comments below.
                 auto lock = PageInterpretation<T_pageSize>::numChunks(chunkSize);
-                auto latestFilling = atomicCAS(pageTable._fillingLevels[pageIndex], 0U, lock);
+                auto latestFilling = atomicCAS(acc, pageTable._fillingLevels[pageIndex], 0U, lock);
                 if(latestFilling == 0U)
                 {
                     // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
                     // Furthermore, chunkSize cannot have changed because we maintain the invariant that the filling
                     // level is always considered first, so no other thread can have passed that barrier to reset it.
                     PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
-                    atomicCAS(pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+                    atomicCAS(acc, pageTable._chunkSizes[pageIndex], chunkSize, 0U);
 
                     // TODO(lenz): Original version had a thread fence at this point in order to invalidate potentially
                     // cached bit masks. Check if that's necessary!
 
                     // At this point, there might already be another thread (with another chunkSize) on this page but
                     // that's fine. It won't see the full capacity but we can just subtract what we've added before:
-                    atomicSub(pageTable._fillingLevels[pageIndex], lock);
+                    atomicSub(acc, pageTable._fillingLevels[pageIndex], lock);
                 }
             }
         }

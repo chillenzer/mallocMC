@@ -71,14 +71,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
 
-        auto create() -> void*
+        template<typename TAcc>
+        auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
-            auto const index = firstFreeBit(field, numChunks());
+            auto const index = firstFreeBit(acc, field, numChunks());
             return (index < noFreeBitFound(field)) ? this->operator[](index) : nullptr;
         }
 
-        auto destroy(void* pointer) -> void
+        template<typename TAcc>
+        auto destroy(TAcc const& acc, void* pointer) -> void
         {
             if(_chunkSize == 0)
             {
@@ -94,7 +96,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(isValid(chunkIndex))
 #endif // DEBUG
             {
-                bitField().unset(chunkIndex);
+                bitField().unset(acc, chunkIndex);
             }
         }
 
@@ -133,9 +135,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
     public:
-        auto isAllocated(uint32_t const chunkIndex) -> bool
+        template<typename TAcc>
+        auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
         {
-            return bitField().get(chunkIndex);
+            return bitField().get(acc, chunkIndex);
         }
 
         [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>

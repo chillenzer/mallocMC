@@ -49,34 +49,41 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         // Convention: We start counting from the right, i.e., if mask[0] == 1 and all others are 0, then mask = 0...01
         BitMaskStorageType<BitMaskSize> mask{};
-        auto operator[](auto const index) const
+
+        template<typename TAcc>
+        auto operator()(TAcc const& acc, auto const index) const
         {
-            return (atomicLoad(mask) & singleBit(index)) != 0U;
+            return (atomicLoad(acc, mask) & singleBit(index)) != 0U;
         }
 
-        auto set()
+        template<typename TAcc>
+        auto set(TAcc const& acc)
         {
-            atomicStore(mask, allOnes);
+            atomicStore(acc, mask, allOnes);
         }
 
-        auto set(auto const index)
+        template<typename TAcc>
+        auto set(TAcc const& acc, auto const index)
         {
-            return atomicOr(mask, singleBit(index));
+            return atomicOr(acc, mask, singleBit(index));
         }
 
-        auto unset(auto const index)
+        template<typename TAcc>
+        auto unset(TAcc const& acc, auto const index)
         {
-            return atomicAnd(mask, allOnes ^ singleBit(index));
+            return atomicAnd(acc, mask, allOnes ^ singleBit(index));
         }
 
-        auto flip()
+        template<typename TAcc>
+        auto flip(TAcc const& acc)
         {
-            return atomicXor(mask, allOnes);
+            return atomicXor(acc, mask, allOnes);
         }
 
-        auto flip(auto const index)
+        template<typename TAcc>
+        auto flip(TAcc const& acc, auto const index)
         {
-            return atomicXor(mask, singleBit(index));
+            return atomicXor(acc, mask, singleBit(index));
         }
 
         auto operator==(auto const other) const
@@ -106,9 +113,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         std::span<BitMask> data;
 
-        [[nodiscard]] auto get(uint32_t index) const -> bool
+        template<typename TAcc>
+        [[nodiscard]] auto get(TAcc const& acc, uint32_t index) const -> bool
         {
-            return data[index / BitMaskSize][index % BitMaskSize];
+            return data[index / BitMaskSize](acc, index % BitMaskSize);
         }
 
         [[nodiscard]] auto operator[](uint32_t index) const -> BitMask&
@@ -116,14 +124,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return data[index];
         }
 
-        void set(uint32_t const index) const
+        template<typename TAcc>
+        void set(TAcc const& acc, uint32_t const index) const
         {
-            data[index / BitMaskSize].set(index % BitMaskSize);
+            data[index / BitMaskSize].set(acc, index % BitMaskSize);
         }
 
-        void unset(uint32_t const index) const
+        template<typename TAcc>
+        void unset(TAcc const& acc, uint32_t const index) const
         {
-            data[index / BitMaskSize].unset(index % BitMaskSize);
+            data[index / BitMaskSize].unset(acc, index % BitMaskSize);
         }
 
         [[nodiscard]] auto begin() const
@@ -157,12 +167,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return field.numBits();
     }
 
-    [[nodiscard]] inline auto firstFreeBit(BitMask& mask, uint32_t const startIndex = 0) -> uint32_t
+    template<typename TAcc>
+    [[nodiscard]] inline auto firstFreeBit(TAcc const& acc, BitMask& mask, uint32_t const startIndex = 0) -> uint32_t
     {
         // TODO(lenz): Don't iterate through all but guess first and then jump to the next free.
         for(uint32_t i = startIndex; i < BitMaskSize; ++i)
         {
-            if((atomicOr(mask.mask, singleBit(i)) & singleBit(i)) == 0U)
+            if((atomicOr(acc, mask.mask, singleBit(i)) & singleBit(i)) == 0U)
             {
                 return i;
             }
@@ -170,7 +181,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return noFreeBitFound(mask);
     }
 
-    inline auto firstFreeBit(BitFieldFlat& field, uint32_t numValidBits = 0) -> uint32_t
+    template<typename TAcc>
+    inline auto firstFreeBit(TAcc const& acc, BitFieldFlat& field, uint32_t numValidBits = 0) -> uint32_t
     {
         if(numValidBits == 0)
         {
@@ -178,7 +190,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
         for(uint32_t i = 0; i < field.numMasks(); ++i)
         {
-            auto indexInMask = firstFreeBit(field[i]);
+            auto indexInMask = firstFreeBit(acc, field[i]);
             if(indexInMask < noFreeBitFound(BitMask{}))
             {
                 uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
