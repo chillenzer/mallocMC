@@ -27,7 +27,9 @@
 
 #pragma once
 
-#include <atomic>
+#include <alpaka/atomic/AtomicAtomicRef.hpp>
+#include <alpaka/atomic/Op.hpp>
+#include <alpaka/atomic/Traits.hpp>
 #include <iterator>
 #include <type_traits>
 
@@ -73,53 +75,50 @@ namespace mallocMC
     template<typename TAcc, typename T>
     inline auto atomicAdd(TAcc const& acc, T& lhs, T const& rhs)
     {
-        auto val = std::atomic_ref(lhs) += rhs;
-        // different convention: returns the result, not the previous value
-        return val - rhs;
+        return alpaka::atomicAdd(acc, &lhs, rhs);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicSub(TAcc const& acc, T& lhs, T const& rhs)
     {
-        auto val = std::atomic_ref(lhs) -= rhs;
-        // different convention: returns the result, not the previous value
-        return val + rhs;
+        return alpaka::atomicSub(acc, &lhs, rhs);
     }
 
     template<typename TAcc, typename T>
-    inline auto atomicCAS(TAcc const& acc, T& target, T cmp, T const& val)
+    inline auto atomicCAS(TAcc const& acc, T& target, T const& cmp, T const& val)
     {
-        std::atomic_ref(target).compare_exchange_strong(cmp, val);
-        return cmp;
+        return alpaka::atomicCas(acc, &target, cmp, val);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicStore(TAcc const& acc, T& target, T const& value)
     {
+        // return alpaka::atomicStore(acc, &target, value);
         return std::atomic_ref(target).store(value);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicXor(TAcc const& acc, T& target, T const& value)
     {
-        return std::atomic_ref(target).fetch_xor(value);
+        return alpaka::atomicXor(acc, &target, value);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicOr(TAcc const& acc, T& target, T const& value)
     {
-        return std::atomic_ref(target).fetch_or(value);
+        return alpaka::atomicOr(acc, &target, value);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicAnd(TAcc const& acc, T& target, T const& value)
     {
-        return std::atomic_ref(target).fetch_and(value);
+        return alpaka::atomicAnd(acc, &target, value);
     }
 
     template<typename TAcc, typename T>
     inline auto atomicLoad(TAcc const& acc, T const& target)
     {
+        // return alpaka::atomicLoad(acc, &target, value);
         return std::atomic_ref(target).load();
     }
 } // namespace mallocMC
