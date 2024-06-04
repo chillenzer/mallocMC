@@ -26,6 +26,7 @@
 */
 
 #include <alpaka/acc/AccCpuThreads.hpp>
+#include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/atomic/Traits.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -43,12 +44,7 @@ using namespace std::chrono_literals;
 // `std::jthread` but we have to ensure that the alpaka atomics work. Thus, the ifdef.
 #ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
 
-inline static auto const acc = 0;
-template<typename TOp, typename T, typename THierarchy, typename TSfinae>
-struct alpaka::trait::AtomicOp<TOp, decltype(acc), T, THierarchy, TSfinae>
-    : alpaka::trait::AtomicOp<TOp, alpaka::AccCpuThreads<alpaka::DimInt<1>, std::size_t>, T, THierarchy, TSfinae>
-{
-};
+inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
 
 TEST_CASE("Threaded BitMask")
 {
