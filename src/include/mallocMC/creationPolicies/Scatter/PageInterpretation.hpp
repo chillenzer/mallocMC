@@ -107,15 +107,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
         }
 
-        auto isValid(void* pointer) -> bool
+        template<typename TAcc>
+        auto isValid(TAcc const& acc, void* pointer) -> bool
         {
             // This function is neither thread-safe nor particularly performant. It is supposed to be used in tests and
             // debug mode.
-            return isValid(chunkNumberOf(pointer));
+            return isValid(acc, chunkNumberOf(pointer));
         }
 
     private:
-        auto isValid(uint32_t const chunkIndex) -> bool
+        template<typename TAcc>
+        auto isValid(TAcc const& acc, uint32_t const chunkIndex) -> bool
         {
             if(chunkIndex >= numChunks())
             {
@@ -124,7 +126,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #endif // DEBUG
                 return false;
             }
-            if(!isAllocated(chunkIndex))
+            if(!isAllocated(acc, chunkIndex))
             {
 #ifdef DEBUG
                 throw std::runtime_error{"Attempted to destroy un-allocated memory."};

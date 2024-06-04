@@ -78,7 +78,7 @@ struct Executor
     }
 };
 
-Executor exec{};
+inline static Executor exec{};
 
 TEST_CASE("BitMask")
 {

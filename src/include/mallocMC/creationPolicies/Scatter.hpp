@@ -96,16 +96,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             return chunkSize == 0U or atomicLoad(acc, pageTable._fillingLevels[index]) == 0U
                 ? false
-                : interpret(index, chunkSize).isValid(pointer);
+                : interpret(index, chunkSize).isValid(acc, pointer);
         }
 
-        auto create(uint32_t const numBytes) -> void*
+        template<typename TAcc>
+        auto create(TAcc const& acc, uint32_t const numBytes) -> void*
         {
             if(numBytes >= T_pageSize)
             {
                 return createOverMultiplePages(numBytes);
             }
-            return createChunk(numBytes);
+            return createChunk(acc, numBytes);
         }
 
         template<typename TAcc>
@@ -126,19 +127,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             else
             {
-                destroyChunk(pointer, index, chunkSize);
+                destroyChunk(acc, pointer, index, chunkSize);
             }
         }
 
     private:
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
-
-        template<typename TAcc>
-        auto interpret(TAcc const& acc, size_t const pageIndex)
-        {
-            return interpret(pageIndex, atomicLoad(acc, pageTable._chunkSizes[pageIndex]));
-        }
 
         auto interpret(size_t const pageIndex, uint32_t const chunkSize)
         {
@@ -168,11 +163,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // need this in production, we might want to revisit this.
             void* pointer = nullptr;
             std::vector<void*> pointers;
-            while((pointer = create(chunkSize)))
+            while((pointer = createOverMultiplePages(chunkSize)))
             {
                 pointers.push_back(pointer);
             }
-            std::for_each(std::begin(pointers), std::end(pointers), [this](auto ptr) { destroy(ptr); });
+            // This is a dirty hack! There is a template TAcc and I provide 0. This only works because multiple pages
+            // are not yet thread-safe.
+            std::for_each(std::begin(pointers), std::end(pointers), [this](auto ptr) { destroy(0, ptr); });
             return pointers.size();
         }
 
@@ -195,8 +192,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             return nullptr;
         }
-
-        auto createChunk(uint32_t const numBytes) -> void*
+        template<typename TAcc>
+        auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
             auto startIndex = computeHash(numBytes, numPages());
 
@@ -211,9 +208,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            while(auto page = choosePage(numBytes, startIndex))
+            while(auto page = choosePage(acc, numBytes, startIndex))
             {
-                auto pointer = page.value().create();
+                auto pointer = page.value().create(acc);
                 if(pointer != nullptr)
                 {
                     return pointer;
@@ -223,14 +220,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return nullptr;
         }
 
-        auto choosePage(uint32_t const numBytes, size_t const startIndex = 0)
+        template<typename TAcc>
+        auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0)
             -> std::optional<PageInterpretation<T_pageSize>>
         {
             for(size_t i = 0; i < numPages(); ++i)
             {
                 // TODO(lenz): Check if an "if" statement would yield better performance here.
                 auto index = (startIndex + i) % numPages();
-                if(thisPageIsAppropriate(index, numBytes))
+                if(thisPageIsAppropriate(acc, index, numBytes))
                 {
                     return std::optional<PageInterpretation<T_pageSize>>{std::in_place_t{}, pages[index], numBytes};
                 }
@@ -242,14 +240,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
         {
             bool result = false;
-            if(enterPage(index, numBytes))
+            if(enterPage(acc, index, numBytes))
             {
                 auto oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
                 result = (oldChunkSize == 0U || oldChunkSize == numBytes);
             }
             else
             {
-                leavePage(index, numBytes);
+                leavePage(acc, index, numBytes);
                 result = false;
             }
             return result;
@@ -270,11 +268,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return std::nullopt;
         }
 
-        void destroyChunk(void* pointer, uint32_t const pageIndex, uint32_t const chunkSize)
+        template<typename TAcc>
+        void destroyChunk(TAcc const& acc, void* pointer, uint32_t const pageIndex, uint32_t const chunkSize)
         {
             auto page = interpret(pageIndex, chunkSize);
-            page.destroy(pointer);
-            leavePage(pageIndex, chunkSize);
+            page.destroy(acc, pointer);
+            leavePage(acc, pageIndex, chunkSize);
         }
 
         template<typename TAcc>

@@ -59,21 +59,59 @@ constexpr size_t blockSize = numPages * (pageSize + pteSize);
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
 // regardless of the underlying access optimisations etc.
-template<size_t T_blockSize, uint32_t T_pageSize>
-auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
+template<typename TAcc, size_t T_blockSize, uint32_t T_pageSize>
+auto fillWith(TAcc const& acc, AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize)
+    -> std::vector<void*>
 {
     std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize));
     std::generate(
         std::begin(pointers),
         std::end(pointers),
-        [&accessBlock, chunkSize]()
+        [&acc, &accessBlock, chunkSize]()
         {
-            void* pointer = accessBlock.create(chunkSize);
+            void* pointer = accessBlock.create(acc, chunkSize);
             REQUIRE(pointer != nullptr);
             return pointer;
         });
     return pointers;
 }
+
+struct Executor
+{
+    Executor() : dev(alpaka::getDevByIdx(platform, 0)){};
+    ~Executor() = default;
+    Executor(const Executor&) = delete;
+    Executor(Executor&&) = delete;
+    auto operator=(const Executor&) -> Executor& = delete;
+    auto operator=(Executor&&) -> Executor& = delete;
+
+    using Acc = alpaka::AccCpuSerial<Dim, Idx>;
+    alpaka::Platform<Acc> const platform = {};
+    alpaka::Dev<alpaka::Platform<Acc>> const dev;
+    alpaka::Queue<Acc, alpaka::Blocking> queue{dev};
+    alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{1}, Idx{1}};
+
+    template<typename T_Functor>
+    auto operator()(T_Functor task) -> std::invoke_result_t<T_Functor, Acc>
+    {
+        using ResultType = std::invoke_result_t<T_Functor, Acc>;
+        if constexpr(std::is_same_v<ResultType, void>)
+        {
+            alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, task));
+        }
+        else
+        {
+            ResultType result;
+            auto const kernel = [&](auto const& acc) -> void { result = task(acc); };
+            auto tmp = alpaka::createTaskKernel<Acc>(workDiv, kernel);
+            alpaka::enqueue(queue, tmp);
+            return result;
+        }
+    }
+};
+
+inline static Executor exec{};
+
 
 template<bool parallel = true>
 struct Runner
@@ -119,9 +157,9 @@ struct ContentGenerator
 TEST_CASE("Threaded AccessBlock")
 {
     AccessBlock<blockSize, pageSize> accessBlock{};
-    auto const create
-        = [&accessBlock](Acc const&, void** pointer, auto chunkSize) { *pointer = accessBlock.create(chunkSize); };
-    auto const destroy = [&accessBlock](Acc const&, void* pointer) { accessBlock.destroy(pointer); };
+    auto const create = [&accessBlock](Acc const& acc, void** pointer, auto chunkSize)
+    { *pointer = accessBlock.create(acc, chunkSize); };
+    auto const destroy = [&accessBlock](Acc const& acc, void* pointer) { accessBlock.destroy(acc, pointer); };
     void* pointer1 = nullptr;
     void* pointer2 = nullptr;
     constexpr uint32_t const chunkSize1 = 32U;
@@ -141,11 +179,14 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("creates partly for insufficient memory with same chunk size.")
     {
-        fillWith(accessBlock, chunkSize1);
-
-        // This is a pointer to the first chunk of the first page. It is valid because we have manually filled up the
-        // complete accessBlock. So, we're effectively opening one slot:
-        accessBlock.destroy(reinterpret_cast<void*>(&accessBlock));
+        exec([&](auto const& acc) { fillWith(acc, accessBlock, chunkSize1); });
+        exec(
+            [&](auto const& acc)
+            {
+                // This is a pointer to the first chunk of the first page. It is valid because we have manually
+                // filled up the complete accessBlock. So, we're effectively opening one slot:
+                accessBlock.destroy(acc, reinterpret_cast<void*>(&accessBlock));
+            });
 
         Runner{}.run(create, &pointer1, chunkSize1).run(create, &pointer2, chunkSize1).join();
 
@@ -164,7 +205,7 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("does not race between clean up and create.")
     {
-        auto pointers = fillWith(accessBlock, chunkSize1);
+        auto pointers = exec([&](auto const& acc) { return fillWith(acc, accessBlock, chunkSize1); });
         std::sort(std::begin(pointers), std::end(pointers));
         // This points to the first chunk of page 0.
         pointer1 = pointers[0];
@@ -172,17 +213,21 @@ TEST_CASE("Threaded AccessBlock")
         std::for_each(
             std::begin(pointers) + 1,
             std::begin(pointers) + pointers.size() / accessBlock.numPages(),
-            [&accessBlock](auto pointer) { accessBlock.destroy(pointer); });
+            [&accessBlock](auto pointer)
+            {
+                exec([&](auto const& acc) { return accessBlock.destroy(acc, pointer); });
+                ;
+            });
         // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
 
         Runner{}
             .run(destroy, &pointer1)
             .run(
-                [&accessBlock, &pointer2](Acc const&)
+                [&accessBlock, &chunkSize1, &pointer2](Acc const& acc)
                 {
                     while(pointer2 == nullptr)
                     {
-                        pointer2 = accessBlock.create(chunkSize1);
+                        pointer2 = accessBlock.create(acc, chunkSize1);
                     }
                 })
             .join();
@@ -192,20 +237,20 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("destroys two pointers of different size.")
     {
-        pointer1 = accessBlock.create(chunkSize1);
-        pointer2 = accessBlock.create(chunkSize2);
+        pointer1 = exec([&](auto const& acc) { return accessBlock.create(acc, chunkSize1); });
+        pointer2 = exec([&](auto const& acc) { return accessBlock.create(acc, chunkSize2); });
         Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
-        CHECK(not accessBlock.isValid(pointer1));
-        CHECK(not accessBlock.isValid(pointer2));
+        CHECK(not exec([&](auto const& acc) { return accessBlock.isValid(acc, pointer1); }));
+        CHECK(not exec([&](auto const& acc) { return accessBlock.isValid(acc, pointer2); }));
     }
 
     SECTION("destroys two pointers of same size.")
     {
-        pointer1 = accessBlock.create(chunkSize1);
-        pointer2 = accessBlock.create(chunkSize1);
+        pointer1 = exec([&](auto const& acc) { return accessBlock.create(acc, chunkSize1); });
+        pointer2 = exec([&](auto const& acc) { return accessBlock.create(acc, chunkSize1); });
         Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
-        CHECK(not accessBlock.isValid(pointer1));
-        CHECK(not accessBlock.isValid(pointer2));
+        CHECK(not exec([&](auto const& acc) { return accessBlock.isValid(acc, pointer1); }));
+        CHECK(not exec([&](auto const& acc) { return accessBlock.isValid(acc, pointer2); }));
     }
 
     SECTION("fills up all blocks in parallel and writes to them.")
@@ -223,9 +268,9 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < content.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &content, &pointers](Acc const&)
+                [&accessBlock, i, &content, &pointers](Acc const& acc)
                 {
-                    pointers[i] = accessBlock.create(chunkSize1);
+                    pointers[i] = accessBlock.create(acc, chunkSize1);
                     auto* begin = reinterpret_cast<uint32_t*>(pointers[i]);
                     auto* end = begin + chunkSize1 / sizeof(uint32_t);
                     std::fill(begin, end, content[i]);
@@ -252,7 +297,7 @@ TEST_CASE("Threaded AccessBlock")
     {
         auto const allSlots = accessBlock.getAvailableSlots(chunkSize1);
         auto const allSlotsOfDifferentSize = accessBlock.getAvailableSlots(chunkSize2);
-        auto pointers = fillWith(accessBlock, chunkSize1);
+        auto pointers = exec([&](auto const& acc) { return fillWith(acc, accessBlock, chunkSize1); });
         auto runner = Runner{};
 
         for(auto* pointer : pointers)
@@ -266,7 +311,8 @@ TEST_CASE("Threaded AccessBlock")
             std::cend(pointers),
             true,
             [](auto const lhs, auto const rhs) { return lhs && rhs; },
-            [&accessBlock](void* pointer) { return not accessBlock.isValid(pointer); }));
+            [&accessBlock](void* pointer)
+            { return not exec([&](auto const& acc) { return accessBlock.isValid(acc, pointer); }); }));
         CHECK(accessBlock.getAvailableSlots(chunkSize1) == allSlots);
         CHECK(accessBlock.getAvailableSlots(chunkSize2) == allSlotsOfDifferentSize);
     }
@@ -279,21 +325,21 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers](Acc const&)
+                [&accessBlock, i, &pointers](Acc const& acc)
                 {
                     for(uint32_t j = 0; j < i; ++j)
                     {
                         // `.isValid()` is not thread-safe, so we use this direct assessment:
                         while(pointers[i] == nullptr)
                         {
-                            pointers[i] = accessBlock.create(chunkSize1);
+                            pointers[i] = accessBlock.create(acc, chunkSize1);
                         }
-                        accessBlock.destroy(pointers[i]);
+                        accessBlock.destroy(acc, pointers[i]);
                         pointers[i] = nullptr;
                     }
                     while(pointers[i] == nullptr)
                     {
-                        pointers[i] = accessBlock.create(chunkSize1);
+                        pointers[i] = accessBlock.create(acc, chunkSize1);
                     }
                 });
         }
@@ -321,7 +367,7 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers, num2](Acc const&)
+                [&accessBlock, i, &pointers, num2](Acc const& acc)
                 {
                     auto myChunkSize = i % 2 == 1 and i <= num2 ? chunkSize2 : chunkSize1;
                     for(uint32_t j = 0; j < i; ++j)
@@ -329,14 +375,14 @@ TEST_CASE("Threaded AccessBlock")
                         // `.isValid()` is not thread-safe, so we use this direct assessment:
                         while(pointers[i] == nullptr)
                         {
-                            pointers[i] = accessBlock.create(myChunkSize);
+                            pointers[i] = accessBlock.create(acc, myChunkSize);
                         }
-                        accessBlock.destroy(pointers[i]);
+                        accessBlock.destroy(acc, pointers[i]);
                         pointers[i] = nullptr;
                     }
                     while(pointers[i] == nullptr)
                     {
-                        pointers[i] = accessBlock.create(myChunkSize);
+                        pointers[i] = accessBlock.create(acc, myChunkSize);
                     }
                 });
         }
@@ -359,16 +405,16 @@ TEST_CASE("Threaded AccessBlock")
         for(size_t i = 0; i < pointers.size(); ++i)
         {
             runner.run(
-                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots](Acc const&)
+                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots](Acc const& acc)
                 {
                     for(uint32_t j = 0; j < i; ++j)
                     {
                         // `.isValid()` is not thread-safe, so we use this direct assessment:
                         while(pointers[i] == nullptr)
                         {
-                            pointers[i] = accessBlock.create(chunkSize1);
+                            pointers[i] = accessBlock.create(acc, chunkSize1);
                         }
-                        accessBlock.destroy(pointers[i]);
+                        accessBlock.destroy(acc, pointers[i]);
                         pointers[i] = nullptr;
                     }
 
@@ -376,7 +422,7 @@ TEST_CASE("Threaded AccessBlock")
                     // that threads looking for memory after we've finished can still find some.
                     while(pointers[i] == nullptr and i > (oversubscriptionFactor - 1) * availableSlots + 1)
                     {
-                        pointers[i] = accessBlock.create(chunkSize1);
+                        pointers[i] = accessBlock.create(acc, chunkSize1);
                     }
                 });
         }
@@ -410,17 +456,17 @@ TEST_CASE("Threaded AccessBlock")
         for(auto& pointer : pointers)
         {
             runner.run(
-                [&accessBlock, &pointer, &chunkSizes](Acc const&)
+                [&accessBlock, &pointer, &chunkSizes](Acc const& acc)
                 {
                     // This is assumed to always succeed. We only need some valid pointer to formulate the loop nicely.
-                    pointer = accessBlock.create(1U);
+                    pointer = accessBlock.create(acc, 1U);
                     for(auto chunkSize : chunkSizes)
                     {
                         accessBlock.destroy(pointer);
                         pointer = nullptr;
                         while(pointer == nullptr)
                         {
-                            pointer = accessBlock.create(chunkSize);
+                            pointer = accessBlock.create(acc, chunkSize);
                         }
                     }
                 });
