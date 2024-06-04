@@ -80,7 +80,7 @@ else()
     endforeach()
 endif()
 
-file(GLOB_RECURSE testSources "${CMAKE_CURRENT_SOURCE_DIR}/tests/**")
+file(GLOB_RECURSE testSources "${CMAKE_CURRENT_SOURCE_DIR}/tests/*/*.cpp")
 alpaka_add_executable(tests EXCLUDE_FROM_ALL ${testSources})
 catch_discover_tests(tests)
 source_group(TREE "${CMAKE_CURRENT_LIST_DIR}/tests" FILES ${testSources})
