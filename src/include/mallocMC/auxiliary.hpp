@@ -87,7 +87,7 @@ namespace mallocMC
     }
 
     template<typename TAcc, typename T>
-    inline auto atomicCAS(TAcc const& acc, T& target, T const& cmp, T const& val)
+    inline auto atomicCAS(TAcc const& acc, T& target, T cmp, T const& val)
     {
         std::atomic_ref(target).compare_exchange_strong(cmp, val);
         return cmp;
