@@ -47,6 +47,8 @@ using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
 using Acc = alpaka::AccCpuThreads<Dim, Idx>;
 
+inline static auto const acc = 0;
+
 TEST_CASE("Threaded BitMask")
 {
     BitMask mask{};
@@ -62,7 +64,7 @@ TEST_CASE("Threaded BitMask")
         uint32_t const firstFreeIndex = GENERATE(0U, 1U, 10U);
         for(uint32_t i = 0; i < firstFreeIndex; ++i)
         {
-            mask.set(i);
+            mask.set(acc, i);
         }
 
         uint32_t result = BitMaskSize;
@@ -73,12 +75,12 @@ TEST_CASE("Threaded BitMask")
                 {
                     for(uint32_t i = firstFreeIndex + 1; i < BitMaskSize; ++i)
                     {
-                        mask.flip(i);
+                        mask.flip(acc, i);
                     }
                 }
             });
-        auto searchThread = std::jthread([&mask, &result]()
-                                         { result = mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit(mask); });
+        auto searchThread = std::jthread(
+            [&mask, &result]() { result = mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit(acc, mask); });
         std::this_thread::sleep_for(20ms);
         CHECK(result == firstFreeIndex);
         noiseThread.request_stop();
