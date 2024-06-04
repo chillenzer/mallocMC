@@ -79,33 +79,6 @@ TEST_CASE("PageInterpretation")
         }
     }
 
-    SECTION("finds first free chunk.")
-    {
-        BitMask& mask{page.bitField()[0]};
-        mask.flip();
-        size_t const index = GENERATE(0, 2);
-        mask.flip(index);
-        auto const chunk = page.firstFreeChunk();
-
-        if(chunk)
-        {
-            CHECK(chunk.value().pointer == page[index]);
-        }
-        else
-        {
-            FAIL("Expected to get a valid chunk but didn't.");
-        }
-    }
-
-    SECTION("returns nullopt if all chunks are full.")
-    {
-        for(auto& mask : page.bitField())
-        {
-            mask.set();
-        }
-        CHECK(page.firstFreeChunk() == std::nullopt);
-    }
-
     SECTION("knows the maximal bit field size.")
     {
         // 116 allows for 29 bit masks capable of representing 928 1-byte chunks. This would give a total addressable

@@ -143,17 +143,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return bitField().get(acc, chunkIndex);
         }
 
-        [[nodiscard]] auto firstFreeChunk() const -> std::optional<Chunk>
-        {
-            auto field = bitField();
-            auto const index = firstFreeBit(field, numChunks());
-            if(index < noFreeBitFound(field))
-            {
-                return std::optional<Chunk>({index, this->operator[](index)});
-            }
-            return std::nullopt;
-        }
-
         [[nodiscard]] auto bitField() const -> BitFieldFlat
         {
             return BitFieldFlat{{bitFieldStart(), ceilingDivision(numChunks(), BitMaskSize)}};
