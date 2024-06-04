@@ -34,6 +34,16 @@
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 
+#include <alpaka/acc/AccCpuSerial.hpp>
+#include <alpaka/acc/AccCpuThreads.hpp>
+#include <alpaka/dev/Traits.hpp>
+#include <alpaka/dim/DimIntegralConst.hpp>
+#include <alpaka/example/ExampleDefaultAcc.hpp>
+#include <alpaka/kernel/Traits.hpp>
+#include <alpaka/platform/PlatformCpu.hpp>
+#include <alpaka/platform/Traits.hpp>
+#include <alpaka/queue/Properties.hpp>
+#include <alpaka/queue/Traits.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
@@ -47,11 +57,44 @@ using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
-auto exec(auto const& task)
+using Dim = alpaka::DimInt<1>;
+using Idx = std::size_t;
+using Acc = alpaka::AccCpuThreads<Dim, Idx>;
+
+struct Executor
 {
-    static auto const acc = 0;
-    return task(acc);
-}
+    Executor() : dev(alpaka::getDevByIdx(platform, 0)){};
+    ~Executor() = default;
+    Executor(const Executor&) = delete;
+    Executor(Executor&&) = delete;
+    auto operator=(const Executor&) -> Executor& = delete;
+    auto operator=(Executor&&) -> Executor& = delete;
+
+    alpaka::Platform<Acc> const platform = {};
+    alpaka::Dev<alpaka::Platform<Acc>> const dev;
+    alpaka::Queue<Acc, alpaka::Blocking> queue{dev};
+    alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{1}, Idx{1}};
+
+    template<typename T_Functor>
+    auto operator()(T_Functor task) -> std::invoke_result_t<T_Functor, Acc>
+    {
+        using ResultType = std::invoke_result_t<T_Functor, Acc>;
+        if constexpr(std::is_same_v<ResultType, void>)
+        {
+            alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, task));
+        }
+        else
+        {
+            ResultType result;
+            auto const kernel = [&](auto const& acc) -> void { result = task(acc); };
+            auto tmp = alpaka::createTaskKernel<Acc>(workDiv, kernel);
+            alpaka::enqueue(queue, tmp);
+            return result;
+        }
+    }
+};
+
+inline static Executor exec{};
 
 TEST_CASE("PageInterpretation")
 {
