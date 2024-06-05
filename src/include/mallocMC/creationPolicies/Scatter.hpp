@@ -32,6 +32,7 @@
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include <algorithm>
+#include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -167,9 +168,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 pointers.push_back(pointer);
             }
-            // This is a dirty hack! There is a template TAcc and I provide 0. This only works because multiple pages
-            // are not yet thread-safe.
-            std::for_each(std::begin(pointers), std::end(pointers), [this](auto ptr) { destroy(0, ptr); });
+            // TODO(lenz): This is a dirty hack! There is a template TAcc and I provide something explicit. This only
+            // works because multiple pages are not yet thread-safe.
+            std::for_each(
+                std::begin(pointers),
+                std::end(pointers),
+                [this](auto ptr) { destroy(alpaka::AtomicAtomicRef{}, ptr); });
             return pointers.size();
         }
 

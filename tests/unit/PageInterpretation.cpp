@@ -57,44 +57,8 @@ using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
-using Dim = alpaka::DimInt<1>;
-using Idx = std::size_t;
-using Acc = alpaka::AccCpuThreads<Dim, Idx>;
-
-struct Executor
-{
-    Executor() : dev(alpaka::getDevByIdx(platform, 0)){};
-    ~Executor() = default;
-    Executor(const Executor&) = delete;
-    Executor(Executor&&) = delete;
-    auto operator=(const Executor&) -> Executor& = delete;
-    auto operator=(Executor&&) -> Executor& = delete;
-
-    alpaka::Platform<Acc> const platform = {};
-    alpaka::Dev<alpaka::Platform<Acc>> const dev;
-    alpaka::Queue<Acc, alpaka::Blocking> queue{dev};
-    alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{1}, Idx{1}};
-
-    template<typename T_Functor>
-    auto operator()(T_Functor task) -> std::invoke_result_t<T_Functor, Acc>
-    {
-        using ResultType = std::invoke_result_t<T_Functor, Acc>;
-        if constexpr(std::is_same_v<ResultType, void>)
-        {
-            alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, task));
-        }
-        else
-        {
-            ResultType result;
-            auto const kernel = [&](auto const& acc) -> void { result = task(acc); };
-            auto tmp = alpaka::createTaskKernel<Acc>(workDiv, kernel);
-            alpaka::enqueue(queue, tmp);
-            return result;
-        }
-    }
-};
-
-inline static Executor exec{};
+// This is just passed through to select one backend to serial parts of the tests.
+inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
 
 TEST_CASE("PageInterpretation")
 {
@@ -176,7 +140,7 @@ TEST_CASE("PageInterpretation.create")
 
         SECTION("returns a pointer to within the data.")
         {
-            auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+            auto* pointer = page.create(acc);
             CHECK(
                 std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer))
                 < std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(page.bitFieldStart())));
@@ -184,7 +148,7 @@ TEST_CASE("PageInterpretation.create")
 
         SECTION("returns a pointer to the start of a chunk.")
         {
-            auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+            auto* pointer = page.create(acc);
             CHECK(std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer)) % chunkSize == 0U);
         }
 
@@ -192,9 +156,9 @@ TEST_CASE("PageInterpretation.create")
         {
             for(auto& mask : page.bitField())
             {
-                exec([&](auto const& acc) { return mask.set(acc); });
+                mask.set(acc);
             }
-            auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+            auto* pointer = page.create(acc);
             CHECK(pointer == nullptr);
         }
 
@@ -202,10 +166,10 @@ TEST_CASE("PageInterpretation.create")
         {
             for(uint32_t i = 0; i < page.numChunks(); ++i)
             {
-                auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+                auto* pointer = page.create(acc);
                 CHECK(pointer != nullptr);
             }
-            auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+            auto* pointer = page.create(acc);
             CHECK(pointer == nullptr);
         }
     }
@@ -220,9 +184,9 @@ TEST_CASE("PageInterpretation.create")
         {
             BitMask& mask{page.bitField()[0]};
             REQUIRE(mask.none());
-            auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+            auto* pointer = page.create(acc);
             auto const index = page.chunkNumberOf(pointer);
-            CHECK(exec([&](auto const& acc) { return mask(acc, index); }));
+            CHECK(mask(acc, index));
         }
     }
 }
@@ -241,7 +205,7 @@ TEST_CASE("PageInterpretation.destroy")
         uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
         uint32_t chunkSize = pageSize / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize};
-        auto* pointer = exec([&](auto const& acc) { return page.create(acc); });
+        auto* pointer = page.create(acc);
 
 #ifdef DEBUG
         SECTION("throws if given an invalid pointer.")
@@ -268,7 +232,7 @@ TEST_CASE("PageInterpretation.destroy")
             // free the page.
             auto mask = page.bitField()[0];
             auto value = mask;
-            exec([&](auto const& acc) { return page.destroy(acc, pointer); });
+            page.destroy(acc, pointer);
             CHECK(mask <= value);
         }
 

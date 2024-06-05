@@ -34,51 +34,14 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
 #include <mallocMC/creationPolicies/Scatter/BitField.hpp>
-#include <type_traits>
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlat;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit;
 
-using Dim = alpaka::DimInt<1>;
-using Idx = std::size_t;
-using Acc = alpaka::AccCpuSerial<Dim, Idx>;
-
-struct Executor
-{
-    Executor() : dev(alpaka::getDevByIdx(platform, 0)){};
-    ~Executor() = default;
-    Executor(const Executor&) = delete;
-    Executor(Executor&&) = delete;
-    auto operator=(const Executor&) -> Executor& = delete;
-    auto operator=(Executor&&) -> Executor& = delete;
-
-    alpaka::Platform<Acc> const platform = {};
-    alpaka::Dev<alpaka::Platform<Acc>> const dev;
-    alpaka::Queue<Acc, alpaka::Blocking> queue{dev};
-    alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{1}, Idx{1}};
-
-    template<typename T_Functor>
-    auto operator()(T_Functor task) -> std::invoke_result_t<T_Functor, Acc>
-    {
-        using ResultType = std::invoke_result_t<T_Functor, Acc>;
-        if constexpr(std::is_same_v<ResultType, void>)
-        {
-            alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, task));
-        }
-        else
-        {
-            ResultType result;
-            auto const kernel = [&](auto const& acc) -> void { result = task(acc); };
-            auto tmp = alpaka::createTaskKernel<Acc>(workDiv, kernel);
-            alpaka::enqueue(queue, tmp);
-            return result;
-        }
-    }
-};
-
-inline static Executor exec{};
+// This is just passed through to select one backend to serial parts of the tests.
+inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
 
 TEST_CASE("BitMask")
 {
@@ -93,8 +56,7 @@ TEST_CASE("BitMask")
     {
         for(size_t i = 0; i < BitMaskSize; ++i)
         {
-            auto result = exec([&](Acc const& acc) { return mask(acc, i); });
-            CHECK(result == false);
+            CHECK(mask(acc, i) == false);
         }
     }
 
@@ -102,26 +64,23 @@ TEST_CASE("BitMask")
     {
         for(size_t i = 0; i < BitMaskSize; ++i)
         {
-            exec([&](Acc const& acc) { return mask.set(acc, i); });
-            auto result = exec([&](Acc const& acc) { return mask(acc, i); });
-            CHECK(result);
+            mask.set(i);
+            CHECK(mask(acc, i));
         }
     }
 
     SECTION("knows the first free bit.")
     {
-        exec([&](Acc const& acc) { return mask.flip(acc); });
+        mask.flip(acc);
         size_t const index = GENERATE(0, 3);
-        exec([&](Acc const& acc) { return mask.flip(acc, index); });
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, mask); });
-        CHECK(result == index);
+        mask.flip(acc, index);
+        CHECK(firstFreeBit(acc, mask) == index);
     }
 
     SECTION("returns BitMaskSize as first free bit if there is none.")
     {
-        exec([&](Acc const& acc) { return mask.flip(acc); });
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, mask); });
-        CHECK(result == BitMaskSize);
+        mask.flip(acc);
+        CHECK(firstFreeBit(acc, mask) == BitMaskSize);
     }
 }
 
@@ -137,14 +96,13 @@ TEST_CASE("BitFieldFlat")
         uint32_t const index = GENERATE(0, 1, numChunks / 2, numChunks - 1);
         for(auto& mask : data)
         {
-            exec([&](Acc const& acc) { return mask.set(acc); });
+            mask.set(acc);
         }
-        exec([&](Acc const& acc) { return data[index / BitMaskSize].unset(acc, index % BitMaskSize); });
+        data[index / BitMaskSize].unset(acc, index % BitMaskSize);
 
         BitFieldFlat field{data};
 
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, field); });
-        CHECK(result == index);
+        CHECK(firstFreeBit(acc, field) == index);
     }
 
     SECTION("knows its first free bit if later ones are free, too.")
@@ -152,17 +110,16 @@ TEST_CASE("BitFieldFlat")
         uint32_t const index = GENERATE(0, 1, numChunks / 2, numChunks - 1);
         for(auto& mask : std::span{static_cast<BitMask*>(data), index / BitMaskSize})
         {
-            exec([&](Acc const& acc) { return mask.set(acc); });
+            mask.set(acc);
         }
         for(uint32_t i = 0; i < index % BitMaskSize; ++i)
         {
-            exec([&](Acc const& acc) { return data[index / BitMaskSize].set(acc, i); });
+            data[index / BitMaskSize].set(acc, i);
         }
 
         BitFieldFlat field{data};
 
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, field); });
-        CHECK(result == index);
+        CHECK(firstFreeBit(acc, field) == index);
     }
 
     SECTION("knows its first free bit for different numChunks.")
@@ -172,25 +129,23 @@ TEST_CASE("BitFieldFlat")
         uint32_t const index = GENERATE(0, 1, 10, 12);
         for(auto& mask : localData)
         {
-            exec([&](Acc const& acc) { return mask.set(acc); });
+            mask.set(acc);
         }
-        exec([&](Acc const& acc) { return localData[index / BitMaskSize].unset(acc, index % BitMaskSize); });
+        localData[index / BitMaskSize].unset(acc, index % BitMaskSize);
 
         BitFieldFlat field{localData};
 
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, field); });
-        CHECK(result == index);
+        CHECK(firstFreeBit(acc, field) == index);
     }
 
     SECTION("sets a bit.")
     {
         BitFieldFlat field{data};
         uint32_t const index = GENERATE(0, 1, numChunks / 2, numChunks - 1);
-        exec([&](Acc const& acc) { return field.set(acc, index); });
+        field.set(acc, index);
         for(uint32_t i = 0; i < numChunks; ++i)
         {
-            auto result = exec([&](Acc const& acc) { return field.get(acc, i); });
-            CHECK(result == (i == index));
+            CHECK(field.get(acc, i) == (i == index));
         }
     }
 
@@ -199,12 +154,11 @@ TEST_CASE("BitFieldFlat")
         BitFieldFlat field{data};
         uint32_t const firstIndex = GENERATE(0, 1, numChunks / 2, numChunks - 1);
         uint32_t const secondIndex = GENERATE(2, numChunks / 3, numChunks / 2, numChunks - 1);
-        exec([&](Acc const& acc) { return field.set(acc, firstIndex); });
-        exec([&](Acc const& acc) { return field.set(acc, secondIndex); });
+        field.set(acc, firstIndex);
+        field.set(acc, secondIndex);
         for(uint32_t i = 0; i < numChunks; ++i)
         {
-            auto result = exec([&](Acc const& acc) { return field.get(acc, i); });
-            CHECK(result == (i == firstIndex || i == secondIndex));
+            CHECK(field.get(acc, i) == (i == firstIndex || i == secondIndex));
         }
     }
 
@@ -213,9 +167,8 @@ TEST_CASE("BitFieldFlat")
         BitFieldFlat field{data};
         for(uint32_t i = 0; i < numChunks; ++i)
         {
-            exec([&](Acc const& acc) { return field.set(acc, i); });
+            field.set(acc, i);
         }
-        auto result = exec([&](Acc const& acc) { return firstFreeBit(acc, field); });
-        CHECK(result == numChunks);
+        CHECK(firstFreeBit(acc, field) == numChunks);
     }
 }
