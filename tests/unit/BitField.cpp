@@ -64,10 +64,24 @@ TEST_CASE("BitMask")
     {
         for(size_t i = 0; i < BitMaskSize; ++i)
         {
-            mask.set(i);
+            mask.set(acc, i);
             CHECK(mask(acc, i));
         }
     }
+
+    SECTION("allows to unset individual bits afterwards.")
+    {
+        for(size_t i = 0; i < BitMaskSize; ++i)
+        {
+            mask.set(acc, i);
+            for(size_t j = 0; j < BitMaskSize; ++j)
+            {
+                CHECK(mask(acc, j) == (i == j));
+            }
+            mask.unset(acc, i);
+        }
+    }
+
 
     SECTION("knows the first free bit.")
     {
