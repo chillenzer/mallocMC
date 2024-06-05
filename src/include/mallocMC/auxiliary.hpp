@@ -91,13 +91,6 @@ namespace mallocMC
     }
 
     template<typename TAcc, typename T>
-    inline auto atomicStore(TAcc const& acc, T& target, T const& value)
-    {
-        // return alpaka::atomicStore(acc, &target, value);
-        return std::atomic_ref(target).store(value);
-    }
-
-    template<typename TAcc, typename T>
     inline auto atomicXor(TAcc const& acc, T& target, T const& value)
     {
         return alpaka::atomicXor(acc, &target, value);
@@ -116,9 +109,8 @@ namespace mallocMC
     }
 
     template<typename TAcc, typename T>
-    inline auto atomicLoad(TAcc const& acc, T const& target)
+    inline auto atomicLoad(TAcc const& acc, T& target)
     {
-        // return alpaka::atomicLoad(acc, &target, value);
-        return std::atomic_ref(target).load();
+        return atomicCAS(acc, target, 0U, 0U);
     }
 } // namespace mallocMC

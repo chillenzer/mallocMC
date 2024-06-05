@@ -51,7 +51,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         BitMaskStorageType<BitMaskSize> mask{};
 
         template<typename TAcc>
-        auto operator()(TAcc const& acc, auto const index) const
+        auto operator()(TAcc const& acc, auto const index)
         {
             return (atomicLoad(acc, mask) & singleBit(index)) != 0U;
         }
@@ -59,7 +59,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         auto set(TAcc const& acc)
         {
-            atomicStore(acc, mask, allOnes);
+            atomicOr(acc, mask, allOnes);
         }
 
         template<typename TAcc>
