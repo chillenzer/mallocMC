@@ -510,6 +510,7 @@ TEST_CASE("Threaded AccessBlock")
         alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{pointers.m_extents[0]}, Idx{1}};
         alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
         alpaka::wait(queue);
+
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
@@ -535,39 +536,43 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(accessBlock.getAvailableSlots(chunkSizes.m_onHost[1]) == allSlotsOfDifferentSize);
     }
 
-    //    SECTION("creates and destroys multiple times.")
-    //    {
-    //        std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize1));
-    //        auto runner = Runner<>{};
-    //
-    //        for(size_t i = 0; i < pointers.size(); ++i)
-    //        {
-    //            runner.run(
-    //                [&accessBlock, i, &pointers](Acc const& acc)
-    //                {
-    //                    for(uint32_t j = 0; j < i; ++j)
-    //                    {
-    //                        // `.isValid()` is not thread-safe, so we use this direct assessment:
-    //                        while(pointers[i] == nullptr)
-    //                        {
-    //                            pointers[i] = accessBlock.create(acc, chunkSize1);
-    //                        }
-    //                        accessBlock.destroy(acc, pointers[i]);
-    //                        pointers[i] = nullptr;
-    //                    }
-    //                    while(pointers[i] == nullptr)
-    //                    {
-    //                        pointers[i] = accessBlock.create(acc, chunkSize1);
-    //                    }
-    //                });
-    //        }
-    //
-    //        runner.join();
-    //
-    //        std::sort(std::begin(pointers), std::end(pointers));
-    //        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
-    //    }
-    //
+    SECTION("creates and destroys multiple times.")
+    {
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{pointers.m_extents[0]}, Idx{1}};
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            [](Acc const& acc, auto* accessBlock, auto* pointers, auto chunkSize)
+            {
+                auto const i = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+                for(uint32_t j = 0; j < i; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[i] == nullptr)
+                    {
+                        pointers[i] = accessBlock->create(acc, chunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[i]);
+                    pointers[i] = nullptr;
+                }
+                while(pointers[i] == nullptr)
+                {
+                    pointers[i] = accessBlock->create(acc, chunkSize);
+                }
+            },
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
+        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
+    }
+
     //    SECTION("creates and destroys multiple times with different sizes.")
     //    {
     //        // CAUTION: This test can fail because we are currently using exactly as much space as is
