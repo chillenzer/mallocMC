@@ -51,6 +51,7 @@
 #include <cstdio>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <span>
 #include <sstream>
 #include <tuple>
 
@@ -573,66 +574,39 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
 
-    //    SECTION("creates and destroys multiple times with different sizes.")
+    // SECTION("creates and destroys multiple times with different sizes.")
+    //{
+    //     // CAUTION: This test can fail because we are currently using exactly as much space as is available but with
+    //     // multiple different chunk sizes. That means that if one of them occupies more pages than it minimally
+    //     needs,
+    //     // the other one will lack pages to with their respective chunk size. This seems not to be a problem
+    //     currently
+    //     // but it might be more of a problem once we move to device and once we include proper scattering.
+
+    //    // Make sure that num2 > num1.
+    //    auto num1 = accessBlock.getAvailableSlots(chunkSize1);
+    //    auto num2 = accessBlock.getAvailableSlots(chunkSize2);
+
+    //    std::vector<void*> pointers(num1 / 2 + num2 / 2);
+    //    auto runner = Runner<>{};
+
+    //    for(size_t i = 0; i < pointers.size(); ++i)
     //    {
-    //        // CAUTION: This test can fail because we are currently using exactly as much space as is
-    //        available but with
-    //        // multiple different chunk sizes. That means that if one of them occupies more pages than it
-    //        minimally needs,
-    //        // the other one will lack pages to with their respective chunk size. This seems not to be a
-    //        problem currently
-    //        // but it might be more of a problem once we move to device and once we include proper
-    //        scattering.
-    //
-    //        // Make sure that num2 > num1.
-    //        auto num1 = accessBlock.getAvailableSlots(chunkSize1);
-    //        auto num2 = accessBlock.getAvailableSlots(chunkSize2);
-    //
-    //        std::vector<void*> pointers(num1 / 2 + num2 / 2);
-    //        auto runner = Runner<>{};
-    //
-    //        for(size_t i = 0; i < pointers.size(); ++i)
-    //        {
-    //            runner.run(
-    //                [&accessBlock, i, &pointers, num2](Acc const& acc)
+    //        runner.run(
+    //            [&accessBlock, i, &pointers, num2](Acc const& acc)
+    //            {
+    //                auto myChunkSize = i % 2 == 1 and i <= num2 ? chunkSize2 : chunkSize1;
+    //                for(uint32_t j = 0; j < i; ++j)
     //                {
-    //                    auto myChunkSize = i % 2 == 1 and i <= num2 ? chunkSize2 : chunkSize1;
-    //                    for(uint32_t j = 0; j < i; ++j)
-    //                    {
-    //                        // `.isValid()` is not thread-safe, so we use this direct assessment:
-    //                        while(pointers[i] == nullptr)
-    //                        {
-    //                            pointers[i] = accessBlock.create(acc, myChunkSize);
-    //                        }
-    //                        accessBlock.destroy(acc, pointers[i]);
-    //                        pointers[i] = nullptr;
-    //                    }
+    //                    // `.isValid()` is not thread-safe, so we use this direct assessment:
     //                    while(pointers[i] == nullptr)
     //                    {
     //                        pointers[i] = accessBlock.create(acc, myChunkSize);
     //                    }
-    //                });
-    //        }
-    //
-    //        runner.join();
-    //
-    //        std::sort(std::begin(pointers), std::end(pointers));
-    //        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
-    //    }
-    //
-    //    SECTION("can handle oversubscription.")
-    //    {
-    //        uint32_t oversubscriptionFactor = 2U;
-    //        auto availableSlots = accessBlock.getAvailableSlots(chunkSize1);
-    //
-    //        // This is oversubscribed but we will only hold keep less 1/oversubscriptionFactor of the memory
-    //        in the end. std::vector<void*> pointers(oversubscriptionFactor * availableSlots); auto runner =
-    //        Runner<>{};
-    //
-    //        for(size_t i = 0; i < pointers.size(); ++i)
-    //        {
-    //            runner.run(
-    //                [&accessBlock, i, &pointers, oversubscriptionFactor, availableSlots](Acc const& acc)
+    //                    accessBlock.destroy(acc, pointers[i]);
+    //                    pointers[i] = nullptr;
+    //                }
+    //                while(pointers[i] == nullptr)
     //                {
     //                    for(uint32_t j = 0; j < i; ++j)
     //                    {
@@ -710,4 +684,113 @@ TEST_CASE("Threaded AccessBlock")
     //        std::sort(std::begin(pointers), std::end(pointers));
     //        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
     //    }
+
+    //    runner.join();
+
+    //    std::sort(std::begin(pointers), std::end(pointers));
+    //    CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
+    //}
+
+    SECTION("can handle oversubscription.")
+    {
+        uint32_t oversubscriptionFactor = 2U;
+        auto availableSlots = accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]);
+
+        // This is oversubscribed but we will only hold keep less 1/oversubscriptionFactor of the memory in the end.
+        Buffer<void*> manyPointers(devHost, devAcc, oversubscriptionFactor * availableSlots);
+
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{manyPointers.m_extents[0]}, Idx{1}};
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            [oversubscriptionFactor, availableSlots](Acc const& acc, auto* accessBlock, auto* pointers, auto chunkSize)
+            {
+                auto const i = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+                for(uint32_t j = 0; j < i; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[i] == nullptr)
+                    {
+                        pointers[i] = accessBlock->create(acc, chunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[i]);
+                    pointers[i] = nullptr;
+                }
+
+                // We only keep some of the memory. In particular, we keep one chunk less than is available, such
+                // that threads looking for memory after we've finished can still find some.
+                while(pointers[i] == nullptr and i > (oversubscriptionFactor - 1) * availableSlots + 1)
+                {
+                    pointers[i] = accessBlock->create(acc, chunkSize);
+                }
+            },
+            &accessBlock,
+            alpaka::getPtrNative(manyPointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, manyPointers.m_onHost, manyPointers.m_onDevice);
+        alpaka::wait(queue);
+
+        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
+        // nullptr.
+        std::span<void*> tmpManyPointers(alpaka::getPtrNative(manyPointers.m_onHost), manyPointers.m_extents[0]);
+        auto beginNonNull = std::begin(tmpManyPointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
+
+        CHECK(std::all_of(
+            std::begin(tmpManyPointers),
+            beginNonNull,
+            [](auto const pointer) { return pointer == nullptr; }));
+
+        std::sort(beginNonNull, std::end(tmpManyPointers));
+        CHECK(std::unique(beginNonNull, std::end(tmpManyPointers)) == std::end(tmpManyPointers));
+    }
+
+    SECTION("can handle many different chunk sizes.")
+    {
+        Buffer<uint32_t> chunkSizes(devHost, devAcc, pageSize - BitMaskSize);
+        std::span<uint32_t> tmp(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
+        std::iota(std::begin(tmp), std::end(tmp), 1U);
+        alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
+        alpaka::wait(queue);
+
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{accessBlock.numPages()}, Idx{1}};
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            [](Acc const& acc, auto* accessBlock, auto* pointers, auto* chunkSizes)
+            {
+                auto const i = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+                pointers[i] = accessBlock->create(acc, 1U);
+
+                std::span<uint32_t> tmpChunkSizes(chunkSizes, pageSize - BitMaskSize);
+                for(auto chunkSize : tmpChunkSizes)
+                {
+                    accessBlock->destroy(acc, pointers[i]);
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    std::stringstream ss;
+                    ss << i << ": " << chunkSize << ", " << pointers[i] << std::endl;
+                    std::cout << ss.str();
+                    pointers[i] = nullptr;
+                    while(pointers[i] == nullptr)
+                    {
+                        pointers[i] = accessBlock->create(acc, chunkSize);
+                    }
+                }
+            },
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(chunkSizes.m_onHost));
+
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), accessBlock.numPages());
+        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
+        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
+    }
 }
