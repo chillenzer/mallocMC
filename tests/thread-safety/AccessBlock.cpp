@@ -417,6 +417,7 @@ TEST_CASE("Threaded AccessBlock")
                     for(auto chunkSize : chunkSizes)
                     {
                         accessBlock.destroy(pointer);
+                        pointer = nullptr;
                         while(pointer == nullptr)
                         {
                             pointer = accessBlock.create(chunkSize);
