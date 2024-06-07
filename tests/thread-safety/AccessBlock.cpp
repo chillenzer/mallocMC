@@ -51,6 +51,7 @@
 #include <cstdio>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <sstream>
 #include <tuple>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
@@ -264,9 +265,9 @@ TEST_CASE("Threaded AccessBlock")
 {
     auto [platformAcc, platformHost, devAcc, devHost, queue] = setup();
     AccessBlock<blockSize, pageSize> accessBlock{};
-
     auto const chunkSizes = createChunkSizes(devHost, devAcc, queue);
     auto pointers = createPointers(devHost, devAcc, queue, accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]));
+    alpaka::wait(queue);
 
     SECTION("creates second memory somewhere else.")
     {
@@ -306,7 +307,7 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("creates partly for insufficient memory with same chunk size.")
     {
-        auto lastFreeChunk = fillAllButOne(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
+        auto* lastFreeChunk = fillAllButOne(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
 
         // Okay, so here we start the actual test. The situation is the following:
         // There is a single chunk available.
@@ -394,56 +395,97 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(not result.m_onHost[0]);
         CHECK(not result.m_onHost[1]);
     }
-    //
-    //    SECTION("destroys two pointers of same size.")
-    //    {
-    //        pointer1 = accessBlock.create(acc, chunkSize1);
-    //        pointer2 = accessBlock.create(acc, chunkSize1);
-    //        Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
-    //        CHECK(not accessBlock.isValid(acc, pointer1));
-    //        CHECK(not accessBlock.isValid(acc, pointer2));
-    //    }
-    //
-    //    SECTION("fills up all blocks in parallel and writes to them.")
-    //    {
-    //        auto const content = [&accessBlock]()
-    //        {
-    //            std::vector<uint32_t> tmp(accessBlock.getAvailableSlots(chunkSize1));
-    //            std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
-    //            return tmp;
-    //        }();
-    //
-    //        std::vector<void*> pointers(content.size());
-    //        auto runner = Runner{};
-    //
-    //        for(size_t i = 0; i < content.size(); ++i)
-    //        {
-    //            runner.run(
-    //                [&accessBlock, i, &content, &pointers](Acc const& acc)
-    //                {
-    //                    pointers[i] = accessBlock.create(acc, chunkSize1);
-    //                    auto* begin = reinterpret_cast<uint32_t*>(pointers[i]);
-    //                    auto* end = begin + chunkSize1 / sizeof(uint32_t);
-    //                    std::fill(begin, end, content[i]);
-    //                });
-    //        }
-    //
-    //        runner.join();
-    //
-    //        CHECK(std::transform_reduce(
-    //            std::cbegin(pointers),
-    //            std::cend(pointers),
-    //            std::cbegin(content),
-    //            true,
-    //            [](auto const lhs, auto const rhs) { return lhs && rhs; },
-    //            [](void* pointer, uint32_t const value)
-    //            {
-    //                auto* start = reinterpret_cast<uint32_t*>(pointer);
-    //                auto end = start + chunkSize1 / sizeof(uint32_t);
-    //                return std::all_of(start, end, [value](auto const val) { return val == value; });
-    //            }));
-    //    }
-    //
+
+    SECTION("destroys two pointers of same size.")
+    {
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+
+        alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
+        alpaka::wait(queue);
+
+        Buffer<bool> result(devHost, devAcc, 2U);
+        alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDivSingleThread,
+            IsValid{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(result.m_onDevice),
+            result.m_extents[0]);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(not result.m_onHost[0]);
+        CHECK(not result.m_onHost[1]);
+    }
+
+    SECTION("fills up all chunks in parallel and writes to them.")
+    {
+        Buffer<uint32_t> content(devHost, devAcc, accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]));
+        std::span<uint32_t> tmp(alpaka::getPtrNative(content.m_onHost), content.m_extents[0]);
+        std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
+        alpaka::memcpy(queue, content.m_onDevice, content.m_onHost);
+        alpaka::wait(queue);
+
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{pointers.m_extents[0]}, Idx{1}};
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            [](Acc const& acc, auto* accessBlock, auto* content, auto* pointers, auto chunkSize)
+            {
+                auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
+                pointers[idx[0]] = accessBlock->create(acc, chunkSize);
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx[0]]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                std::fill(begin, end, content[idx[0]]);
+            },
+            &accessBlock,
+            alpaka::getPtrNative(content.m_onDevice),
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
+
+        alpaka::wait(queue);
+
+        Buffer<bool> results(devHost, devAcc, pointers.m_extents[0]);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            [](Acc const& acc, auto* content, auto* pointers, auto* results, auto chunkSize)
+            {
+                auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx[0]]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                results[idx[0]] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx[0]]; });
+            },
+            alpaka::getPtrNative(content.m_onDevice),
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(results.m_onDevice),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+        alpaka::memcpy(queue, results.m_onHost, results.m_onDevice);
+        alpaka::wait(queue);
+
+
+        std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
+        CHECK(std::reduce(
+            std::cbegin(tmpResults),
+            std::cend(tmpResults),
+            true,
+            [](auto const lhs, auto const rhs) { return lhs && rhs; }));
+    }
+
     //    SECTION("destroys all pointers simultaneously.")
     //    {
     //        auto const allSlots = accessBlock.getAvailableSlots(chunkSize1);
