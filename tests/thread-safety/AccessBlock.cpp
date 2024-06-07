@@ -260,6 +260,44 @@ auto freeAllButOneOnFirstPage(auto& queue, auto& accessBlock, auto& pointers)
     return pointer1;
 }
 
+auto checkContent(
+    auto& devHost,
+    auto& devAcc,
+    auto& queue,
+    auto& pointers,
+    auto& content,
+    auto& workDiv,
+    auto const chunkSize)
+{
+    Buffer<bool> results(devHost, devAcc, pointers.m_extents[0]);
+    alpaka::exec<Acc>(
+        queue,
+        workDiv,
+        [](Acc const& acc, auto* content, auto* pointers, auto* results, auto chunkSize)
+        {
+            auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
+            auto* begin = reinterpret_cast<uint32_t*>(pointers[idx[0]]);
+            auto* end = begin + chunkSize / sizeof(uint32_t);
+            results[idx[0]] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx[0]]; });
+        },
+        alpaka::getPtrNative(content.m_onDevice),
+        alpaka::getPtrNative(pointers.m_onDevice),
+        alpaka::getPtrNative(results.m_onDevice),
+        chunkSize);
+    alpaka::wait(queue);
+    alpaka::memcpy(queue, results.m_onHost, results.m_onDevice);
+    alpaka::wait(queue);
+
+
+    std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
+    auto writtenCorrectly = std::reduce(
+        std::cbegin(tmpResults),
+        std::cend(tmpResults),
+        true,
+        [](auto const lhs, auto const rhs) { return lhs && rhs; });
+
+    return writtenCorrectly;
+}
 
 TEST_CASE("Threaded AccessBlock")
 {
@@ -458,32 +496,9 @@ TEST_CASE("Threaded AccessBlock")
 
         alpaka::wait(queue);
 
-        Buffer<bool> results(devHost, devAcc, pointers.m_extents[0]);
-        alpaka::exec<Acc>(
-            queue,
-            workDiv,
-            [](Acc const& acc, auto* content, auto* pointers, auto* results, auto chunkSize)
-            {
-                auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
-                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx[0]]);
-                auto* end = begin + chunkSize / sizeof(uint32_t);
-                results[idx[0]] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx[0]]; });
-            },
-            alpaka::getPtrNative(content.m_onDevice),
-            alpaka::getPtrNative(pointers.m_onDevice),
-            alpaka::getPtrNative(results.m_onDevice),
-            chunkSizes.m_onHost[0]);
-        alpaka::wait(queue);
-        alpaka::memcpy(queue, results.m_onHost, results.m_onDevice);
-        alpaka::wait(queue);
-
-
-        std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
-        CHECK(std::reduce(
-            std::cbegin(tmpResults),
-            std::cend(tmpResults),
-            true,
-            [](auto const lhs, auto const rhs) { return lhs && rhs; }));
+        auto writtenCorrectly
+            = checkContent(devHost, devAcc, queue, pointers, content, workDiv, chunkSizes.m_onHost[0]);
+        CHECK(writtenCorrectly);
     }
 
     //    SECTION("destroys all pointers simultaneously.")
