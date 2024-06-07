@@ -26,8 +26,6 @@
 */
 
 
-#include "catch2/generators/catch_generators.hpp"
-
 #include <algorithm>
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
@@ -52,7 +50,6 @@
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <span>
-#include <sstream>
 #include <tuple>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
@@ -645,51 +642,6 @@ TEST_CASE("Threaded AccessBlock")
     //        CHECK(std::unique(beginNonNull, std::end(pointers)) == std::end(pointers));
     //    }
     //
-    //    SECTION("can handle many different chunk sizes.")
-    //    {
-    //        auto const chunkSizes = []()
-    //        {
-    //            // We want to stay within chunked allocation, so we will always have at least one bit mask
-    //            present in the
-    //            // page.
-    //            std::vector<uint32_t> tmp(pageSize - BitMaskSize);
-    //            std::iota(std::begin(tmp), std::end(tmp), 1U);
-    //            return tmp;
-    //        }();
-    //
-    //        std::vector<void*> pointers(numPages);
-    //        auto runner = Runner<>{};
-    //
-    //        for(auto& pointer : pointers)
-    //        {
-    //            runner.run(
-    //                [&accessBlock, &pointer, &chunkSizes](Acc const& acc)
-    //                {
-    //                    // This is assumed to always succeed. We only need some valid pointer to formulate
-    //                    the loop nicely. pointer = accessBlock.create(acc, 1U); for(auto chunkSize :
-    //                    chunkSizes)
-    //                    {
-    //                        accessBlock.destroy(acc, pointer);
-    //                        pointer = nullptr;
-    //                        while(pointer == nullptr)
-    //                        {
-    //                            pointer = accessBlock.create(acc, chunkSize);
-    //                        }
-    //                    }
-    //                });
-    //        }
-    //
-    //        runner.join();
-    //
-    //        std::sort(std::begin(pointers), std::end(pointers));
-    //        CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
-    //    }
-
-    //    runner.join();
-
-    //    std::sort(std::begin(pointers), std::end(pointers));
-    //    CHECK(std::unique(std::begin(pointers), std::end(pointers)) == std::end(pointers));
-    //}
 
     SECTION("can handle oversubscription.")
     {
@@ -769,11 +721,9 @@ TEST_CASE("Threaded AccessBlock")
                 for(auto chunkSize : tmpChunkSizes)
                 {
                     accessBlock->destroy(acc, pointers[i]);
-                    // `.isValid()` is not thread-safe, so we use this direct assessment:
-                    std::stringstream ss;
-                    ss << i << ": " << chunkSize << ", " << pointers[i] << std::endl;
-                    std::cout << ss.str();
                     pointers[i] = nullptr;
+
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
                     while(pointers[i] == nullptr)
                     {
                         pointers[i] = accessBlock->create(acc, chunkSize);
