@@ -501,29 +501,40 @@ TEST_CASE("Threaded AccessBlock")
         CHECK(writtenCorrectly);
     }
 
-    //    SECTION("destroys all pointers simultaneously.")
-    //    {
-    //        auto const allSlots = accessBlock.getAvailableSlots(chunkSize1);
-    //        auto const allSlotsOfDifferentSize = accessBlock.getAvailableSlots(chunkSize2);
-    //        auto pointers = fillWith(accessBlock, chunkSize1);
-    //        auto runner = Runner{};
-    //
-    //        for(auto* pointer : pointers)
-    //        {
-    //            runner.run(destroy, pointer);
-    //        }
-    //        runner.join();
-    //
-    //        CHECK(std::transform_reduce(
-    //            std::cbegin(pointers),
-    //            std::cend(pointers),
-    //            true,
-    //            [](auto const lhs, auto const rhs) { return lhs && rhs; },
-    //            [&accessBlock](void* pointer) { return not accessBlock.isValid(acc, pointer); }));
-    //        CHECK(accessBlock.getAvailableSlots(chunkSize1) == allSlots);
-    //        CHECK(accessBlock.getAvailableSlots(chunkSize2) == allSlotsOfDifferentSize);
-    //    }
-    //
+    SECTION("destroys all pointers simultaneously.")
+    {
+        auto const allSlots = accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]);
+        auto const allSlotsOfDifferentSize = accessBlock.getAvailableSlots(chunkSizes.m_onHost[1]);
+        fillWith(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
+
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{pointers.m_extents[0]}, Idx{1}};
+        alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
+        alpaka::wait(queue);
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        Buffer<bool> result(devHost, devAcc, pointers.m_extents[0]);
+        alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDivSingleThread,
+            IsValid{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(result.m_onDevice),
+            result.m_extents[0]);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
+        alpaka::wait(queue);
+
+        std::span<bool> tmpResults(alpaka::getPtrNative(result.m_onHost), result.m_extents[0]);
+        CHECK(std::none_of(std::cbegin(tmpResults), std::cend(tmpResults), [](auto const val) { return val; }));
+
+        CHECK(accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]) == allSlots);
+        CHECK(accessBlock.getAvailableSlots(chunkSizes.m_onHost[1]) == allSlotsOfDifferentSize);
+    }
+
     //    SECTION("creates and destroys multiple times.")
     //    {
     //        std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSize1));
