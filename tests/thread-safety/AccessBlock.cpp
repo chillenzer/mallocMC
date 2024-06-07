@@ -36,6 +36,7 @@
 #include <alpaka/dim/DimIntegralConst.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
 #include <alpaka/kernel/Traits.hpp>
+#include <alpaka/mem/alloc/Traits.hpp>
 #include <alpaka/mem/buf/BufCpu.hpp>
 #include <alpaka/mem/view/Traits.hpp>
 #include <alpaka/mem/view/ViewPlainPtr.hpp>
@@ -47,8 +48,10 @@
 #include <catch2/generators/catch_generators_all.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <tuple>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
@@ -84,7 +87,11 @@ struct FillWith
             result + size,
             [&acc, &accessBlock, chunkSize]()
             {
-                void* pointer = accessBlock->create(acc, chunkSize);
+                void* pointer{nullptr};
+                while(pointer == nullptr)
+                {
+                    pointer = accessBlock->create(acc, chunkSize);
+                }
                 return pointer;
             });
     }
@@ -115,6 +122,20 @@ struct Create
     };
 };
 
+struct CreateUntilSuccess
+{
+    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
+    {
+        auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
+        auto& myPointer = pointers[idx[0]];
+        while(myPointer == nullptr)
+        {
+            myPointer = accessBlock->create(acc, chunkSize);
+        }
+    };
+};
+
+
 struct Destroy
 {
     auto operator()(Acc const& acc, auto* accessBlock, void** pointers) const
@@ -124,169 +145,255 @@ struct Destroy
     };
 };
 
-TEST_CASE("Threaded AccessBlock")
+struct IsValid
 {
-    AccessBlock<blockSize, pageSize> accessBlock{};
+    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, bool* results, size_t const size) const
+    {
+        std::span<void*> tmpPointers(pointers, size);
+        std::span<bool> tmpResults(results, size);
+        std::transform(
+            std::begin(tmpPointers),
+            std::end(tmpPointers),
+            std::begin(tmpResults),
+            [&acc, &accessBlock](auto pointer) { return accessBlock->isValid(acc, pointer); });
+    }
+};
 
-    auto const destroy = [&accessBlock](Acc const& acc, void* pointer) { accessBlock.destroy(acc, pointer); };
-    std::vector<uint32_t> const chunkSizes({32U, 512U});
-    uint32_t const& chunkSize1 = chunkSizes[0];
-    uint32_t const& chunkSize2 = chunkSizes[1];
-    std::vector<void*> pointers(accessBlock.getAvailableSlots(chunkSizes[0]), reinterpret_cast<void*>(1U));
-    auto& pointer1 = pointers[0];
-    auto& pointer2 = pointers[1];
 
+using Host = alpaka::AccCpuSerial<Dim, Idx>;
+
+template<typename TElem>
+struct Buffer
+{
+    alpaka::Dev<alpaka::Platform<Acc>> m_devAcc;
+    alpaka::Dev<alpaka::Platform<Host>> m_devHost;
+
+    alpaka::Vec<Dim, Idx> m_extents;
+
+    alpaka::Buf<Acc, TElem, Dim, Idx> m_onDevice;
+    alpaka::Buf<Host, TElem, Dim, Idx> m_onHost;
+
+
+    Buffer(auto devHost, auto devAcc, auto extents)
+        : m_devAcc{devAcc}
+        , m_devHost{devHost}
+        , m_extents{extents}
+        , m_onDevice(alpaka::allocBuf<TElem, Idx>(devAcc, m_extents))
+        , m_onHost(alpaka::allocBuf<TElem, Idx>(devHost, m_extents))
+    {
+    }
+};
+
+auto createChunkSizes(auto const& devHost, auto const& devAcc, auto& queue)
+{
+    Buffer<uint32_t> chunkSizes(devHost, devAcc, 2U);
+    chunkSizes.m_onHost[0] = 32U;
+    chunkSizes.m_onHost[1] = 512U;
+    alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
+    return chunkSizes;
+}
+
+auto createPointers(auto const& devHost, auto const& devAcc, auto& queue, size_t const size)
+{
+    Buffer<void*> pointers(devHost, devAcc, size);
+    std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+    std::fill(std::begin(tmp), std::end(tmp), reinterpret_cast<void*>(1U));
+    alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
+    return pointers;
+}
+
+auto setup()
+{
     alpaka::Platform<Acc> const platformAcc = {};
     alpaka::Platform<alpaka::AccCpuSerial<Dim, Idx>> const platformHost = {};
     alpaka::Dev<alpaka::Platform<Acc>> const devAcc(alpaka::getDevByIdx(platformAcc, 0));
-    alpaka::Dev<alpaka::Platform<Acc>> const devHost(alpaka::getDevByIdx(platformHost, 0));
-    alpaka::Queue<Acc, alpaka::Blocking> queue{devAcc};
+    alpaka::Dev<alpaka::Platform<Host>> const devHost(alpaka::getDevByIdx(platformHost, 0));
+    alpaka::Queue<Acc, alpaka::NonBlocking> queue{devAcc};
+    return std::make_tuple(platformAcc, platformHost, devAcc, devHost, queue);
+}
+
+auto fillWith(auto& queue, auto& accessBlock, auto const& chunkSize, auto& pointers)
+{
+    alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
+    alpaka::exec<Acc>(
+        queue,
+        workDivSingleThread,
+        FillWith{},
+        &accessBlock,
+        chunkSize,
+        alpaka::getPtrNative(pointers.m_onDevice),
+        pointers.m_extents[0]);
+    alpaka::wait(queue);
+    alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+    alpaka::wait(queue);
+}
+
+auto fillAllButOne(auto& queue, auto& accessBlock, auto const& chunkSize, auto& pointers)
+{
+    fillWith(queue, accessBlock, chunkSize, pointers);
+    auto* pointer1 = pointers.m_onHost[0];
+
+    // Destroy exactly one pointer (i.e. the first). This is non-destructive on the actual values in
+    // devPointers, so we don't need to wait for the copy before to finish.
+    alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
+    alpaka::exec<Acc>(queue, workDivSingleThread, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
+    alpaka::wait(queue);
+    return pointer1;
+}
+
+auto freeAllButOneOnFirstPage(auto& queue, auto& accessBlock, auto& pointers)
+{
+    std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+    std::sort(std::begin(tmp), std::end(tmp));
+    // This points to the first chunk of page 0.
+    auto* pointer1 = tmp[0];
+    alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
+
+    // Delete all other chunks on page 0.
+    alpaka::WorkDivMembers<Dim, Idx> const workDiv{
+        Idx{1},
+        Idx{pointers.m_extents[0] / accessBlock.numPages() - 1},
+        Idx{1}};
+    alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice) + 1U);
+    alpaka::wait(queue);
+    return pointer1;
+}
+
+
+TEST_CASE("Threaded AccessBlock")
+{
+    auto [platformAcc, platformHost, devAcc, devHost, queue] = setup();
+    AccessBlock<blockSize, pageSize> accessBlock{};
+
+    auto const chunkSizes = createChunkSizes(devHost, devAcc, queue);
+    auto pointers = createPointers(devHost, devAcc, queue, accessBlock.getAvailableSlots(chunkSizes.m_onHost[0]));
 
     SECTION("creates second memory somewhere else.")
     {
-        auto extents = alpaka::Vec<Dim, Idx>(2U);
-        alpaka::Buf<Acc, void*, Dim, Idx> devPointers(alpaka::allocBuf<void*, Idx>(devAcc, extents));
-
-        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
-        alpaka::exec<Acc>(queue, workDiv, Create{}, &accessBlock, alpaka::getPtrNative(devPointers), chunkSize1);
-        alpaka::wait(queue);
-
-        auto hostPointers = alpaka::createView(devHost, pointers.data(), extents);
-        alpaka::memcpy(queue, hostPointers, devPointers);
-        alpaka::wait(queue);
-
-        CHECK(pointer1 != pointer2);
-    }
-
-    SECTION("creates memory of different chunk size in different pages.")
-    {
-        auto extents = alpaka::Vec<Dim, Idx>(2U);
-        alpaka::Buf<Acc, void*, Dim, Idx> devPointers(alpaka::allocBuf<void*, Idx>(devAcc, extents));
-        alpaka::Buf<Acc, uint32_t, Dim, Idx> devChunkSizes(alpaka::allocBuf<uint32_t, Idx>(devAcc, extents));
-        alpaka::memcpy(queue, devChunkSizes, alpaka::createView(devHost, chunkSizes.data(), extents));
-        alpaka::wait(queue);
-
         alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
         alpaka::exec<Acc>(
             queue,
             workDiv,
             Create{},
             &accessBlock,
-            alpaka::getPtrNative(devPointers),
-            alpaka::getPtrNative(devChunkSizes));
-
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onDevice[0]);
         alpaka::wait(queue);
 
-        auto hostPointers = alpaka::createView(devHost, pointers.data(), extents);
-        alpaka::memcpy(queue, hostPointers, devPointers);
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        CHECK(accessBlock.pageIndex(pointer1) != accessBlock.pageIndex(pointer2));
+        CHECK(pointers.m_onHost[0] != pointers.m_onHost[1]);
+    }
+
+    SECTION("creates memory of different chunk size in different pages.")
+    {
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(chunkSizes.m_onDevice));
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(accessBlock.pageIndex(pointers.m_onHost[0]) != accessBlock.pageIndex(pointers.m_onHost[1]));
     }
 
     SECTION("creates partly for insufficient memory with same chunk size.")
     {
-        auto extents = alpaka::Vec<Dim, Idx>(accessBlock.getAvailableSlots(chunkSize1));
-        alpaka::Buf<Acc, void*, Dim, Idx> devPointers(alpaka::allocBuf<void*, Idx>(devAcc, extents));
-
-        alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
-        alpaka::exec<Acc>(
-            queue,
-            workDivSingleThread,
-            FillWith{},
-            &accessBlock,
-            chunkSize1,
-            alpaka::getPtrNative(devPointers),
-            extents[0]);
-        alpaka::wait(queue);
-
-        auto hostPointers = alpaka::createView(devHost, pointers.data(), pointers.size());
-        auto devPointersView = alpaka::createView(devHost, alpaka::getPtrNative(devPointers), pointers.size());
-        alpaka::memcpy(queue, hostPointers, devPointersView);
-        auto* pointer1 = hostPointers[0];
-        auto* pointer2 = hostPointers[1];
-        alpaka::wait(queue);
-
-        // Destroy exactly one pointer (i.e. the first). This is non-destructive on the actual values in devPointers,
-        // so we don't need to wait for the copy before to finish.
-        alpaka::exec<Acc>(queue, workDivSingleThread, Destroy{}, &accessBlock, alpaka::getPtrNative(devPointers));
-        alpaka::wait(queue);
+        auto lastFreeChunk = fillAllButOne(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
 
         // Okay, so here we start the actual test. The situation is the following:
         // There is a single chunk available.
         // We try to do two allocations.
         // So, we expect one to succeed and one to fail.
         alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
-        alpaka::exec<Acc>(queue, workDiv, Create{}, &accessBlock, alpaka::getPtrNative(devPointers), chunkSize1);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
         alpaka::wait(queue);
 
-        alpaka::memcpy(queue, hostPointers, devPointersView);
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
+
         CHECK(
-            ((hostPointers[0] == pointer1 and hostPointers[1] == nullptr)
-             or (hostPointers[1] == pointer1 and hostPointers[0] == nullptr)));
+            ((pointers.m_onHost[0] == lastFreeChunk and pointers.m_onHost[1] == nullptr)
+             or (pointers.m_onHost[1] == lastFreeChunk and pointers.m_onHost[0] == nullptr)));
     }
 
     SECTION("does not race between clean up and create.")
     {
-        for(auto chunkSize : chunkSizes)
-        {
-            auto extents = alpaka::Vec<Dim, Idx>(accessBlock.getAvailableSlots(chunkSize1));
-            alpaka::Buf<Acc, void*, Dim, Idx> devPointers(alpaka::allocBuf<void*, Idx>(devAcc, extents));
+        fillWith(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
+        auto freePage = accessBlock.pageIndex(freeAllButOneOnFirstPage(queue, accessBlock, pointers));
 
-            alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
-            alpaka::exec<Acc>(
-                queue,
-                workDivSingleThread,
-                FillWith{},
-                &accessBlock,
-                chunkSize1,
-                alpaka::getPtrNative(devPointers),
-                extents[0]);
-            alpaka::wait(queue);
+        // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
+        alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
 
-            auto hostPointers = alpaka::createView(devHost, pointers.data(), pointers.size());
-            auto devPointersView = alpaka::createView(devHost, alpaka::getPtrNative(devPointers), pointers.size());
-            alpaka::memcpy(queue, hostPointers, devPointersView);
-            alpaka::wait(queue);
+        alpaka::exec<Acc>(
+            queue,
+            workDivSingleThread,
+            Destroy{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice));
 
-            std::sort(std::begin(pointers), std::end(pointers));
-            // This points to the first chunk of page 0.
-            pointer1 = pointers[0];
-            // Delete all other chunks on page 0.
-            alpaka::WorkDivMembers<Dim, Idx> const workDiv{
-                Idx{1},
-                Idx{pointers.size() / accessBlock.numPages() - 1},
-                Idx{1}};
-            alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(devPointers) + 1U);
+        alpaka::exec<Acc>(
+            queue,
+            workDivSingleThread,
+            CreateUntilSuccess{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            chunkSizes.m_onHost[0]);
 
-            // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
-            alpaka::exec<Acc>(queue, workDivSingleThread, Destroy{}, &accessBlock, alpaka::getPtrNative(devPointers));
-            alpaka::exec<Acc>(
-                queue,
-                workDivSingleThread,
-                [&chunkSize](Acc const& acc, auto* accessBlock, void** pointer2)
-                {
-                    while(*pointer2 == nullptr)
-                    {
-                        *pointer2 = accessBlock->create(acc, chunkSize);
-                    }
-                },
-                &accessBlock,
-                alpaka::getPtrNative(devPointers));
+        alpaka::wait(queue);
 
-            CHECK(accessBlock.pageIndex(pointer1) == accessBlock.pageIndex(pointer2));
-        }
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(accessBlock.pageIndex(pointers.m_onHost[0]) == freePage);
     }
 
-    //    SECTION("destroys two pointers of different size.")
-    //    {
-    //        pointer1 = accessBlock.create(acc, chunkSize1);
-    //        pointer2 = accessBlock.create(acc, chunkSize2);
-    //        Runner{}.run(destroy, pointer1).run(destroy, pointer2).join();
-    //        CHECK(not accessBlock.isValid(acc, pointer1));
-    //        CHECK(not accessBlock.isValid(acc, pointer2));
-    //    }
+    SECTION("destroys two pointers of different size.")
+    {
+        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(chunkSizes.m_onDevice));
+        alpaka::wait(queue);
+
+        alpaka::exec<Acc>(queue, workDiv, Destroy{}, &accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
+        alpaka::wait(queue);
+
+        Buffer<bool> result(devHost, devAcc, 2U);
+        alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
+        alpaka::exec<Acc>(
+            queue,
+            workDivSingleThread,
+            IsValid{},
+            &accessBlock,
+            alpaka::getPtrNative(pointers.m_onDevice),
+            alpaka::getPtrNative(result.m_onDevice),
+            result.m_extents[0]);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(not result.m_onHost[0]);
+        CHECK(not result.m_onHost[1]);
+    }
     //
     //    SECTION("destroys two pointers of same size.")
     //    {
@@ -395,13 +502,14 @@ TEST_CASE("Threaded AccessBlock")
     //
     //    SECTION("creates and destroys multiple times with different sizes.")
     //    {
-    //        // CAUTION: This test can fail because we are currently using exactly as much space as is available but
-    //        with
-    //        // multiple different chunk sizes. That means that if one of them occupies more pages than it minimally
-    //        needs,
-    //        // the other one will lack pages to with their respective chunk size. This seems not to be a problem
-    //        currently
-    //        // but it might be more of a problem once we move to device and once we include proper scattering.
+    //        // CAUTION: This test can fail because we are currently using exactly as much space as is
+    //        available but with
+    //        // multiple different chunk sizes. That means that if one of them occupies more pages than it
+    //        minimally needs,
+    //        // the other one will lack pages to with their respective chunk size. This seems not to be a
+    //        problem currently
+    //        // but it might be more of a problem once we move to device and once we include proper
+    //        scattering.
     //
     //        // Make sure that num2 > num1.
     //        auto num1 = accessBlock.getAvailableSlots(chunkSize1);
@@ -444,8 +552,9 @@ TEST_CASE("Threaded AccessBlock")
     //        uint32_t oversubscriptionFactor = 2U;
     //        auto availableSlots = accessBlock.getAvailableSlots(chunkSize1);
     //
-    //        // This is oversubscribed but we will only hold keep less 1/oversubscriptionFactor of the memory in the
-    //        end. std::vector<void*> pointers(oversubscriptionFactor * availableSlots); auto runner = Runner<>{};
+    //        // This is oversubscribed but we will only hold keep less 1/oversubscriptionFactor of the memory
+    //        in the end. std::vector<void*> pointers(oversubscriptionFactor * availableSlots); auto runner =
+    //        Runner<>{};
     //
     //        for(size_t i = 0; i < pointers.size(); ++i)
     //        {
@@ -463,10 +572,11 @@ TEST_CASE("Threaded AccessBlock")
     //                        pointers[i] = nullptr;
     //                    }
     //
-    //                    // We only keep some of the memory. In particular, we keep one chunk less than is available,
-    //                    such
+    //                    // We only keep some of the memory. In particular, we keep one chunk less than is
+    //                    available, such
     //                    // that threads looking for memory after we've finished can still find some.
-    //                    while(pointers[i] == nullptr and i > (oversubscriptionFactor - 1) * availableSlots + 1)
+    //                    while(pointers[i] == nullptr and i > (oversubscriptionFactor - 1) * availableSlots +
+    //                    1)
     //                    {
     //                        pointers[i] = accessBlock.create(acc, chunkSize1);
     //                    }
@@ -475,11 +585,13 @@ TEST_CASE("Threaded AccessBlock")
     //
     //        runner.join();
     //
-    //        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
+    //        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning
+    //        should have a
     //        // nullptr.
     //        auto beginNonNull = std::begin(pointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
     //
-    //        CHECK(std::all_of(std::begin(pointers), beginNonNull, [](auto const pointer) { return pointer == nullptr;
+    //        CHECK(std::all_of(std::begin(pointers), beginNonNull, [](auto const pointer) { return pointer ==
+    //        nullptr;
     //        }));
     //
     //        std::sort(beginNonNull, std::end(pointers));
@@ -490,8 +602,8 @@ TEST_CASE("Threaded AccessBlock")
     //    {
     //        auto const chunkSizes = []()
     //        {
-    //            // We want to stay within chunked allocation, so we will always have at least one bit mask present in
-    //            the
+    //            // We want to stay within chunked allocation, so we will always have at least one bit mask
+    //            present in the
     //            // page.
     //            std::vector<uint32_t> tmp(pageSize - BitMaskSize);
     //            std::iota(std::begin(tmp), std::end(tmp), 1U);
@@ -506,8 +618,9 @@ TEST_CASE("Threaded AccessBlock")
     //            runner.run(
     //                [&accessBlock, &pointer, &chunkSizes](Acc const& acc)
     //                {
-    //                    // This is assumed to always succeed. We only need some valid pointer to formulate the loop
-    //                    nicely. pointer = accessBlock.create(acc, 1U); for(auto chunkSize : chunkSizes)
+    //                    // This is assumed to always succeed. We only need some valid pointer to formulate
+    //                    the loop nicely. pointer = accessBlock.create(acc, 1U); for(auto chunkSize :
+    //                    chunkSizes)
     //                    {
     //                        accessBlock.destroy(acc, pointer);
     //                        pointer = nullptr;
