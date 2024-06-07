@@ -76,8 +76,8 @@ TEST_CASE("Threaded BitMask")
                     }
                 }
             });
-        auto searchThread = std::jthread(
-            [&mask, &result]() { result = mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit(acc, mask); });
+        std::thread([&mask, &result]() { result = mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit(acc, mask); })
+            .join();
         std::this_thread::sleep_for(20ms);
         CHECK(result == firstFreeIndex);
         noiseThread.request_stop();
