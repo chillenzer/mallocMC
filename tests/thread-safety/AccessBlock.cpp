@@ -31,6 +31,8 @@
 #include <algorithm>
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
+#include <alpaka/acc/Tag.hpp>
+#include <alpaka/acc/TagAccIsEnabled.hpp>
 #include <alpaka/core/Common.hpp>
 #include <alpaka/dev/Traits.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>
@@ -45,6 +47,7 @@
 #include <alpaka/queue/Properties.hpp>
 #include <alpaka/queue/Traits.hpp>
 #include <alpaka/vec/Vec.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_all.hpp>
 #include <cstddef>
@@ -60,8 +63,6 @@ using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 
 using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
-// using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
-using Acc = alpaka::AccCpuThreads<Dim, Idx>;
 
 
 constexpr uint32_t pageSize = 1024;
@@ -113,13 +114,15 @@ struct ContentGenerator
 
 struct Create
 {
-    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
+    template<typename TAcc>
+    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
     {
         auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
         pointers[idx[0]] = accessBlock->create(acc, chunkSize);
     };
 
-    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, auto* chunkSizes) const
+    template<typename TAcc>
+    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, auto* chunkSizes) const
     {
         auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
         pointers[idx[0]] = accessBlock->create(acc, chunkSizes[idx[0]]);
@@ -128,7 +131,8 @@ struct Create
 
 struct CreateUntilSuccess
 {
-    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
+    template<typename TAcc>
+    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
     {
         auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
         auto& myPointer = pointers[idx[0]];
@@ -142,7 +146,8 @@ struct CreateUntilSuccess
 
 struct Destroy
 {
-    auto operator()(Acc const& acc, auto* accessBlock, void** pointers) const
+    template<typename TAcc>
+    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers) const
     {
         auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
         accessBlock->destroy(acc, pointers[idx[0]]);
@@ -151,7 +156,8 @@ struct Destroy
 
 struct IsValid
 {
-    auto operator()(Acc const& acc, auto* accessBlock, void** pointers, bool* results, size_t const size) const
+    template<typename TAcc>
+    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, bool* results, size_t const size) const
     {
         std::span<void*> tmpPointers(pointers, size);
         std::span<bool> tmpResults(results, size);
@@ -166,18 +172,18 @@ struct IsValid
 
 using Host = alpaka::AccCpuSerial<Dim, Idx>;
 
-template<typename TElem>
+template<typename TElem, typename TDevHost, typename TDevAcc>
 struct Buffer
 {
-    alpaka::Dev<alpaka::Platform<Acc>> m_devAcc;
-    alpaka::Dev<alpaka::Platform<Host>> m_devHost;
+    TDevAcc m_devAcc;
+    TDevHost m_devHost;
 
     alpaka::Vec<Dim, Idx> m_extents;
 
-    alpaka::Buf<Acc, TElem, Dim, Idx> m_onDevice;
-    alpaka::Buf<Host, TElem, Dim, Idx> m_onHost;
+    alpaka::Buf<TDevAcc, TElem, Dim, Idx> m_onDevice;
+    alpaka::Buf<TDevHost, TElem, Dim, Idx> m_onHost;
 
-    Buffer(auto devHost, auto devAcc, auto extents)
+    Buffer(TDevHost const& devHost, TDevAcc const& devAcc, auto extents)
         : m_devAcc{devAcc}
         , m_devHost{devHost}
         , m_extents{extents}
@@ -187,9 +193,15 @@ struct Buffer
     }
 };
 
+template<typename TElem, typename TDevHost, typename TDevAcc>
+auto makeBuffer(TDevHost const& devHost, TDevAcc const& devAcc, auto extents)
+{
+    return Buffer<TElem, TDevHost, TDevAcc>{devHost, devAcc, extents};
+}
+
 auto createChunkSizes(auto const& devHost, auto const& devAcc, auto& queue)
 {
-    Buffer<uint32_t> chunkSizes(devHost, devAcc, 2U);
+    auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, 2U);
     chunkSizes.m_onHost[0] = 32U;
     chunkSizes.m_onHost[1] = 512U;
     alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
@@ -198,23 +210,25 @@ auto createChunkSizes(auto const& devHost, auto const& devAcc, auto& queue)
 
 auto createPointers(auto const& devHost, auto const& devAcc, auto& queue, size_t const size)
 {
-    Buffer<void*> pointers(devHost, devAcc, size);
+    auto pointers = makeBuffer<void*>(devHost, devAcc, size);
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
     std::fill(std::begin(tmp), std::end(tmp), reinterpret_cast<void*>(1U));
     alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
     return pointers;
 }
 
+template<typename TAcc>
 auto setup()
 {
-    alpaka::Platform<Acc> const platformAcc = {};
+    alpaka::Platform<TAcc> const platformAcc = {};
     alpaka::Platform<alpaka::AccCpuSerial<Dim, Idx>> const platformHost = {};
-    alpaka::Dev<alpaka::Platform<Acc>> const devAcc(alpaka::getDevByIdx(platformAcc, 0));
+    alpaka::Dev<alpaka::Platform<TAcc>> const devAcc(alpaka::getDevByIdx(platformAcc, 0));
     alpaka::Dev<alpaka::Platform<Host>> const devHost(alpaka::getDevByIdx(platformHost, 0));
-    alpaka::Queue<Acc, alpaka::NonBlocking> queue{devAcc};
+    alpaka::Queue<TAcc, alpaka::NonBlocking> queue{devAcc};
     return std::make_tuple(platformAcc, platformHost, devAcc, devHost, queue);
 }
 
+using Acc = alpaka::AccCpuThreads<Dim, Idx>;
 auto fillWith(auto& queue, auto* accessBlock, auto const& chunkSize, auto& pointers)
 {
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
@@ -274,7 +288,7 @@ auto checkContent(
     auto& workDiv,
     auto const chunkSize)
 {
-    Buffer<bool> results(devHost, devAcc, pointers.m_extents[0]);
+    auto results = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
     alpaka::exec<Acc>(
         queue,
         workDiv,
@@ -308,7 +322,7 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
 {
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
     alpaka::wait(queue);
-    Buffer<size_t> result(devHost, devAcc, 1U);
+    auto result = makeBuffer<size_t>(devHost, devAcc, 1U);
     alpaka::wait(queue);
     alpaka::exec<Acc>(
         queue,
@@ -336,9 +350,10 @@ auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
     return mallocMC::indexOf(pointer, accessBlock, T_pageSize);
 }
 
-TEST_CASE("Threaded AccessBlock")
+TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 {
-    auto [platformAcc, platformHost, devAcc, devHost, queue] = setup();
+    using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
+    auto [platformAcc, platformHost, devAcc, devHost, queue] = setup<Acc>();
     auto accessBlockBuf = alpaka::allocBuf<MyAccessBlock, Idx>(devAcc, alpaka::Vec<Dim, Idx>{1U});
     alpaka::memset(queue, accessBlockBuf, 0x00);
     auto* accessBlock = alpaka::getPtrNative(accessBlockBuf);
@@ -458,7 +473,7 @@ TEST_CASE("Threaded AccessBlock")
         alpaka::exec<Acc>(queue, workDiv, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
         alpaka::wait(queue);
 
-        Buffer<bool> result(devHost, devAcc, 2U);
+        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
         alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
         alpaka::exec<Acc>(
             queue,
@@ -492,7 +507,7 @@ TEST_CASE("Threaded AccessBlock")
         alpaka::exec<Acc>(queue, workDiv, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
         alpaka::wait(queue);
 
-        Buffer<bool> result(devHost, devAcc, 2U);
+        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
         alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
         alpaka::exec<Acc>(
             queue,
@@ -513,7 +528,7 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("fills up all chunks in parallel and writes to them.")
     {
-        Buffer<uint32_t> content(
+        auto content = makeBuffer<uint32_t>(
             devHost,
             devAcc,
             getAvailableSlots(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
@@ -561,7 +576,7 @@ TEST_CASE("Threaded AccessBlock")
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        Buffer<bool> result(devHost, devAcc, pointers.m_extents[0]);
+        auto result = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
         alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
         alpaka::exec<Acc>(
             queue,
@@ -682,7 +697,7 @@ TEST_CASE("Threaded AccessBlock")
 
         // This is oversubscribed but we will only hold keep less than 1/oversubscriptionFactor of the memory in the
         // end.
-        Buffer<void*> manyPointers(devHost, devAcc, oversubscriptionFactor * availableSlots);
+        auto manyPointers = makeBuffer<void*>(devHost, devAcc, oversubscriptionFactor * availableSlots);
 
         alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{manyPointers.m_extents[0]}, Idx{1}};
 
@@ -734,7 +749,7 @@ TEST_CASE("Threaded AccessBlock")
 
     SECTION("can handle many different chunk sizes.")
     {
-        Buffer<uint32_t> chunkSizes(devHost, devAcc, pageSize - BitMaskSize);
+        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize - BitMaskSize);
         std::span<uint32_t> tmp(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
         std::iota(std::begin(tmp), std::end(tmp), 1U);
         alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);

@@ -4,14 +4,10 @@
 
 #pragma once
 
-#include <boost/version.hpp>
-
-#ifndef ALPAKA_DISABLE_ATOMIC_ATOMICREF
-#    define ALPAKA_DISABLE_ATOMIC_ATOMICREF
-#endif
-
 #include "alpaka/atomic/AtomicAtomicRef.hpp"
 #include "alpaka/atomic/AtomicStdLibLock.hpp"
+
+#include <boost/version.hpp>
 
 namespace alpaka
 {
