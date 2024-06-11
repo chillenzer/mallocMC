@@ -84,7 +84,7 @@ TEST_CASE("Threaded BitMask")
     }
 }
 #else
-TEST_CASE("Threaded BitMask", [!should_fail])
+TEST_CASE("Threaded BitMask", "[!shouldfail]")
 {
     FAIL("The Threaded BitMask regression test could not run because it is only available with the std::threads "
          "backend enabled.");
