@@ -248,11 +248,11 @@ auto setup()
     return std::make_tuple(platformAcc, platformHost, devAcc, devHost, queue);
 }
 
-using Acc = alpaka::AccCpuThreads<Dim, Idx>;
+template<typename TAcc>
 auto fillWith(auto& queue, auto* accessBlock, auto const& chunkSize, auto& pointers)
 {
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
-    alpaka::exec<Acc>(
+    alpaka::exec<TAcc>(
         queue,
         workDivSingleThread,
         FillWith{},
@@ -265,20 +265,21 @@ auto fillWith(auto& queue, auto* accessBlock, auto const& chunkSize, auto& point
     alpaka::wait(queue);
 }
 
+template<typename TAcc>
 auto fillAllButOne(auto& queue, auto* accessBlock, auto const& chunkSize, auto& pointers)
 {
-    fillWith(queue, accessBlock, chunkSize, pointers);
+    fillWith<TAcc>(queue, accessBlock, chunkSize, pointers);
     auto* pointer1 = pointers.m_onHost[0];
 
     // Destroy exactly one pointer (i.e. the first). This is non-destructive on the actual values in
     // devPointers, so we don't need to wait for the copy before to finish.
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
-    alpaka::exec<Acc>(queue, workDivSingleThread, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
+    alpaka::exec<TAcc>(queue, workDivSingleThread, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice));
     alpaka::wait(queue);
     return pointer1;
 }
 
-template<size_t T_blockSize, uint32_t T_pageSize>
+template<typename TAcc, size_t T_blockSize, uint32_t T_pageSize>
 auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto& pointers)
 {
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
@@ -294,11 +295,12 @@ auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>*
         Idx{1},
         Idx{pointers.m_extents[0] / AccessBlock<T_blockSize, T_pageSize>::numPages() - 1},
         Idx{1}};
-    alpaka::exec<Acc>(queue, workDiv, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice) + 1U);
+    alpaka::exec<TAcc>(queue, workDiv, Destroy{}, accessBlock, alpaka::getPtrNative(pointers.m_onDevice) + 1U);
     alpaka::wait(queue);
     return pointer1;
 }
 
+template<typename TAcc>
 auto checkContent(
     auto& devHost,
     auto& devAcc,
@@ -309,10 +311,10 @@ auto checkContent(
     auto const chunkSize)
 {
     auto results = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
-    alpaka::exec<Acc>(
+    alpaka::exec<TAcc>(
         queue,
         workDiv,
-        [](Acc const& acc, auto* content, auto* pointers, auto* results, auto chunkSize)
+        [](TAcc const& acc, auto* content, auto* pointers, auto* results, auto chunkSize)
         {
             auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
             auto* begin = reinterpret_cast<uint32_t*>(pointers[idx[0]]);
@@ -338,16 +340,17 @@ auto checkContent(
     return writtenCorrectly;
 }
 
+template<typename TAcc>
 auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto const& devAcc, auto chunkSize)
 {
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
     alpaka::wait(queue);
     auto result = makeBuffer<size_t>(devHost, devAcc, 1U);
     alpaka::wait(queue);
-    alpaka::exec<Acc>(
+    alpaka::exec<TAcc>(
         queue,
         workDivSingleThread,
-        [](Acc const& acc, auto* accessBlock, auto chunkSize, auto* result)
+        [](TAcc const& /*acc*/, auto* accessBlock, auto chunkSize, auto* result)
         { *result = accessBlock->getAvailableSlots(chunkSize); },
         accessBlock,
         chunkSize,
@@ -391,7 +394,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         devHost,
         devAcc,
         queue,
-        getAvailableSlots(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
+        getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
     alpaka::wait(queue);
 
     SECTION("creates second memory somewhere else.")
