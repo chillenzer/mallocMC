@@ -83,7 +83,7 @@ using MyAccessBlock = AccessBlock<blockSize, pageSize>;
 struct FillWith
 {
     template<typename TAcc, size_t T_blockSize, uint32_t T_pageSize>
-    auto operator()(
+    ALPAKA_FN_ACC auto operator()(
         TAcc const& acc,
         AccessBlock<T_blockSize, T_pageSize>* accessBlock,
         uint32_t const chunkSize,
@@ -109,7 +109,7 @@ struct ContentGenerator
 {
     uint32_t counter{0U};
 
-    auto operator()() -> uint32_t
+    ALPAKA_FN_ACC auto operator()() -> uint32_t
     {
         return counter++;
     }
@@ -121,13 +121,13 @@ struct span
     T* pointer;
     size_t size;
 
-    auto operator[](size_t index) -> T&
+    ALPAKA_FN_ACC auto operator[](size_t index) -> T&
     {
         return pointer[index];
     }
 };
 
-auto forAll(auto const& acc, auto size, auto functor)
+ALPAKA_FN_ACC auto forAll(auto const& acc, auto size, auto functor)
 {
     auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
     auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
@@ -144,13 +144,13 @@ auto forAll(auto const& acc, auto size, auto functor)
 struct Create
 {
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
         forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSize); });
     };
 
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
+    ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
     {
         forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSizes[idx]); });
     };
@@ -159,7 +159,7 @@ struct Create
 struct CreateUntilSuccess
 {
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
         forAll(
             acc,
@@ -178,7 +178,7 @@ struct CreateUntilSuccess
 struct Destroy
 {
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers) const
+    ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers) const
     {
         forAll(acc, pointers.size, [&](auto idx) { accessBlock->destroy(acc, pointers[idx]); });
     };
@@ -187,7 +187,12 @@ struct Destroy
 struct IsValid
 {
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, bool* results, size_t const size) const
+    ALPAKA_FN_ACC auto operator()(
+        TAcc const& acc,
+        auto* accessBlock,
+        void** pointers,
+        bool* results,
+        size_t const size) const
     {
         std::span<void*> tmpPointers(pointers, size);
         std::span<bool> tmpResults(results, size);

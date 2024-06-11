@@ -33,7 +33,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <optional>
 #include <unistd.h>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -47,32 +46,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     public:
         // this is needed to instantiate this in-place in an std::optional
-        PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize) : _data(data), _chunkSize(chunkSize)
+        ALPAKA_FN_ACC PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize)
+            : _data(data)
+            , _chunkSize(chunkSize)
         {
         }
 
-        static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
+        ALPAKA_FN_ACC static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
         {
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
-        [[nodiscard]] constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
             return BitMaskSize * T_pageSize / (static_cast<size_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
         }
 
-        [[nodiscard]] auto numChunks() const -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] auto numChunks() const -> uint32_t
         {
             return numChunks(_chunkSize);
         }
 
-        [[nodiscard]] auto operator[](size_t index) const -> void*
+        ALPAKA_FN_ACC [[nodiscard]] auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
 
         template<typename TAcc>
-        auto create(TAcc const& acc) -> void*
+        ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
             auto const index = firstFreeBit(acc, field, numChunks());
@@ -80,7 +81,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        auto destroy(TAcc const& acc, void* pointer) -> void
+        ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* pointer) -> void
         {
             if(_chunkSize == 0)
             {
@@ -100,7 +101,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
 
-        auto cleanup() -> void
+        ALPAKA_FN_ACC auto cleanup() -> void
         {
             // This method is not thread-safe by itself. But it is supposed to be called after acquiring a "lock" in
             // the form of setting the filling level, so that's fine.
@@ -108,7 +109,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        auto isValid(TAcc const& acc, void* pointer) -> bool
+        ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
         {
             // This function is neither thread-safe nor particularly performant. It is supposed to be used in tests and
             // debug mode.
@@ -117,7 +118,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     private:
         template<typename TAcc>
-        auto isValid(TAcc const& acc, uint32_t const chunkIndex) -> bool
+        ALPAKA_FN_ACC auto isValid(TAcc const& acc, uint32_t const chunkIndex) -> bool
         {
             if(chunkIndex >= numChunks())
             {
@@ -138,37 +139,37 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     public:
         template<typename TAcc>
-        auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
+        ALPAKA_FN_ACC auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
         {
             return bitField().get(acc, chunkIndex);
         }
 
-        [[nodiscard]] auto bitField() const -> BitFieldFlat
+        ALPAKA_FN_ACC [[nodiscard]] auto bitField() const -> BitFieldFlat
         {
             return BitFieldFlat{{bitFieldStart(), ceilingDivision(numChunks(), BitMaskSize)}};
         }
 
-        [[nodiscard]] auto bitFieldStart() const -> BitMask*
+        ALPAKA_FN_ACC [[nodiscard]] auto bitFieldStart() const -> BitMask*
         {
             return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
         }
 
-        [[nodiscard]] auto bitFieldSize() const -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] auto bitFieldSize() const -> uint32_t
         {
             return bitFieldSize(_chunkSize);
         }
 
-        [[nodiscard]] static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
         {
             return sizeof(BitMask) * ceilingDivision(numChunks(chunkSize), BitMaskSize);
         }
 
-        [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
         {
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }
