@@ -57,6 +57,7 @@
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <span>
 #include <tuple>
+#include <type_traits>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
@@ -112,13 +113,32 @@ struct ContentGenerator
     }
 };
 
+template<typename T>
+struct span
+{
+    T* pointer;
+    size_t size;
+
+    auto operator[](size_t index) -> T&
+    {
+        return pointer[index];
+    }
+};
+
 struct Create
 {
     template<typename TAcc>
-    auto operator()(TAcc const& acc, auto* accessBlock, void** pointers, auto chunkSize) const
+    auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
-        auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);
-        pointers[idx[0]] = accessBlock->create(acc, chunkSize);
+        auto const idx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+        auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
+        for(auto i = 0; i < numElements; ++i)
+        {
+            if(idx + i < pointers.size)
+            {
+                pointers[idx + i] = accessBlock->create(acc, chunkSize);
+            }
+        }
     };
 
     template<typename TAcc>
@@ -350,6 +370,15 @@ auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
     return mallocMC::indexOf(pointer, accessBlock, T_pageSize);
 }
 
+template<typename TAcc>
+auto createWorkDiv(auto const numElements) -> alpaka::WorkDivMembers<Dim, Idx>
+{
+    if constexpr(std::is_same_v<alpaka::AccToTag<TAcc>, alpaka::TagCpuSerial>)
+    {
+        return {{1U}, {1U}, {numElements}};
+    }
+}
+
 TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 {
     using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
@@ -367,13 +396,14 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("creates second memory somewhere else.")
     {
-        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{2}, Idx{1}};
+        size_t const size = 2U;
+        auto const workDiv = createWorkDiv<Acc>(size);
         alpaka::exec<Acc>(
             queue,
             workDiv,
             Create{},
             accessBlock,
-            alpaka::getPtrNative(pointers.m_onDevice),
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
             chunkSizes.m_onDevice[0]);
         alpaka::wait(queue);
 
