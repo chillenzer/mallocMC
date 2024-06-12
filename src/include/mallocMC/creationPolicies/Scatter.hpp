@@ -200,6 +200,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             return nullptr;
         }
+
+        ALPAKA_FN_ACC static auto noFreePageFound()
+        {
+            return numPages();
+        }
+
         template<typename TAcc>
         ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
@@ -216,30 +222,27 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            void* pointer{nullptr};
-            auto index = numPages();
-            while(index == numPages())
+            auto index = choosePage(acc, numBytes, startIndex);
+            void* pointer = index != noFreePageFound()
+                ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
+                : nullptr;
+
+            while(index != noFreePageFound() and pointer == nullptr)
             {
+                leavePage(acc, index);
+                startIndex = index + 1;
                 index = choosePage(acc, numBytes, startIndex);
                 pointer = PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc);
-                if(pointer == nullptr)
-                {
-                    leavePage(acc, index);
-                    startIndex = index + 1;
-                }
-                else
-                {
-                    break;
-                }
             }
+
             return pointer;
         }
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
         {
-            auto resultingIndex = numPages();
-            for(size_t i = 0; i < numPages() && resultingIndex == numPages(); ++i)
+            auto resultingIndex = noFreePageFound();
+            for(size_t i = 0; i < numPages() && resultingIndex == noFreePageFound(); ++i)
             {
                 // TODO(lenz): Check if an "if" statement would yield better performance here.
                 auto index = (startIndex + i) % numPages();
