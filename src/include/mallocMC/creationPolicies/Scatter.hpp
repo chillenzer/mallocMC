@@ -102,11 +102,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes) -> void*
         {
+            void* pointer{nullptr};
             if(numBytes >= T_pageSize)
             {
-                return createOverMultiplePages(numBytes);
+                pointer = createOverMultiplePages(numBytes);
             }
-            return createChunk(acc, numBytes);
+            else
+            {
+                pointer = createChunk(acc, numBytes);
+            }
+            return pointer;
         }
 
         template<typename TAcc>
@@ -211,33 +216,40 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            while(auto page = choosePage(acc, numBytes, startIndex))
+            void* pointer{nullptr};
+            auto index = numPages();
+            while(index == numPages())
             {
-                auto pointer = page.value().create(acc);
-                if(pointer != nullptr)
+                index = choosePage(acc, numBytes, startIndex);
+                pointer = PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc);
+                if(pointer == nullptr)
                 {
-                    return pointer;
+                    leavePage(acc, index);
+                    startIndex = index + 1;
                 }
-                leavePage(acc, pageIndex(page.value()[0]));
-                startIndex = pageIndex(page.value()[0]) + 1;
+                else
+                {
+                    break;
+                }
             }
-            return nullptr;
+            return pointer;
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0)
-            -> std::optional<PageInterpretation<T_pageSize>>
+        ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
         {
-            for(size_t i = 0; i < numPages(); ++i)
+            auto resultingIndex = numPages();
+            for(size_t i = 0; i < numPages() && resultingIndex == numPages(); ++i)
             {
                 // TODO(lenz): Check if an "if" statement would yield better performance here.
                 auto index = (startIndex + i) % numPages();
+
                 if(thisPageIsAppropriate(acc, index, numBytes))
                 {
-                    return std::optional<PageInterpretation<T_pageSize>>{std::in_place_t{}, pages[index], numBytes};
+                    resultingIndex = index;
                 }
             }
-            return std::nullopt;
+            return resultingIndex;
         }
 
         template<typename TAcc>
