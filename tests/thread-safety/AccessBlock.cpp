@@ -270,13 +270,9 @@ auto createWorkDiv(auto const& devAcc, auto const numElements) -> alpaka::WorkDi
     {
         return {{1U}, {1U}, {numElements}};
     }
-    else if constexpr(std::is_same_v<alpaka::Platform<TAcc>, alpaka::PlatformCpu>)
-    {
-        return alpaka::getValidWorkDiv<TAcc>(devAcc, {numElements}, {1U});
-    }
     else
     {
-        throw "There is no work div implemented for this accelerator.";
+        return alpaka::getValidWorkDiv<TAcc>(devAcc, {numElements}, {1U});
     }
 }
 
@@ -387,6 +383,14 @@ auto checkContent(
     return writtenCorrectly;
 }
 
+struct GetAvailableSlots
+{
+    ALPAKA_FN_ACC auto operator()(auto const& /*acc*/, auto* accessBlock, auto chunkSize, auto* result) const
+    {
+        *result = accessBlock->getAvailableSlots(chunkSize);
+    };
+};
+
 template<typename TAcc>
 auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto const& devAcc, auto chunkSize)
 {
@@ -397,8 +401,7 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
     alpaka::exec<TAcc>(
         queue,
         workDivSingleThread,
-        [](TAcc const& /*acc*/, auto* accessBlock, auto chunkSize, auto* result)
-        { *result = accessBlock->getAvailableSlots(chunkSize); },
+        GetAvailableSlots{},
         accessBlock,
         chunkSize,
         alpaka::getPtrNative(result.m_onDevice));
@@ -426,6 +429,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
     auto [platformAcc, platformHost, devAcc, devHost, queue] = setup<Acc>();
     auto accessBlockBuf = alpaka::allocBuf<MyAccessBlock, Idx>(devAcc, alpaka::Vec<Dim, Idx>{1U});
     alpaka::memset(queue, accessBlockBuf, 0x00);
+    alpaka::wait(queue);
     auto* accessBlock = alpaka::getPtrNative(accessBlockBuf);
     auto const chunkSizes = createChunkSizes(devHost, devAcc, queue);
     auto pointers = createPointers(
@@ -445,7 +449,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
-            chunkSizes.m_onDevice[0]);
+            chunkSizes.m_onHost[0]);
         alpaka::wait(queue);
 
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
