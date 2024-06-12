@@ -40,8 +40,6 @@
 #include <iterator>
 #include <numeric>
 #include <optional>
-#include <stdexcept>
-#include <thread>
 #include <vector>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
