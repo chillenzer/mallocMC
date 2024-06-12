@@ -55,6 +55,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
 #include <span>
@@ -334,6 +335,25 @@ auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>*
     alpaka::wait(queue);
     return pointer1;
 }
+struct CheckContent
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* content, span<void*> pointers, auto* results, auto chunkSize)
+        const
+    {
+        auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+        auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
+        for(auto i = 0; i < numElements; ++i)
+        {
+            auto idx = idx0 + i;
+            if(idx < pointers.size)
+            {
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                results[idx] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx]; });
+            }
+        }
+    }
+};
 
 template<typename TAcc>
 auto checkContent(
@@ -349,21 +369,7 @@ auto checkContent(
     alpaka::exec<TAcc>(
         queue,
         workDiv,
-        [](TAcc const& acc, auto* content, span<void*> pointers, auto* results, auto chunkSize)
-        {
-            auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-            auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-            for(auto i = 0; i < numElements; ++i)
-            {
-                auto idx = idx0 + i;
-                if(idx < pointers.size)
-                {
-                    auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
-                    auto* end = begin + chunkSize / sizeof(uint32_t);
-                    results[idx] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx]; });
-                }
-            }
-        },
+        CheckContent{},
         alpaka::getPtrNative(content.m_onDevice),
         span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
         alpaka::getPtrNative(results.m_onDevice),
@@ -374,11 +380,7 @@ auto checkContent(
 
 
     std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
-    auto writtenCorrectly = std::reduce(
-        std::cbegin(tmpResults),
-        std::cend(tmpResults),
-        true,
-        [](auto const lhs, auto const rhs) { return lhs && rhs; });
+    auto writtenCorrectly = std::reduce(std::cbegin(tmpResults), std::cend(tmpResults), true, std::multiplies<bool>{});
 
     return writtenCorrectly;
 }
@@ -422,7 +424,30 @@ auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
     // pointer to the access block. Not sure if this is reliable if the pointers are device pointers.
     return mallocMC::indexOf(pointer, accessBlock, T_pageSize);
 }
-
+struct FillAllUpAndWriteToThem
+{
+    ALPAKA_FN_ACC auto operator()(
+        auto const& acc,
+        auto* accessBlock,
+        auto* content,
+        span<void*> pointers,
+        auto chunkSize) const
+    {
+        auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+        auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
+        for(auto i = 0; i < numElements; ++i)
+        {
+            auto idx = idx0 + i;
+            if(idx < pointers.size)
+            {
+                pointers[idx] = accessBlock->create(acc, chunkSize);
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                std::fill(begin, end, content[idx]);
+            }
+        }
+    }
+};
 TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 {
     using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
@@ -633,22 +658,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::exec<Acc>(
             queue,
             workDiv,
-            [](Acc const& acc, auto* accessBlock, auto* content, span<void*> pointers, auto chunkSize)
-            {
-                auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-                auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-                for(auto i = 0; i < numElements; ++i)
-                {
-                    auto idx = idx0 + i;
-                    if(idx < pointers.size)
-                    {
-                        pointers[idx] = accessBlock->create(acc, chunkSize);
-                        auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
-                        auto* end = begin + chunkSize / sizeof(uint32_t);
-                        std::fill(begin, end, content[idx]);
-                    }
-                }
-            },
+            FillAllUpAndWriteToThem{},
             accessBlock,
             alpaka::getPtrNative(content.m_onDevice),
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
