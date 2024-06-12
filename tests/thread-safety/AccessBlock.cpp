@@ -448,6 +448,120 @@ struct FillAllUpAndWriteToThem
         }
     }
 };
+struct CreateAndDestroMultipleTimes
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    {
+        forAll(
+            acc,
+            pointers.size,
+            [&](auto idx)
+            {
+                for(uint32_t j = 0; j < idx; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
+                }
+                while(pointers[idx] == nullptr)
+                {
+                    pointers[idx] = accessBlock->create(acc, chunkSize);
+                }
+            });
+    }
+};
+struct CreateAndDestroyWithDifferentSizes
+{
+    size_t num2{};
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
+    {
+        forAll(
+            acc,
+            pointers.size,
+            [&](auto idx)
+            {
+                auto myChunkSize = idx % 2 == 1 and idx <= num2 ? chunkSizes[1] : chunkSizes[0];
+                for(uint32_t j = 0; j < idx; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, myChunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
+                }
+                while(pointers[idx] == nullptr)
+                {
+                    pointers[idx] = accessBlock->create(acc, myChunkSize);
+                }
+            });
+    }
+};
+struct OversubscribedCreation
+{
+    uint32_t oversubscriptionFactor{};
+    size_t availableSlots{};
+
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    {
+        forAll(
+            acc,
+            pointers.size,
+            [&](auto idx)
+            {
+                for(uint32_t j = 0; j < idx + 1; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
+                }
+
+                // We only keep some of the memory. In particular, we keep one chunk less than is available,
+                // such that threads looking for memory after we've finished can still find some.
+                while(pointers[idx] == nullptr and idx > (oversubscriptionFactor - 1) * availableSlots + 1)
+                {
+                    pointers[idx] = accessBlock->create(acc, chunkSize);
+                }
+            });
+    }
+};
+
+struct CreateAllChunkSizes
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
+    {
+        forAll(
+            acc,
+            pointers.size,
+            [&](auto i)
+            {
+                pointers[i] = accessBlock->create(acc, 1U);
+
+                std::span<uint32_t> tmpChunkSizes(chunkSizes, pageSize - BitMaskSize);
+                for(auto chunkSize : tmpChunkSizes)
+                {
+                    accessBlock->destroy(acc, pointers[i]);
+                    pointers[i] = nullptr;
+
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[i] == nullptr)
+                    {
+                        pointers[i] = accessBlock->create(acc, chunkSize);
+                    }
+                }
+            });
+    }
+};
+
 TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 {
     using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
@@ -721,29 +835,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::exec<Acc>(
             queue,
             workDiv,
-            [](Acc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize)
-            {
-                forAll(
-                    acc,
-                    pointers.size,
-                    [&](auto idx)
-                    {
-                        for(uint32_t j = 0; j < idx; ++j)
-                        {
-                            // `.isValid()` is not thread-safe, so we use this direct assessment:
-                            while(pointers[idx] == nullptr)
-                            {
-                                pointers[idx] = accessBlock->create(acc, chunkSize);
-                            }
-                            accessBlock->destroy(acc, pointers[idx]);
-                            pointers[idx] = nullptr;
-                        }
-                        while(pointers[idx] == nullptr)
-                        {
-                            pointers[idx] = accessBlock->create(acc, chunkSize);
-                        }
-                    });
-            },
+            CreateAndDestroMultipleTimes{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
             chunkSizes.m_onHost[0]);
@@ -778,30 +870,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::exec<Acc>(
             queue,
             workDiv,
-            [num2](Acc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes)
-            {
-                forAll(
-                    acc,
-                    pointers.size,
-                    [&](auto idx)
-                    {
-                        auto myChunkSize = idx % 2 == 1 and idx <= num2 ? chunkSizes[1] : chunkSizes[0];
-                        for(uint32_t j = 0; j < idx; ++j)
-                        {
-                            // `.isValid()` is not thread-safe, so we use this direct assessment:
-                            while(pointers[idx] == nullptr)
-                            {
-                                pointers[idx] = accessBlock->create(acc, myChunkSize);
-                            }
-                            accessBlock->destroy(acc, pointers[idx]);
-                            pointers[idx] = nullptr;
-                        }
-                        while(pointers[idx] == nullptr)
-                        {
-                            pointers[idx] = accessBlock->create(acc, myChunkSize);
-                        }
-                    });
-            },
+            CreateAndDestroyWithDifferentSizes{num2},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
             alpaka::getPtrNative(chunkSizes.m_onDevice));
@@ -814,7 +883,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         std::sort(std::begin(tmpPointers), std::end(tmpPointers));
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
-
 
     SECTION("can handle oversubscription.")
     {
@@ -831,50 +899,12 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::exec<Acc>(
             queue,
             workDiv,
-            [oversubscriptionFactor,
-             availableSlots](Acc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize)
-            {
-                forAll(
-                    acc,
-                    pointers.size,
-                    [&](auto idx)
-                    {
-                        for(uint32_t j = 0; j < idx + 1; ++j)
-                        {
-                            // `.isValid()` is not thread-safe, so we use this direct assessment:
-                            while(pointers[idx] == nullptr)
-                            {
-                                if constexpr(std::is_same_v<Acc, alpaka::AccCpuOmp2Threads<Dim, Idx>>)
-                                {
-                                    std::cout << "First:" << idx << std::endl;
-                                }
-                                pointers[idx] = accessBlock->create(acc, chunkSize);
-                            }
-                            accessBlock->destroy(acc, pointers[idx]);
-                            pointers[idx] = nullptr;
-                        }
-
-                        // We only keep some of the memory. In particular, we keep one chunk less than is available,
-                        // such that threads looking for memory after we've finished can still find some.
-                        while(pointers[idx] == nullptr and idx > (oversubscriptionFactor - 1) * availableSlots + 1)
-                        {
-                            if constexpr(std::is_same_v<Acc, alpaka::AccCpuOmp2Threads<Dim, Idx>>)
-                            {
-                                std::cout << "Second:" << idx << std::endl;
-                            }
-                            pointers[idx] = accessBlock->create(acc, chunkSize);
-                        }
-                    });
-            },
+            OversubscribedCreation{oversubscriptionFactor, availableSlots},
             accessBlock,
             span<void*>(alpaka::getPtrNative(manyPointers.m_onDevice), manyPointers.m_extents[0]),
             chunkSizes.m_onHost[0]);
         alpaka::wait(queue);
 
-        if constexpr(std::is_same_v<Acc, alpaka::AccCpuOmp2Threads<Dim, Idx>>)
-        {
-            std::cout << "Done" << std::endl;
-        }
         alpaka::memcpy(queue, manyPointers.m_onHost, manyPointers.m_onDevice);
         alpaka::wait(queue);
 
@@ -905,29 +935,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::exec<Acc>(
             queue,
             workDiv,
-            [](Acc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes)
-            {
-                forAll(
-                    acc,
-                    pointers.size,
-                    [&](auto i)
-                    {
-                        pointers[i] = accessBlock->create(acc, 1U);
-
-                        std::span<uint32_t> tmpChunkSizes(chunkSizes, pageSize - BitMaskSize);
-                        for(auto chunkSize : tmpChunkSizes)
-                        {
-                            accessBlock->destroy(acc, pointers[i]);
-                            pointers[i] = nullptr;
-
-                            // `.isValid()` is not thread-safe, so we use this direct assessment:
-                            while(pointers[i] == nullptr)
-                            {
-                                pointers[i] = accessBlock->create(acc, chunkSize);
-                            }
-                        }
-                    });
-            },
+            CreateAllChunkSizes{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), MyAccessBlock::numPages()),
             alpaka::getPtrNative(chunkSizes.m_onDevice));
