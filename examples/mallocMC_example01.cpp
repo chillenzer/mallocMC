@@ -103,11 +103,12 @@ auto main() -> int
     // create arrays of arrays on the device
     {
         auto createArrayPointers
-            = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, ScatterAllocator::AllocatorHandle allocHandle) {
-                  arA = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-                  arB = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-                  arC = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-              };
+            = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, ScatterAllocator::AllocatorHandle allocHandle)
+        {
+            arA<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
+            arB<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
+            arC<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
+        };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
             queue,
@@ -121,17 +122,18 @@ auto main() -> int
 
     // fill 2 of them all with ascending values
     {
-        auto fillArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, ScatterAllocator::AllocatorHandle allocHandle) {
+        auto fillArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, ScatterAllocator::AllocatorHandle allocHandle)
+        {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
-            arA[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arB[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arC[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
+            arA<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
+            arB<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
+            arC<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
 
             for(int i = 0; i < length; ++i)
             {
-                arA[id][i] = static_cast<int>(id * length + i);
-                arB[id][i] = static_cast<int>(id * length + i);
+                arA<Acc>[id][i] = static_cast<int>(id * length + i);
+                arB<Acc>[id][i] = static_cast<int>(id * length + i);
             }
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
@@ -145,14 +147,15 @@ auto main() -> int
     {
         auto sumsBufferAcc = alpaka::allocBuf<int, Idx>(dev, Idx{block * grid});
 
-        auto addArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, int* sums) {
+        auto addArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, int* sums)
+        {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             sums[id] = 0;
             for(int i = 0; i < length; ++i)
             {
-                arC[id][i] = arA[id][i] + arB[id][i];
-                sums[id] += arC[id][i];
+                arC<Acc>[id][i] = arA<Acc>[id][i] + arB<Acc>[id][i];
+                sums[id] += arC<Acc>[id][i];
             }
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
@@ -184,21 +187,23 @@ auto main() -> int
     }
 
     {
-        auto freeArrays = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle) {
+        auto freeArrays = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-            allocHandle.free(acc, arA[id]);
-            allocHandle.free(acc, arB[id]);
-            allocHandle.free(acc, arC[id]);
+            allocHandle.free(acc, arA<Acc>[id]);
+            allocHandle.free(acc, arB<Acc>[id]);
+            allocHandle.free(acc, arC<Acc>[id]);
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
         alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, freeArrays, scatterAlloc.getAllocatorHandle()));
     }
 
     {
-        auto freeArrayPointers = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle) {
-            allocHandle.free(acc, arA);
-            allocHandle.free(acc, arB);
-            allocHandle.free(acc, arC);
+        auto freeArrayPointers = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        {
+            allocHandle.free(acc, arA<Acc>);
+            allocHandle.free(acc, arB<Acc>);
+            allocHandle.free(acc, arC<Acc>);
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(

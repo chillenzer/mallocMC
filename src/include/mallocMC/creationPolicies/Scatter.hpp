@@ -34,6 +34,11 @@
 #include <algorithm>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/core/Common.hpp>
+#include <alpaka/kernel/Traits.hpp>
+#include <alpaka/mem/view/Traits.hpp>
+#include <alpaka/mem/view/ViewPlainPtr.hpp>
+#include <alpaka/vec/Vec.hpp>
+#include <alpaka/workdiv/WorkDivMembers.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -361,3 +366,47 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
+
+namespace mallocMC::CreationPolicies
+{
+
+    template<typename T1, typename T2, size_t T_blockSize = 1024U * 1024U * 1024U, uint32_t T_pageSize = 4096U>
+    struct Scatter : public ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>
+    {
+        static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
+        {
+            return pointer == nullptr;
+        }
+
+        template<typename TAcc>
+        static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
+        {
+            using Dim = typename alpaka::trait::DimType<TAcc>::type;
+            using Idx = typename alpaka::trait::IdxType<TAcc>::type;
+
+            if(memsize != T_blockSize)
+                throw "Memory size mismatch between runtime and compile-time.";
+            alpaka::memset(
+                queue,
+                alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize)),
+                0);
+
+            auto workDivSingleThread = alpaka::WorkDivMembers<Dim, Idx>{{1U}, {1U}, {1U}};
+            auto initKernel
+                = [] ALPAKA_FN_ACC(auto const& m_acc, auto* m_heap, void* m_heapmem) { m_heap->pool = m_heapmem; };
+            alpaka::exec<TAcc>(queue, workDivSingleThread, initKernel, heap, pool);
+        }
+
+        constexpr const static bool providesAvailableSlots = false;
+        static auto classname() -> std::string
+        {
+            return "Scatter";
+        }
+
+        template<typename AlignmentPolicy, typename AlpakaAcc>
+        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
+        {
+            return ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>::template create<AlpakaAcc>(acc, bytes);
+        }
+    };
+} // namespace mallocMC::CreationPolicies

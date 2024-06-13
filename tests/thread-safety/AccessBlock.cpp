@@ -415,7 +415,6 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
     return tmp;
 }
 
-
 template<size_t T_blockSize, uint32_t T_pageSize>
 auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
 {
@@ -424,6 +423,7 @@ auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
     // pointer to the access block. Not sure if this is reliable if the pointers are device pointers.
     return mallocMC::indexOf(pointer, accessBlock, T_pageSize);
 }
+
 struct FillAllUpAndWriteToThem
 {
     ALPAKA_FN_ACC auto operator()(
