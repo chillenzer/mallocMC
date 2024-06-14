@@ -58,7 +58,7 @@ alpaka_add_executable(mallocMC_Example03 EXCLUDE_FROM_ALL examples/mallocMC_exam
 target_include_directories(mallocMC_Example03 PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
 target_link_libraries(mallocMC_Example03 PUBLIC alpaka::alpaka warnings)
 
-add_custom_target(examples DEPENDS mallocMC_Example01 mallocMC_Example03 VerifyHeap)
+add_custom_target(examples DEPENDS mallocMC_Example01 mallocMC_Example03)
 
 if(${mallocMC_CATCH2_PROVIDER} STREQUAL "intern")
     find_package(Catch2 3.6.0 REQUIRED)
