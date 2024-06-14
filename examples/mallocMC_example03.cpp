@@ -29,11 +29,8 @@
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
-#include <cassert>
 #include <iostream>
 #include <mallocMC/mallocMC.hpp>
-#include <numeric>
-#include <vector>
 
 using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
@@ -44,7 +41,7 @@ using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 struct ScatterConfig
 {
     static constexpr auto pagesize = 4096;
-    static constexpr auto accessblocksize = 2u * 1024u * 1024u * 1024u;
+    static constexpr auto accessblocksize = 2U * 1024U * 1024U * 1024U;
     static constexpr auto regionsize = 16;
     static constexpr auto wastefactor = 2;
     static constexpr auto resetfreedpages = false;
@@ -79,7 +76,9 @@ struct ExampleKernel
     {
         const auto id = static_cast<uint32_t>(alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]);
         if(id == 0)
-            arA<Acc> = (int*) allocHandle.malloc(acc, sizeof(int) * 32);
+        {
+            arA<Acc> = static_cast<int*>(allocHandle.malloc(acc, sizeof(int) * 32U));
+        }
         // wait the the malloc from thread zero is not changing the result for some threads
         alpaka::syncBlockThreads(acc);
         const auto slots = allocHandle.getAvailableSlots(acc, 1);
@@ -94,7 +93,9 @@ struct ExampleKernel
         // wait that all thread read from `arA<Acc>`
         alpaka::syncBlockThreads(acc);
         if(id == 0)
+        {
             allocHandle.free(acc, arA<Acc>);
+        }
     }
 };
 
@@ -104,7 +105,7 @@ auto main() -> int
     const auto dev = alpaka::getDevByIdx(platform, 0);
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
-    unsigned const block = std::min(static_cast<size_t>(32u), static_cast<size_t>(devProps.m_blockThreadCountMax));
+    unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
     ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
 
