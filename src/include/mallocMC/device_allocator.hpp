@@ -76,8 +76,13 @@ namespace mallocMC
             DistributionPolicy distributionPolicy(acc);
             const uint32 req_size = distributionPolicy.collect(acc, bytes);
             void* memBlock = CreationPolicy::template create<AlignmentPolicy>(acc, req_size);
-            if(CreationPolicy::isOOM(memBlock, req_size))
-                memBlock = OOMPolicy::handleOOM(memBlock);
+            // TODO(lenz): This commented out block has weird effects when uncommented. The execution deadlocks or
+            // throws cudaErrorIllegalAddress. Investigate and re-activate again!
+            //            if(CreationPolicy::isOOM(memBlock, req_size))
+            //            {
+            //                printf("WTF2?\n");
+            //                memBlock = OOMPolicy::handleOOM(memBlock);
+            //            }
             return distributionPolicy.distribute(acc, memBlock);
         }
 

@@ -367,6 +367,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
 
+struct InitKernel
+{
+    ALPAKA_FN_ACC auto operator()(auto const& m_acc, auto* m_heap, void* m_heapmem) const
+    {
+        m_heap->pool = m_heapmem;
+    }
+};
+
 namespace mallocMC::CreationPolicies
 {
 
@@ -381,20 +389,19 @@ namespace mallocMC::CreationPolicies
         template<typename TAcc>
         static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
         {
+            if(memsize != T_blockSize)
+            {
+                throw "Memory size mismatch between runtime and compile-time.";
+            }
+
             using Dim = typename alpaka::trait::DimType<TAcc>::type;
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
 
-            if(memsize != T_blockSize)
-                throw "Memory size mismatch between runtime and compile-time.";
-            alpaka::memset(
-                queue,
-                alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize)),
-                0);
+            auto poolView = alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize));
+            alpaka::memset(queue, poolView, 0U, alpaka::Vec<Dim, Idx>(memsize));
 
             auto workDivSingleThread = alpaka::WorkDivMembers<Dim, Idx>{{1U}, {1U}, {1U}};
-            auto initKernel
-                = [] ALPAKA_FN_ACC(auto const& m_acc, auto* m_heap, void* m_heapmem) { m_heap->pool = m_heapmem; };
-            alpaka::exec<TAcc>(queue, workDivSingleThread, initKernel, heap, pool);
+            alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool);
         }
 
         constexpr const static bool providesAvailableSlots = false;
