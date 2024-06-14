@@ -43,7 +43,7 @@ using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 struct ScatterHeapConfig
 {
     static constexpr auto pagesize = 4096;
-    static constexpr auto accessblocksize = 2u * 1024u * 1024u * 1024u;
+    static constexpr auto accessblocksize = 2U * 1024U * 1024U * 1024U;
     static constexpr auto regionsize = 16;
     static constexpr auto wastefactor = 2;
     static constexpr auto resetfreedpages = false;
@@ -88,15 +88,16 @@ auto main() -> int
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
 
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
-    unsigned const block = std::min(static_cast<size_t>(32u), static_cast<size_t>(devProps.m_blockThreadCountMax));
+    unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
     // round up
-    auto grid = (length + block - 1u) / block;
+    auto grid = (length + block - 1U) / block;
     assert(length <= block * grid); // necessary for used algorithm
 
     // init the heap
     std::cerr << "initHeap...";
-    ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
+    auto const heapSize = 1U * 1024U * 1024U * 1024U;
+    ScatterAllocator scatterAlloc(dev, queue, heapSize); // 1GB for device-side malloc
     std::cerr << "done\n";
     std::cout << ScatterAllocator::info("\n") << '\n';
 
@@ -105,9 +106,9 @@ auto main() -> int
         auto createArrayPointers
             = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, ScatterAllocator::AllocatorHandle allocHandle)
         {
-            arA<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-            arB<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-            arC<Acc> = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
+            arA<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
+            arB<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
+            arC<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
@@ -126,9 +127,9 @@ auto main() -> int
         {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
-            arA<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arB<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arC<Acc>[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
+            arA<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
+            arB<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
+            arC<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
 
             for(int i = 0; i < length; ++i)
             {
