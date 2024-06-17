@@ -81,7 +81,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return getAvailableMultiPages(chunkSize);
         }
 
-        ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> size_t
+        ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> ssize_t
         {
             return indexOf(pointer, pages, T_pageSize);
         }
@@ -381,7 +381,7 @@ namespace mallocMC::CreationPolicies
     template<typename T1, typename T2, size_t T_blockSize = 1024U * 1024U * 1024U, uint32_t T_pageSize = 4096U>
     struct Scatter : public ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>
     {
-        static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
+        ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
         }
@@ -398,10 +398,12 @@ namespace mallocMC::CreationPolicies
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
 
             auto poolView = alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize));
-            alpaka::memset(queue, poolView, 0U, alpaka::Vec<Dim, Idx>(memsize));
+            alpaka::memset(queue, poolView, 0U);
+            alpaka::wait(queue);
 
             auto workDivSingleThread = alpaka::WorkDivMembers<Dim, Idx>{{1U}, {1U}, {1U}};
             alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool);
+            alpaka::wait(queue);
         }
 
         constexpr const static bool providesAvailableSlots = false;

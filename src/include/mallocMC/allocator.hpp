@@ -140,7 +140,7 @@ namespace mallocMC
          * compile time. The volatile workaround has no negative effects on the
          * register usage in CUDA.
          */
-        alloc(AlpakaDevice& dev, AlpakaQueue& queue, volatile size_t size)
+        alloc(AlpakaDevice& dev, AlpakaQueue& queue, size_t size)
         {
             void* pool = reservePolicy.setMemPool(dev, size);
             std::tie(pool, size) = AlignmentPolicy::alignPool(pool, size);
