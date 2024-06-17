@@ -25,6 +25,7 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
@@ -47,6 +48,7 @@
 #include <type_traits>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMaskStorageType;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 
 constexpr uint32_t const pageTableEntrySize = 8U;
@@ -269,15 +271,17 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // the bit mask. Thus, the following test would corrupt the bit mask, if we were to allocate this in
             // chunked mode.
 
+#ifndef NDEBUG
+            REQUIRE(sizeof(BitMaskStorageType<>) > 1U);
             auto localChunkSize = pageSize - 1U;
             auto slots = accessBlock.getAvailableSlots(localChunkSize);
             auto pointer = accessBlock.create(acc, localChunkSize);
             REQUIRE(slots == accessBlock.getAvailableSlots(localChunkSize) + 1);
             memset(pointer, 0, localChunkSize);
-#ifndef NDEBUG
-            CHECK_THROWS(
-                accessBlock.destroy(acc, pointer),
-                std::runtime_error{"Attempted to destroy un-allocated memory."});
+            CHECK_NOTHROW(accessBlock.destroy(acc, pointer));
+#else
+            SUCCEED("This bug actually never had any observable behaviour in NDEBUG mode because the corrupted bit "
+                    "mask is never read again.");
 #endif // NDEBUG
         }
     }

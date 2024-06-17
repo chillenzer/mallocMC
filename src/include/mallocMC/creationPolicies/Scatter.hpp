@@ -28,6 +28,7 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
+#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
@@ -108,7 +109,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes) -> void*
         {
             void* pointer{nullptr};
-            if(numBytes >= T_pageSize)
+            if(numBytes >= multiPageThreshold())
             {
                 pointer = createOverMultiplePages(numBytes);
             }
@@ -126,12 +127,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             if(index > static_cast<ssize_t>(numPages()) || index < 0)
             {
 #ifndef NDEBUG
-                throw std::runtime_error{"Attempted to destroy an invalid pointer!"};
+                throw std::runtime_error{
+                    "Attempted to destroy an invalid pointer! Pointer does not point to any page."};
 #endif // NDEBUG
                 return;
             }
             auto const chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
-            if(chunkSize >= T_pageSize)
+            if(chunkSize >= multiPageThreshold())
             {
                 destroyOverMultiplePages(index, chunkSize);
             }
@@ -144,6 +146,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
+
+        ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
+        {
+            return T_pageSize - sizeof(BitMaskStorageType<>);
+        }
 
         ALPAKA_FN_ACC auto interpret(size_t const pageIndex, uint32_t const chunkSize)
         {
