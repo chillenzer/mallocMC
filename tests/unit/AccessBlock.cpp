@@ -40,8 +40,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <mallocMC/creationPolicies/Scatter.hpp>
+#include <stdexcept>
 #include <type_traits>
 
 using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
@@ -259,6 +261,25 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             CHECK(accessBlock.create(acc, chunkSize) == pointers[0]);
             REQUIRE(accessBlock.isValid(acc, pointers[0]));
         }
+
+        SECTION("and writes something very close to page size.")
+        {
+            // This is a regression test. The original version of the code started to use multi-page mode when numBytes
+            // >= pageSize. That is too late because if we're not in multi-page mode, we need to leave some space for
+            // the bit mask. Thus, the following test would corrupt the bit mask, if we were to allocate this in
+            // chunked mode.
+
+            auto localChunkSize = pageSize - 1U;
+            auto slots = accessBlock.getAvailableSlots(localChunkSize);
+            auto pointer = accessBlock.create(acc, localChunkSize);
+            REQUIRE(slots == accessBlock.getAvailableSlots(localChunkSize) + 1);
+            memset(pointer, 0, localChunkSize);
+#ifndef NDEBUG
+            CHECK_THROWS(
+                accessBlock.destroy(acc, pointer),
+                std::runtime_error{"Attempted to destroy un-allocated memory."});
+#endif // NDEBUG
+        }
     }
 
     SECTION("destroys")
@@ -307,10 +328,12 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 
         SECTION("no invalid pointer but throws instead.")
         {
-#ifdef DEBUG
+#ifndef NDEBUG
             pointer = nullptr;
-            CHECK_THROWS_WITH(accessBlock.destroy(pointer), Catch::Contains("Attempted to destroy invalid pointer"));
-#endif // DEBUG
+            CHECK_THROWS(
+                accessBlock.destroy(acc, pointer),
+                std::runtime_error{"Attempted to destroy an invalid pointer!"});
+#endif // NDEBUG
         }
 
         SECTION("pointer for larger than page size")

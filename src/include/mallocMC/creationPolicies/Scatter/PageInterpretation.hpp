@@ -85,20 +85,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(_chunkSize == 0)
             {
-#ifdef DEBUG
+#ifndef NDEBUG
                 throw std::runtime_error{
                     "Attempted to destroy a pointer with chunkSize==0. Likely this page was recently "
                     "(and potentially pre-maturely) freed."};
-#endif // DEBUG
+#endif // NDEBUG
                 return;
             }
             auto chunkIndex = chunkNumberOf(pointer);
-#ifdef DEBUG
-            if(isValid(chunkIndex))
-#endif // DEBUG
+#ifndef NDEBUG
+            if(not isValid(acc, chunkIndex))
             {
-                bitField().unset(acc, chunkIndex);
+                throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
+                                         "to a valid chunk or it is not marked as allocated."};
             }
+#endif // NDEBUG
+            bitField().unset(acc, chunkIndex);
         }
 
         ALPAKA_FN_ACC auto cleanup() -> void
@@ -118,23 +120,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     private:
         template<typename TAcc>
-        ALPAKA_FN_ACC auto isValid(TAcc const& acc, uint32_t const chunkIndex) -> bool
+        ALPAKA_FN_ACC auto isValid(TAcc const& acc, ssize_t const chunkIndex) -> bool
         {
-            if(chunkIndex >= numChunks())
-            {
-#ifdef DEBUG
-                throw std::runtime_error{"Attempted to destroy out-of-bounds pointer. Chunk index out of range!"};
-#endif // DEBUG
-                return false;
-            }
-            if(!isAllocated(acc, chunkIndex))
-            {
-#ifdef DEBUG
-                throw std::runtime_error{"Attempted to destroy un-allocated memory."};
-#endif // DEBUG
-                return false;
-            }
-            return true;
+            return chunkIndex >= 0 and chunkIndex < numChunks() and isAllocated(acc, chunkIndex);
         }
 
     public:
@@ -169,7 +157,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto chunkNumberOf(void* pointer) -> uint32_t
+        ALPAKA_FN_ACC [[nodiscard]] auto chunkNumberOf(void* pointer) -> ssize_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }

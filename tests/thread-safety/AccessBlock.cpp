@@ -457,6 +457,7 @@ struct CreateAndDestroMultipleTimes
             pointers.size,
             [&](auto idx)
             {
+                pointers[idx] = nullptr;
                 for(uint32_t j = 0; j < idx; ++j)
                 {
                     // `.isValid()` is not thread-safe, so we use this direct assessment:

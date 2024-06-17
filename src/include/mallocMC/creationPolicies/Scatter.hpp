@@ -125,9 +125,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const index = pageIndex(pointer);
             if(index > static_cast<ssize_t>(numPages()) || index < 0)
             {
-#ifdef DEBUG
-                throw std::runtime_error{"Attempted to destroy invalid pointer."};
-#endif // DEBUG
+#ifndef NDEBUG
+                throw std::runtime_error{"Attempted to destroy an invalid pointer!"};
+#endif // NDEBUG
                 return;
             }
             auto const chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
