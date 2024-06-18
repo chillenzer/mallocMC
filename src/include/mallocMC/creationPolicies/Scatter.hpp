@@ -36,6 +36,7 @@
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/core/Common.hpp>
 #include <alpaka/kernel/Traits.hpp>
+#include <alpaka/mem/fence/Traits.hpp>
 #include <alpaka/mem/view/Traits.hpp>
 #include <alpaka/mem/view/ViewPlainPtr.hpp>
 #include <alpaka/vec/Vec.hpp>
@@ -189,7 +190,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             std::for_each(
                 std::begin(pointers),
                 std::end(pointers),
-                [this](auto ptr) { destroy(alpaka::AtomicAtomicRef{}, ptr); });
+                [&](auto ptr) { destroyOverMultiplePages(pageIndex(ptr), chunkSize); });
             return pointers.size();
         }
 
@@ -345,6 +346,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                         // filling level is always considered first, so no other thread can have passed that barrier to
                         // reset it.
                         PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
+                        alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
 
                         // It is important to keep this after the clean-up line above: Otherwise another thread with a
                         // smaller chunk size might circumvent our lock and already start allocating before we're done
