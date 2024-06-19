@@ -27,6 +27,7 @@
 
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/core/Common.hpp>
@@ -55,19 +56,6 @@ using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 constexpr uint32_t const pageTableEntrySize = 8U;
 constexpr uint32_t const pageSize1 = 1024U;
 constexpr uint32_t const pageSize2 = 4096U;
-
-// TODO(lenz): This is a dirty hack. I'm using AtomicAtomicRef instead of an accelerator directly because it turns out
-// that it's very hard to instantiate an accelerator and the atomics don't really care what you hand them. But the
-// mem_fence DOES care, so I have to provide this empty implementation. We don't really get a thread fence anymore, of
-// course, but that's okay because we are single-threaded in this file. Never do this in production, of course!
-template<>
-struct alpaka::trait::MemFence<alpaka::AtomicAtomicRef, alpaka::memory_scope::Device, void>
-{
-    template<typename... T>
-    ALPAKA_FN_ACC static void mem_fence(T... /*We're just providing a general interface.*/)
-    {
-    }
-};
 
 // This is just passed through to select one backend to serial parts of the tests.
 inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};

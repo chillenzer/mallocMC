@@ -26,6 +26,7 @@
 */
 
 #include "mallocMC/auxiliary.hpp"
+#include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>

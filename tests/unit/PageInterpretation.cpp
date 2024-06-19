@@ -33,6 +33,7 @@
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
+#include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
