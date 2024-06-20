@@ -97,6 +97,24 @@ TEST_CASE("BitMask")
         mask.flip(acc);
         CHECK(firstFreeBit(acc, mask) == BitMaskSize);
     }
+
+    SECTION("knows the first free bit with startIndex.")
+    {
+        // The search is supposed to wrap around. So, the "first free bit" is always the smaller one unless startIndex
+        // lies in between the two indices.
+        mask.set(acc);
+        size_t index1 = GENERATE(0, 5);
+        size_t index2 = GENERATE(0, 11);
+        if(index1 > index2)
+        {
+            std::swap(index1, index2);
+        }
+        size_t const startIndex = GENERATE(0, 4, 5, 6);
+        mask.unset(acc, index1);
+        mask.unset(acc, index2);
+        CHECK(
+            firstFreeBit(acc, mask, startIndex) == ((startIndex > index1 and startIndex <= index2) ? index2 : index1));
+    }
 }
 
 TEST_CASE("BitFieldFlat")

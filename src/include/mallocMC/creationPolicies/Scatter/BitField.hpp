@@ -49,6 +49,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         return 1U << index;
     }
 
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto allOnesUpTo(BitMaskStorageType<> const index) -> BitMaskStorageType<>
+    {
+        if(index == 0U)
+            return 0U;
+        if(index == BitMaskSize)
+            return allOnes<TAcc>;
+        return allOnes<TAcc> >> (BitMaskSize - std::min(std::max(index, 0U), BitMaskSize));
+    }
+
     struct BitMask
     {
         // Convention: We start counting from the right, i.e., if mask[0] == 1 and all others are 0, then mask = 0...01
@@ -173,18 +183,35 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     }
 
     template<typename TAcc>
-    ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBit(TAcc const& acc, BitMask& mask, uint32_t const startIndex = 0)
-        -> uint32_t
+    ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBitInBetween(
+        TAcc const& acc,
+        BitMask& mask,
+        uint32_t const startIndex,
+        uint32_t const endIndex) -> uint32_t
     {
         auto result = noFreeBitFound(mask);
-        for(uint32_t i = startIndex; i < BitMaskSize and result == noFreeBitFound(mask);)
+        for(uint32_t i = startIndex; i >= startIndex and i < endIndex and result == noFreeBitFound(mask);)
         {
-            auto oldMask = atomicOr(acc, mask.mask, singleBit(i));
+            auto oldMask = atomicOr(acc, mask.mask, singleBit(i)) | allOnesUpTo<TAcc>(startIndex);
             if((oldMask & singleBit(i)) == 0U)
             {
                 result = i;
             }
-            i = alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
+            i = oldMask == allOnes<TAcc>
+                ? noFreeBitFound(mask)
+                : alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
+        }
+        return result;
+    }
+
+    template<typename TAcc>
+    ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBit(TAcc const& acc, BitMask& mask, uint32_t const startIndex = 0)
+        -> uint32_t
+    {
+        auto result = firstFreeBitInBetween(acc, mask, startIndex, BitMaskSize);
+        if(result == noFreeBitFound(mask))
+        {
+            result = firstFreeBitInBetween(acc, mask, 0U, startIndex);
         }
         return result;
     }
