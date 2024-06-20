@@ -56,7 +56,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return 0U;
         if(index == BitMaskSize)
             return allOnes<TAcc>;
-        return allOnes<TAcc> >> (BitMaskSize - std::min(std::max(index, 0U), BitMaskSize));
+        // A global constexpr variable cannot be referenced (because it doesn't necessarily exist in memory but could
+        // be inlined everywhere by the compiler). Most compilers don't really care but nvcc apparently does, so we get
+        // a variable in local scope to reference BitMaskSize.
+        constexpr auto referencableBitMaskSize = BitMaskSize;
+        return allOnes<TAcc> >> (referencableBitMaskSize - std::min(std::max(index, 0U), referencableBitMaskSize));
     }
 
     struct BitMask

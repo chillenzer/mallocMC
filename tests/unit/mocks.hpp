@@ -46,7 +46,7 @@ template<>
 struct alpaka::trait::Ffs<alpaka::AtomicAtomicRef, void> : alpaka::trait::Ffs<alpaka::IntrinsicFallback, void>
 {
     template<typename T, typename... TArgs>
-    ALPAKA_FN_ACC static auto ffs(T /*intrinsic*/, TArgs... args)
+    static auto ffs(T /*intrinsic*/, TArgs... args)
     {
         return Ffs<alpaka::IntrinsicFallback, void>::ffs(alpaka::IntrinsicFallback{}, args...);
     }
