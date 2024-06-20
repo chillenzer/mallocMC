@@ -123,18 +123,19 @@ auto main() -> int
 
     // fill 2 of them all with ascending values
     {
-        auto fillArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, ScatterAllocator::AllocatorHandle allocHandle)
+        auto fillArrays
+            = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, ScatterAllocator::AllocatorHandle allocHandle)
         {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
-            arA<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
-            arB<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
-            arC<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, length * sizeof(int)));
+            arA<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
+            arB<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
+            arC<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
 
-            for(int i = 0; i < length; ++i)
+            for(int i = 0; i < localLength; ++i)
             {
-                arA<Acc>[id][i] = static_cast<int>(id * length + i);
-                arB<Acc>[id][i] = static_cast<int>(id * length + i);
+                arA<Acc>[id][i] = static_cast<int>(id * localLength + i);
+                arB<Acc>[id][i] = static_cast<int>(id * localLength + i);
             }
         };
         const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
@@ -148,12 +149,12 @@ auto main() -> int
     {
         auto sumsBufferAcc = alpaka::allocBuf<int, Idx>(dev, Idx{block * grid});
 
-        auto addArrays = [] ALPAKA_FN_ACC(const Acc& acc, int length, int* sums)
+        auto addArrays = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, int* sums)
         {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             sums[id] = 0;
-            for(int i = 0; i < length; ++i)
+            for(int i = 0; i < localLength; ++i)
             {
                 arC<Acc>[id][i] = arA<Acc>[id][i] + arB<Acc>[id][i];
                 sums[id] += arC<Acc>[id][i];
