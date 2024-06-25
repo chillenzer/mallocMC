@@ -97,7 +97,7 @@ auto main() -> int
 
     // init the heap
     std::cerr << "initHeap...";
-    auto const heapSize = 1U * 1024U * 1024U * 1024U;
+    auto const heapSize = 2U * 1024U * 1024U * 1024U;
     ScatterAllocator scatterAlloc(dev, queue, heapSize); // 1GB for device-side malloc
     std::cerr << "done\n";
     std::cout << ScatterAllocator::info("\n") << '\n';

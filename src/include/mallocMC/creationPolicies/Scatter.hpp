@@ -439,7 +439,7 @@ namespace mallocMC::CreationPolicies
         template<typename TAcc>
         static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
         {
-            if(memsize != T_blockSize)
+            if(memsize != T_HeapConfig::heapsize)
             {
                 throw "Memory size mismatch between runtime and compile-time.";
             }

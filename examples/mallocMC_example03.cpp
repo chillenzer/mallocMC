@@ -108,7 +108,7 @@ auto main() -> int
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
     unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
-    ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
+    ScatterAllocator scatterAlloc(dev, queue, 2U * 1024U * 1024U * 1024U); // 2GB for device-side malloc
 
     const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{block}, Idx{1}};
     alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel{}, scatterAlloc.getAllocatorHandle()));
