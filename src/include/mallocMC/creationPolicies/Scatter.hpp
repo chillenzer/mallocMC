@@ -374,6 +374,39 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
     };
+
+    template<size_t T_heapSize, size_t T_blockSize, uint32_t T_pageSize>
+    struct Heap
+    {
+        ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numBlocks() -> size_t
+        {
+            return T_heapSize / T_blockSize;
+        }
+
+        AccessBlock<T_blockSize, T_pageSize> accessBlocks[numBlocks()]{};
+
+        template<typename AlignmentPolicy, typename AlpakaAcc>
+        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
+        {
+            for(auto& block : accessBlocks)
+            {
+                void* pointer = block.create(acc, bytes);
+                if(pointer != nullptr)
+                {
+                    return pointer;
+                }
+            }
+            return nullptr;
+        }
+
+        template<typename AlpakaAcc>
+        ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
+        {
+            auto blockIndex = indexOf(pointer, accessBlocks, T_blockSize);
+            accessBlocks[blockIndex].destroy(acc, pointer);
+        }
+    };
+
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
 
 struct InitKernel
@@ -387,9 +420,17 @@ struct InitKernel
 namespace mallocMC::CreationPolicies
 {
 
-    template<typename T1, typename T2, size_t T_blockSize = 1024U * 1024U * 1024U, uint32_t T_pageSize = 4096U>
-    struct Scatter : public ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>
+    template<
+        typename T_HeapConfig,
+        typename T2,
+        size_t T_blockSize = 1024U * 1024U * 1024U,
+        uint32_t T_pageSize = 4096U>
+    struct Scatter
+        : public ScatterAlloc::Heap<T_HeapConfig::heapsize, T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
     {
+        static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
+        static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
+
         ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
@@ -419,12 +460,6 @@ namespace mallocMC::CreationPolicies
         static auto classname() -> std::string
         {
             return "Scatter";
-        }
-
-        template<typename AlignmentPolicy, typename AlpakaAcc>
-        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
-        {
-            return ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>::template create<AlpakaAcc>(acc, bytes);
         }
     };
 } // namespace mallocMC::CreationPolicies

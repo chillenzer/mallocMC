@@ -42,11 +42,12 @@ using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 
 struct ScatterHeapConfig
 {
-    static constexpr auto pagesize = 4096;
+    static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
     static constexpr auto accessblocksize = 2U * 1024U * 1024U * 1024U;
+    static constexpr auto pagesize = 4096;
     static constexpr auto regionsize = 16;
-    static constexpr auto wastefactor = 2;
-    static constexpr auto resetfreedpages = false;
+    static constexpr auto wastefactor = 1;
+    static constexpr auto resetfreedpages = true;
 };
 
 struct ScatterHashConfig
