@@ -420,11 +420,7 @@ struct InitKernel
 namespace mallocMC::CreationPolicies
 {
 
-    template<
-        typename T_HeapConfig,
-        typename T2,
-        size_t T_blockSize = 1024U * 1024U * 1024U,
-        uint32_t T_pageSize = 4096U>
+    template<typename T_HeapConfig, typename T_HashConfig>
     struct Scatter
         : public ScatterAlloc::Heap<T_HeapConfig::heapsize, T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
     {
