@@ -249,7 +249,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t const numValidBits,
         uint32_t const i) -> uint32_t
     {
-        auto indexInMask = firstFreeBit(acc, field[i]);
+        auto startIndexInMask = 0U;
+        auto indexInMask = firstFreeBit(acc, field[i], startIndexInMask);
         if(indexInMask < noFreeBitFound(BitMask{}))
         {
             uint32_t freeBitIndex = indexInMask + BitMaskSize * i;

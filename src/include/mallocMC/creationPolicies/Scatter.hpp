@@ -60,9 +60,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    ALPAKA_FN_ACC inline auto computeHash([[maybe_unused]] uint32_t const numBytes, size_t const numPages) -> size_t
+    template<typename TCaller, typename... TAdditionalInfo>
+    ALPAKA_FN_ACC inline auto computeHash(TAdditionalInfo... /*unused*/) -> size_t
     {
-        return 42U % numPages;
+        return 42U;
     }
 
     template<size_t T_blockSize, uint32_t T_pageSize>
@@ -222,7 +223,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
-            auto startIndex = computeHash(numBytes, numPages());
+            auto startIndex = computeHash<decltype(*this)>(numBytes) % numPages();
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -389,10 +390,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
-            auto const startIndex = 0U;
             return wrappingLoop(
                 acc,
-                startIndex,
+                computeHash<decltype(*this)>(bytes) % numBlocks(),
                 numBlocks(),
                 static_cast<void*>(nullptr),
                 [this, bytes](auto const& localAcc, auto const index)

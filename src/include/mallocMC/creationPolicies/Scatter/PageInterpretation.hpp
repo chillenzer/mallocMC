@@ -76,7 +76,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
-            auto const index = firstFreeBit(acc, field, numChunks());
+            auto startIndex = 0U;
+            auto const index = firstFreeBit(acc, field, numChunks(), startIndex);
             return (index < noFreeBitFound(field)) ? this->operator[](index) : nullptr;
         }
 
