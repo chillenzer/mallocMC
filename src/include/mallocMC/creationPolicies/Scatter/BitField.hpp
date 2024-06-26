@@ -28,6 +28,7 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
+#include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
 
 #include <alpaka/core/Common.hpp>
 #include <alpaka/intrinsic/Traits.hpp>
@@ -212,12 +213,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBit(TAcc const& acc, BitMask& mask, uint32_t const startIndex = 0)
         -> uint32_t
     {
-        auto result = firstFreeBitInBetween(acc, mask, startIndex, BitMaskSize);
-        if(result == noFreeBitFound(mask))
-        {
-            result = firstFreeBitInBetween(acc, mask, 0U, startIndex);
-        }
-        return result;
+        return wrappingLoop(
+            acc,
+            startIndex,
+            BitMaskSize,
+            [&mask](TAcc const& acc, size_t const start, size_t const stop)
+            { return firstFreeBitInBetween(acc, mask, start, stop); });
     }
 
     template<typename TAcc>
