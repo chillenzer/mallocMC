@@ -29,17 +29,17 @@
 #include <alpaka/core/Common.hpp>
 #include <cstddef>
 
-template<typename TAcc, typename TFunctor, typename... TArgs>
+template<typename TAcc, typename TFunctor, typename TSuccessFunctor, typename... TArgs>
 ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
     TAcc const& acc,
     size_t const startIndex,
-    // TODO(lenz): The size currently doubles as an success criterion. Not sure if that's a desirable coupling.
     size_t const size,
+    TSuccessFunctor success,
     TFunctor func,
     TArgs... args)
 {
     auto result = func(acc, startIndex, size, args...);
-    if(result == size)
+    if(not success(result))
     {
         result = func(acc, 0, startIndex, args...);
     }

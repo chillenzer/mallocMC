@@ -217,6 +217,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             acc,
             startIndex,
             BitMaskSize,
+            [](auto const result) { return result < BitMaskSize; },
             [&mask](TAcc const& acc, size_t const start, size_t const stop)
             { return firstFreeBitInBetween(acc, mask, start, stop); });
     }
@@ -229,12 +230,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t const startIndex = 0U) -> uint32_t
     {
         numValidBits = numValidBits == 0 ? field.numBits() : numValidBits;
-        auto result = firstFreeBitInBetween(acc, field, numValidBits, startIndex, field.numMasks());
-        if(result == noFreeBitFound(field))
-        {
-            result = firstFreeBitInBetween(acc, field, numValidBits, 0U, startIndex);
-        }
-        return result;
+        return wrappingLoop(
+            acc,
+            startIndex,
+            field.numMasks(),
+            [numValidBits](auto const result) { return result < numValidBits; },
+            [&field, numValidBits](TAcc const& acc, size_t const start, size_t const stop)
+            { return firstFreeBitInBetween(acc, field, numValidBits, start, stop); });
     }
 
     template<typename TAcc>
