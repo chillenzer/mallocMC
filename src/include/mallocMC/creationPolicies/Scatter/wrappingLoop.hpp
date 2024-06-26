@@ -28,20 +28,38 @@
 
 #include <alpaka/core/Common.hpp>
 #include <cstddef>
+#include <cstdint>
 
-template<typename TAcc, typename TFunctor, typename TSuccessFunctor, typename... TArgs>
+template<typename TAcc, typename TFunctor, typename... TArgs>
+ALPAKA_FN_ACC [[nodiscard]] inline auto internalWrappingLoop(
+    TAcc const& acc,
+    size_t const startIndex,
+    size_t const endIndex,
+    auto failureValue,
+    TFunctor func,
+    TArgs... args)
+{
+    auto result = failureValue;
+    for(uint32_t i = startIndex; i < endIndex && result == failureValue; ++i)
+    {
+        result = func(acc, i, args...);
+    }
+    return result;
+}
+
+template<typename TAcc, typename TFunctor, typename... TArgs>
 ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
     TAcc const& acc,
     size_t const startIndex,
     size_t const size,
-    TSuccessFunctor success,
+    auto failureValue,
     TFunctor func,
     TArgs... args)
 {
-    auto result = func(acc, startIndex, size, args...);
-    if(not success(result))
+    auto result = internalWrappingLoop(acc, startIndex, size, failureValue, func, args...);
+    if(result == failureValue)
     {
-        result = func(acc, 0, startIndex, args...);
+        result = internalWrappingLoop(acc, 0U, startIndex, failureValue, func, args...);
     }
     return result;
 }

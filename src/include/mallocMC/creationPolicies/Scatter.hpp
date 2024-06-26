@@ -254,32 +254,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
         {
-            auto result = choosePageInBetween(acc, numBytes, startIndex, numPages());
-            if(result == noFreePageFound())
-            {
-                result = choosePageInBetween(acc, numBytes, 0U, startIndex);
-            }
-            return result;
+            return wrappingLoop(
+                acc,
+                startIndex,
+                numPages(),
+                noFreePageFound(),
+                [this, numBytes](auto const& localAcc, auto const index)
+                { return thisPageIsAppropriate(localAcc, index, numBytes) ? index : noFreePageFound(); });
         }
-
-        template<typename TAcc>
-        ALPAKA_FN_ACC auto choosePageInBetween(
-            TAcc const& acc,
-            uint32_t const numBytes,
-            size_t const startIndex,
-            size_t const endIndex) -> size_t
-        {
-            auto resultingIndex = noFreePageFound();
-            for(size_t i = startIndex; i < endIndex && resultingIndex == noFreePageFound(); ++i)
-            {
-                if(thisPageIsAppropriate(acc, i, numBytes))
-                {
-                    resultingIndex = i;
-                }
-            }
-            return resultingIndex;
-        }
-
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
@@ -399,31 +381,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return heapSize / T_blockSize;
         }
 
+        ALPAKA_FN_ACC [[nodiscard]] auto noFreeBlockFound() const -> size_t
+        {
+            return numBlocks();
+        }
+
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
-            size_t startIndex = 0U;
-            void* pointer = createInBetween(acc, bytes, startIndex, numBlocks());
-            if(pointer == nullptr)
-            {
-                pointer = createInBetween(acc, bytes, 0U, startIndex);
-            }
-            return pointer;
-        }
-
-        template<typename AlpakaAcc>
-        ALPAKA_FN_ACC auto createInBetween(
-            const AlpakaAcc& acc,
-            uint32_t bytes,
-            size_t const startIndex,
-            size_t const endIndex) -> void*
-        {
-            void* pointer{};
-            for(size_t i = startIndex; i < endIndex && pointer == nullptr; ++i)
-            {
-                pointer = accessBlocks[i].create(acc, bytes);
-            }
-            return pointer;
+            auto const startIndex = 0U;
+            return wrappingLoop(
+                acc,
+                startIndex,
+                numBlocks(),
+                static_cast<void*>(nullptr),
+                [this, bytes](auto const& localAcc, auto const index)
+                { return accessBlocks[index].create(localAcc, bytes); });
         }
 
         template<typename AlpakaAcc>

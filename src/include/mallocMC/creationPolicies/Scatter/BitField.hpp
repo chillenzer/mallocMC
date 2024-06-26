@@ -204,6 +204,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             i = oldMask == allOnes
                 ? noFreeBitFound(mask)
+                // For some reason, the interface of ffs takes signed integers, so we have to cast explicitly.
                 : alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
         }
         return result;
@@ -213,13 +214,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBit(TAcc const& acc, BitMask& mask, uint32_t const startIndex = 0)
         -> uint32_t
     {
-        return wrappingLoop(
-            acc,
-            startIndex,
-            BitMaskSize,
-            [](auto const result) { return result < BitMaskSize; },
-            [&mask](TAcc const& acc, size_t const start, size_t const stop)
-            { return firstFreeBitInBetween(acc, mask, start, stop); });
+        // This function almost reproduces the structure of `wrappingLoop` but internally the `firstFreeBitInBetween`
+        // function makes different jumps. I decided against de-duplication here in favor of keeping the interface of
+        // `wrappingLoop` a little simpler.
+        auto result = firstFreeBitInBetween(acc, mask, startIndex, BitMaskSize);
+        if(result == noFreeBitFound(mask))
+        {
+            result = firstFreeBitInBetween(acc, mask, 0U, startIndex);
+        }
+        return result;
     }
 
     template<typename TAcc>
@@ -234,33 +237,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             acc,
             startIndex,
             field.numMasks(),
-            [numValidBits](auto const result) { return result < numValidBits; },
-            [&field, numValidBits](TAcc const& acc, size_t const start, size_t const stop)
-            { return firstFreeBitInBetween(acc, field, numValidBits, start, stop); });
+            noFreeBitFound(field),
+            [&field, numValidBits](TAcc const& localAcc, auto const i)
+            { return firstFreeBitAt(localAcc, field, numValidBits, i); });
     }
 
     template<typename TAcc>
-    ALPAKA_FN_ACC inline auto firstFreeBitInBetween(
+    ALPAKA_FN_ACC inline auto firstFreeBitAt(
         TAcc const& acc,
         BitFieldFlat& field,
         uint32_t const numValidBits,
-        uint32_t const startIndex,
-        uint32_t const endIndex) -> uint32_t
+        uint32_t const i) -> uint32_t
     {
-        uint32_t result = noFreeBitFound(field);
-        for(uint32_t i = startIndex; i < endIndex && result == noFreeBitFound(field); ++i)
+        auto indexInMask = firstFreeBit(acc, field[i]);
+        if(indexInMask < noFreeBitFound(BitMask{}))
         {
-            auto indexInMask = firstFreeBit(acc, field[i]);
-            if(indexInMask < noFreeBitFound(BitMask{}))
+            uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
+            if(freeBitIndex < numValidBits)
             {
-                uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
-                if(freeBitIndex < numValidBits)
-                {
-                    result = freeBitIndex;
-                }
+                return freeBitIndex;
             }
         }
-        return result;
+        return noFreeBitFound(field);
     }
 
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
