@@ -28,7 +28,7 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
-#include "mallocMC/creationPolicies/Scatter/computeHash.hpp"
+#include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 #include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
 
 #include <alpaka/core/Common.hpp>
@@ -239,8 +239,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             startIndex,
             field.numMasks(),
             noFreeBitFound(field),
-            [&field, numValidBits](TAcc const& localAcc, auto const i)
-            { return firstFreeBitAt(localAcc, field, numValidBits, i); });
+            [&field, numValidBits](TAcc const& localAcc, auto const index)
+            { return firstFreeBitAt(localAcc, field, numValidBits, index); });
     }
 
     template<typename TAcc>
@@ -248,13 +248,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         TAcc const& acc,
         BitFieldFlat& field,
         uint32_t const numValidBits,
-        uint32_t const i) -> uint32_t
+        uint32_t const index) -> uint32_t
     {
-        auto startIndexInMask = computeHash<BitFieldFlat>() % field.numMasks();
-        auto indexInMask = firstFreeBit(acc, field[i], startIndexInMask);
+        auto startIndexInMask = Hash<BitFieldFlat>::get() % field.numMasks();
+        auto indexInMask = firstFreeBit(acc, field[index], startIndexInMask);
         if(indexInMask < noFreeBitFound(BitMask{}))
         {
-            uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
+            uint32_t freeBitIndex = indexInMask + BitMaskSize * index;
             if(freeBitIndex < numValidBits)
             {
                 return freeBitIndex;

@@ -30,8 +30,8 @@
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
+#include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
-#include "mallocMC/creationPolicies/Scatter/computeHash.hpp"
 
 #include <algorithm>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
@@ -218,7 +218,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
-            auto startIndex = computeHash<decltype(*this)>(numBytes) % numPages();
+            auto startIndex = Hash<decltype(*this)>::get(numBytes) % numPages();
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -387,7 +387,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             return wrappingLoop(
                 acc,
-                computeHash<decltype(*this)>(bytes) % numBlocks(),
+                Hash<decltype(*this)>::get(bytes) % numBlocks(),
                 numBlocks(),
                 static_cast<void*>(nullptr),
                 [this, bytes](auto const& localAcc, auto const index)

@@ -30,7 +30,7 @@
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
-#include "mallocMC/creationPolicies/Scatter/computeHash.hpp"
+#include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -77,6 +77,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
+            // TODO(lenz): This is the line that should be here but it segfaults for some reason. Debug!
+            // auto startIndex = Hash<decltype(*this)>::get() % numChunks();
             auto startIndex = 0U;
             auto const index = firstFreeBit(acc, field, numChunks(), startIndex);
             return (index < noFreeBitFound(field)) ? this->operator[](index) : nullptr;
