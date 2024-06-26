@@ -375,20 +375,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-    template<size_t T_heapSize, size_t T_blockSize, uint32_t T_pageSize>
+    template<size_t T_blockSize, uint32_t T_pageSize>
     struct Heap
     {
-        ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numBlocks() -> size_t
-        {
-            return T_heapSize / T_blockSize;
-        }
+        size_t heapSize{};
+        AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
 
-        AccessBlock<T_blockSize, T_pageSize> accessBlocks[numBlocks()]{};
+        ALPAKA_FN_ACC [[nodiscard]] auto numBlocks() const -> size_t
+        {
+            return heapSize / T_blockSize;
+        }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
-            for(auto& block : accessBlocks)
+            for(auto& block : std::span(accessBlocks, numBlocks()))
             {
                 void* pointer = block.create(acc, bytes);
                 if(pointer != nullptr)
@@ -411,9 +412,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 struct InitKernel
 {
-    ALPAKA_FN_ACC auto operator()(auto const& m_acc, auto* m_heap, void* m_heapmem) const
+    template<size_t T_blockSize, uint32_t T_pageSize>
+    ALPAKA_FN_ACC auto operator()(
+        auto const& /*unused*/,
+        mallocMC::CreationPolicies::ScatterAlloc::Heap<T_blockSize, T_pageSize>* m_heap,
+        void* m_heapmem,
+        size_t const m_memsize) const
     {
-        m_heap->pool = m_heapmem;
+        m_heap->accessBlocks
+            = static_cast<mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>*>(m_heapmem);
+        m_heap->heapSize = m_memsize;
     }
 };
 
@@ -421,8 +429,7 @@ namespace mallocMC::CreationPolicies
 {
 
     template<typename T_HeapConfig, typename T_HashConfig>
-    struct Scatter
-        : public ScatterAlloc::Heap<T_HeapConfig::heapsize, T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
+    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
     {
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
         static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
@@ -435,11 +442,6 @@ namespace mallocMC::CreationPolicies
         template<typename TAcc>
         static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
         {
-            if(memsize != T_HeapConfig::heapsize)
-            {
-                throw "Memory size mismatch between runtime and compile-time.";
-            }
-
             using Dim = typename alpaka::trait::DimType<TAcc>::type;
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
 
@@ -448,7 +450,7 @@ namespace mallocMC::CreationPolicies
             alpaka::wait(queue);
 
             auto workDivSingleThread = alpaka::WorkDivMembers<Dim, Idx>{{1U}, {1U}, {1U}};
-            alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool);
+            alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
 

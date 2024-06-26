@@ -67,8 +67,6 @@ namespace mallocMC
         using OOMPolicy = T_OOMPolicy;
         using AlignmentPolicy = T_AlignmentPolicy;
 
-        void* pool;
-
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC auto malloc(const AlpakaAcc& acc, size_t bytes) -> void*
         {
