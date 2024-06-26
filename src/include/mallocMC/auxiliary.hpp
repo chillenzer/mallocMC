@@ -74,37 +74,37 @@ namespace mallocMC
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicAdd(TAcc const& acc, T& lhs, T const& rhs)
+    ALPAKA_FN_ACC inline auto atomicAdd(TAcc const& acc, T& lhs, T const rhs)
     {
         return alpaka::atomicAdd(acc, &lhs, rhs);
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicSub(TAcc const& acc, T& lhs, T const& rhs)
+    ALPAKA_FN_ACC inline auto atomicSub(TAcc const& acc, T& lhs, T const rhs)
     {
         return alpaka::atomicSub(acc, &lhs, rhs);
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicCAS(TAcc const& acc, T& target, T const& cmp, T const& val)
+    ALPAKA_FN_ACC inline auto atomicCAS(TAcc const& acc, T& target, T const cmp, T const val)
     {
         return alpaka::atomicCas(acc, &target, cmp, val);
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicXor(TAcc const& acc, T& target, T const& value)
+    ALPAKA_FN_ACC inline auto atomicXor(TAcc const& acc, T& target, T const value)
     {
         return alpaka::atomicXor(acc, &target, value);
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicOr(TAcc const& acc, T& target, T const& value)
+    ALPAKA_FN_ACC inline auto atomicOr(TAcc const& acc, T& target, T const value)
     {
         return alpaka::atomicOr(acc, &target, value);
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto atomicAnd(TAcc const& acc, T& target, T const& value)
+    ALPAKA_FN_ACC inline auto atomicAnd(TAcc const& acc, T& target, T const value)
     {
         return alpaka::atomicAnd(acc, &target, value);
     }

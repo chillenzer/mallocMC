@@ -41,7 +41,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     constexpr const uint32_t BitMaskSize = 32U;
     template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>> // NOLINT(*magic-number*)
     using BitMaskStorageType = uint32_t;
-    ALPAKA_STATIC_ACC_MEM_CONSTANT constexpr const BitMaskStorageType<BitMaskSize> allOnes
+    static constexpr const BitMaskStorageType<BitMaskSize> allOnes
         = std::numeric_limits<BitMaskStorageType<BitMaskSize>>::max();
 
     ALPAKA_FN_ACC inline auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
@@ -55,12 +55,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         if(index == 0U)
             return 0U;
         if(index == BitMaskSize)
-            return allOnes<TAcc>;
+            return allOnes;
         // A global constexpr variable cannot be referenced (because it doesn't necessarily exist in memory but could
         // be inlined everywhere by the compiler). Most compilers don't really care but nvcc apparently does, so we get
         // a variable in local scope to reference BitMaskSize.
         constexpr auto referencableBitMaskSize = BitMaskSize;
-        return allOnes<TAcc> >> (referencableBitMaskSize - std::min(std::max(index, 0U), referencableBitMaskSize));
+        return allOnes >> (referencableBitMaskSize - std::min(std::max(index, 0U), referencableBitMaskSize));
     }
 
     struct BitMask
@@ -77,7 +77,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto set(TAcc const& acc)
         {
-            atomicOr(acc, mask, allOnes<TAcc>);
+            atomicOr(acc, mask, allOnes);
         }
 
         template<typename TAcc>
@@ -89,13 +89,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto unset(TAcc const& acc, auto const index)
         {
-            return atomicAnd(acc, mask, allOnes<TAcc> ^ singleBit(index));
+            return atomicAnd(acc, mask, allOnes ^ singleBit(index));
         }
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto flip(TAcc const& acc)
         {
-            return atomicXor(acc, mask, allOnes<TAcc>);
+            return atomicXor(acc, mask, allOnes);
         }
 
         template<typename TAcc>
@@ -124,7 +124,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC [[nodiscard]] auto all(TAcc const& acc) const
         {
-            return atomicAnd(acc, mask, allOnes<TAcc>);
+            return atomicAnd(acc, mask, allOnes);
         }
     };
 
@@ -201,7 +201,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 result = i;
             }
-            i = oldMask == allOnes<TAcc>
+            i = oldMask == allOnes
                 ? noFreeBitFound(mask)
                 : alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
         }
