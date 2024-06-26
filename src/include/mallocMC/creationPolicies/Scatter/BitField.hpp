@@ -28,6 +28,7 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
+#include "mallocMC/creationPolicies/Scatter/computeHash.hpp"
 #include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
 
 #include <alpaka/core/Common.hpp>
@@ -249,7 +250,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t const numValidBits,
         uint32_t const i) -> uint32_t
     {
-        auto startIndexInMask = 0U;
+        auto startIndexInMask = computeHash<BitFieldFlat>() % field.numMasks();
         auto indexInMask = firstFreeBit(acc, field[i], startIndexInMask);
         if(indexInMask < noFreeBitFound(BitMask{}))
         {

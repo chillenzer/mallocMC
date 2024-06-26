@@ -138,7 +138,7 @@ TEST_CASE("BitFieldFlat")
         CHECK(firstFreeBit(acc, field) == index);
     }
 
-    SECTION("knows its first free bit if later ones are free, too.")
+    SECTION("knows a free bit if later ones are free, too.")
     {
         uint32_t const index = GENERATE(0, 1, numChunks / 2, numChunks - 1);
         for(auto& mask : std::span{static_cast<BitMask*>(data), index / BitMaskSize})
@@ -152,7 +152,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{data};
 
-        CHECK(firstFreeBit(acc, field) == index);
+        CHECK(firstFreeBit(acc, field) >= index);
     }
 
     SECTION("knows its first free bit for different numChunks.")

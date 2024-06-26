@@ -31,6 +31,7 @@
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/creationPolicies/Scatter/computeHash.hpp"
 
 #include <algorithm>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
@@ -59,12 +60,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _chunkSizes[T_numPages]{};
         uint32_t _fillingLevels[T_numPages]{};
     };
-
-    template<typename TCaller, typename... TAdditionalInfo>
-    ALPAKA_FN_ACC inline auto computeHash(TAdditionalInfo... /*unused*/) -> size_t
-    {
-        return 42U;
-    }
 
     template<size_t T_blockSize, uint32_t T_pageSize>
     class AccessBlock
