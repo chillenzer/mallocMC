@@ -221,13 +221,31 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     }
 
     template<typename TAcc>
-    ALPAKA_FN_ACC inline auto firstFreeBit(TAcc const& acc, BitFieldFlat& field, uint32_t numValidBits = 0) -> uint32_t
+    ALPAKA_FN_ACC inline auto firstFreeBit(
+        TAcc const& acc,
+        BitFieldFlat& field,
+        uint32_t numValidBits = 0U,
+        uint32_t const startIndex = 0U) -> uint32_t
     {
-        if(numValidBits == 0)
+        numValidBits = numValidBits == 0 ? field.numBits() : numValidBits;
+        auto result = firstFreeBitInBetween(acc, field, numValidBits, startIndex, field.numMasks());
+        if(result == noFreeBitFound(field))
         {
-            numValidBits = field.numBits();
+            result = firstFreeBitInBetween(acc, field, numValidBits, 0U, startIndex);
         }
-        for(uint32_t i = 0; i < field.numMasks(); ++i)
+        return result;
+    }
+
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto firstFreeBitInBetween(
+        TAcc const& acc,
+        BitFieldFlat& field,
+        uint32_t const numValidBits,
+        uint32_t const startIndex,
+        uint32_t const endIndex) -> uint32_t
+    {
+        uint32_t result = noFreeBitFound(field);
+        for(uint32_t i = startIndex; i < endIndex && result == noFreeBitFound(field); ++i)
         {
             auto indexInMask = firstFreeBit(acc, field[i]);
             if(indexInMask < noFreeBitFound(BitMask{}))
@@ -235,12 +253,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 uint32_t freeBitIndex = indexInMask + BitMaskSize * i;
                 if(freeBitIndex < numValidBits)
                 {
-                    return freeBitIndex;
+                    result = freeBitIndex;
                 }
-                return noFreeBitFound(field);
             }
         }
-        return noFreeBitFound(field);
+        return result;
     }
 
 } // namespace mallocMC::CreationPolicies::ScatterAlloc

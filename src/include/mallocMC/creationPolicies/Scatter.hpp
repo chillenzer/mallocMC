@@ -254,19 +254,32 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
         {
-            auto resultingIndex = noFreePageFound();
-            for(size_t i = 0; i < numPages() && resultingIndex == noFreePageFound(); ++i)
+            auto result = choosePageInBetween(acc, numBytes, startIndex, numPages());
+            if(result == noFreePageFound())
             {
-                // TODO(lenz): Check if an "if" statement would yield better performance here.
-                auto index = (startIndex + i) % numPages();
+                result = choosePageInBetween(acc, numBytes, 0U, startIndex);
+            }
+            return result;
+        }
 
-                if(thisPageIsAppropriate(acc, index, numBytes))
+        template<typename TAcc>
+        ALPAKA_FN_ACC auto choosePageInBetween(
+            TAcc const& acc,
+            uint32_t const numBytes,
+            size_t const startIndex,
+            size_t const endIndex) -> size_t
+        {
+            auto resultingIndex = noFreePageFound();
+            for(size_t i = startIndex; i < endIndex && resultingIndex == noFreePageFound(); ++i)
+            {
+                if(thisPageIsAppropriate(acc, i, numBytes))
                 {
-                    resultingIndex = index;
+                    resultingIndex = i;
                 }
             }
             return resultingIndex;
         }
+
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
@@ -389,15 +402,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
-            for(auto& block : std::span(accessBlocks, numBlocks()))
+            size_t startIndex = 0U;
+            void* pointer = createInBetween(acc, bytes, startIndex, numBlocks());
+            if(pointer == nullptr)
             {
-                void* pointer = block.create(acc, bytes);
-                if(pointer != nullptr)
-                {
-                    return pointer;
-                }
+                pointer = createInBetween(acc, bytes, 0U, startIndex);
             }
-            return nullptr;
+            return pointer;
+        }
+
+        template<typename AlpakaAcc>
+        ALPAKA_FN_ACC auto createInBetween(
+            const AlpakaAcc& acc,
+            uint32_t bytes,
+            size_t const startIndex,
+            size_t const endIndex) -> void*
+        {
+            void* pointer{};
+            for(size_t i = startIndex; i < endIndex && pointer == nullptr; ++i)
+            {
+                pointer = accessBlocks[i].create(acc, bytes);
+            }
+            return pointer;
         }
 
         template<typename AlpakaAcc>
