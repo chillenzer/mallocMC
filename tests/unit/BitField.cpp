@@ -39,7 +39,6 @@
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlat;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
-using mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit;
 
 // This is just passed through to select one backend to serial parts of the tests.
 inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
@@ -89,13 +88,13 @@ TEST_CASE("BitMask")
         mask.flip(acc);
         size_t const index = GENERATE(0, 3);
         mask.flip(acc, index);
-        CHECK(firstFreeBit(acc, mask) == index);
+        CHECK(mask.firstFreeBit(acc) == index);
     }
 
     SECTION("returns BitMaskSize as first free bit if there is none.")
     {
         mask.flip(acc);
-        CHECK(firstFreeBit(acc, mask) == BitMaskSize);
+        CHECK(mask.firstFreeBit(acc) == BitMaskSize);
     }
 
     SECTION("knows the first free bit with startIndex.")
@@ -113,7 +112,7 @@ TEST_CASE("BitMask")
         mask.unset(acc, index1);
         mask.unset(acc, index2);
         CHECK(
-            firstFreeBit(acc, mask, startIndex) == ((startIndex > index1 and startIndex <= index2) ? index2 : index1));
+            mask.firstFreeBit(acc, startIndex) == ((startIndex > index1 and startIndex <= index2) ? index2 : index1));
     }
 }
 
@@ -135,7 +134,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{data};
 
-        CHECK(firstFreeBit(acc, field) == index);
+        CHECK(field.firstFreeBit(acc) == index);
     }
 
     SECTION("knows a free bit if later ones are free, too.")
@@ -152,7 +151,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{data};
 
-        CHECK(firstFreeBit(acc, field) >= index);
+        CHECK(field.firstFreeBit(acc) >= index);
     }
 
     SECTION("knows its first free bit for different numChunks.")
@@ -168,7 +167,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{localData};
 
-        CHECK(firstFreeBit(acc, field) == index);
+        CHECK(field.firstFreeBit(acc) == index);
     }
 
     SECTION("sets a bit.")
@@ -202,6 +201,6 @@ TEST_CASE("BitFieldFlat")
         {
             field.set(acc, i);
         }
-        CHECK(firstFreeBit(acc, field) == numChunks);
+        CHECK(field.firstFreeBit(acc) == numChunks);
     }
 }

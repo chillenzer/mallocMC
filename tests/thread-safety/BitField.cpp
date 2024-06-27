@@ -78,8 +78,7 @@ TEST_CASE("Threaded BitMask")
                     }
                 }
             });
-        std::thread([&mask, &result]() { result = mallocMC::CreationPolicies::ScatterAlloc::firstFreeBit(acc, mask); })
-            .join();
+        std::thread([&mask, &result]() { result = mask.firstFreeBit(acc); }).join();
         std::this_thread::sleep_for(20ms);
         CHECK(result == firstFreeIndex);
         noiseThread.request_stop();

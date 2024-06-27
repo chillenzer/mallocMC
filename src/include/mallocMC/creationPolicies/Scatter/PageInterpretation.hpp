@@ -80,8 +80,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // TODO(lenz): This is the line that should be here but it segfaults for some reason. Debug!
             // auto startIndex = Hash<decltype(*this)>::get() % numChunks();
             auto startIndex = 0U;
-            auto const index = firstFreeBit(acc, field, numChunks(), startIndex);
-            return (index < noFreeBitFound(field)) ? this->operator[](index) : nullptr;
+            auto const index = field.firstFreeBit(acc, numChunks(), startIndex);
+            return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
         }
 
         template<typename TAcc>
