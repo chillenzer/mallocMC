@@ -451,12 +451,14 @@ namespace mallocMC::CreationPolicies
         {
             using Dim = typename alpaka::trait::DimType<TAcc>::type;
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
+            using VecType = alpaka::Vec<Dim, Idx>;
 
             auto poolView = alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize));
             alpaka::memset(queue, poolView, 0U);
             alpaka::wait(queue);
 
-            auto workDivSingleThread = alpaka::WorkDivMembers<Dim, Idx>{{1U}, {1U}, {1U}};
+            auto workDivSingleThread
+                = alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()};
             alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
