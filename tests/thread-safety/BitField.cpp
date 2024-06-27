@@ -46,6 +46,9 @@ using namespace std::chrono_literals;
 // `std::jthread` but we have to ensure that the alpaka atomics work. Thus, the ifdef.
 #ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
 
+// This is a hack. We should actually pass an instance of alpaka::AccCpuThreads but it turns out to be really hard to
+// instantiate, so we refrain from doing so. But the atomics are fine with getting handed the precise atomics backend
+// they are supposed to use and the rest is mocked out in mocks.hpp.
 inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
 
 TEST_CASE("Threaded BitMask")
