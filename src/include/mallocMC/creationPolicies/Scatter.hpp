@@ -215,10 +215,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
+        ALPAKA_FN_ACC static auto startIndex(uint32_t const numBytes)
+        {
+            return 42U % numPages();
+        }
+
         template<typename TAcc>
         ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
-            auto startIndex = Hash<decltype(*this)>::get(numBytes) % numPages();
+            auto index = startIndex(numBytes);
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -227,11 +232,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // The seemingly non-terminating behaviour that we wrap around multiple times can only occur (assuming a
             // consistent, valid state of the data) when there is high demand for memory such that pages that appear
-            // free to `choosePage` are repeatedly found but then the free chunks scooped away by other threads.
+            // free to `choosePage` are repeatedly found but then the free chunks are scooped away by other threads.
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            auto index = choosePage(acc, numBytes, startIndex);
+            index = choosePage(acc, numBytes, index);
             void* pointer = index != noFreePageFound()
                 ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
                 : nullptr;
@@ -239,8 +244,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             while(index != noFreePageFound() and pointer == nullptr)
             {
                 leavePage(acc, index);
-                startIndex = index + 1;
-                index = choosePage(acc, numBytes, startIndex);
+                ++index;
+                index = choosePage(acc, numBytes, index);
                 pointer = PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc);
             }
 
@@ -382,12 +387,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
+        ALPAKA_FN_ACC auto startIndex(uint32_t const numBytes) const
+        {
+            return 42U % numBlocks();
+        }
+
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
             return wrappingLoop(
                 acc,
-                Hash<decltype(*this)>::get(bytes) % numBlocks(),
+                startIndex(bytes),
                 numBlocks(),
                 static_cast<void*>(nullptr),
                 [this, bytes](auto const& localAcc, auto const index)

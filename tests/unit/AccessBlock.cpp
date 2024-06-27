@@ -168,6 +168,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             REQUIRE(chunkSize != chunkSize2);
             // To be precise, the second call will actually return a nullptr if there is only a single page (which is
             // one of the test cases at the time of writing). But that technically passes this test, too.
+
             CHECK(
                 accessBlock.pageIndex(accessBlock.create(acc, chunkSize))
                 != accessBlock.pageIndex(accessBlock.create(acc, chunkSize2)));

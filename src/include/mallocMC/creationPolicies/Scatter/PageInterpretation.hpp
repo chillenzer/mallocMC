@@ -73,14 +73,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
 
+
+        ALPAKA_FN_ACC auto startIndex() const
+        {
+            return 42U;
+        }
+
         template<typename TAcc>
         ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
-            // TODO(lenz): This is the line that should be here but it segfaults for some reason. Debug!
-            // auto startIndex = Hash<decltype(*this)>::get() % numChunks();
-            auto startIndex = 0U;
-            auto const index = field.firstFreeBit(acc, numChunks(), startIndex);
+            auto const index
+                = field.firstFreeBit(acc, numChunks(), startIndex() % std::max(numChunks() / BitMaskSize, 1U));
             return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
         }
 
