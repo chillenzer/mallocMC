@@ -215,4 +215,16 @@ TEST_CASE("BitFieldFlat")
         }
         CHECK(field.firstFreeBit(acc, numValidBits) == numChunks);
     }
+
+    SECTION("returns numChunks if free bit is not valid.")
+    {
+        BitFieldFlat field{data};
+        uint32_t const numValidBits = GENERATE(1, numChunks / 2, numChunks - 1);
+        for(uint32_t i = 0; i < numValidBits; ++i)
+        {
+            // We are filling up all valid bits.
+            field.set(acc, i);
+        }
+        CHECK(field.firstFreeBit(acc, numValidBits) == numChunks);
+    }
 }

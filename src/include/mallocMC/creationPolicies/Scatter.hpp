@@ -32,10 +32,13 @@
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/core/Common.hpp>
+#include <alpaka/core/Positioning.hpp>
+#include <alpaka/idx/Accessors.hpp>
 #include <alpaka/kernel/Traits.hpp>
 #include <alpaka/mem/fence/Traits.hpp>
 #include <alpaka/mem/view/Traits.hpp>
@@ -215,15 +218,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
-        ALPAKA_FN_ACC static auto startIndex(uint32_t const numBytes)
+        ALPAKA_FN_ACC static auto startIndex(auto const& acc)
         {
-            return 42U % numPages();
+            return (laneid() * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numPages();
         }
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
         {
-            auto index = startIndex(numBytes);
+            auto index = startIndex(acc);
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -387,9 +390,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_ACC auto startIndex(uint32_t const numBytes) const
+        ALPAKA_FN_ACC auto startIndex(auto const& acc, uint32_t const numBytes) const
         {
-            return 42U % numBlocks();
+            return (numBytes * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numBlocks();
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
@@ -397,7 +400,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             return wrappingLoop(
                 acc,
-                startIndex(bytes),
+                startIndex(acc, bytes),
                 numBlocks(),
                 static_cast<void*>(nullptr),
                 [this, bytes](auto const& localAcc, auto const index)

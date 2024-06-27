@@ -30,6 +30,7 @@
 #include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 #include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 
 #include <alpaka/core/Common.hpp>
 #include <alpaka/intrinsic/Traits.hpp>
@@ -248,7 +249,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         ALPAKA_FN_ACC [[nodiscard]] static auto startIndex()
         {
-            return 42U;
+            return warpid() * warpSize + laneid();
         }
 
         ALPAKA_FN_ACC [[nodiscard]] static auto isThisLastMask(uint32_t const numValidBits, uint32_t const index)

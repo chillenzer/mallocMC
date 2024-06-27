@@ -31,6 +31,7 @@
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/creationPolicies/Scatter/Hash.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -76,15 +77,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_ACC auto startIndex() const
         {
-            return 42U;
+            return 199 * _chunkSize + smid();
         }
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
         {
             auto field = bitField();
-            auto const index
-                = field.firstFreeBit(acc, numChunks(), startIndex() % std::max(numChunks() / BitMaskSize, 1U));
+            auto const index = field.firstFreeBit(acc, numChunks(), startIndex());
             return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
         }
 
