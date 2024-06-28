@@ -46,11 +46,6 @@ using namespace std::chrono_literals;
 // `std::jthread` but we have to ensure that the alpaka atomics work. Thus, the ifdef.
 #ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
 
-// This is a hack. We should actually pass an instance of alpaka::AccCpuThreads but it turns out to be really hard to
-// instantiate, so we refrain from doing so. But the atomics are fine with getting handed the precise atomics backend
-// they are supposed to use and the rest is mocked out in mocks.hpp.
-inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
-
 TEST_CASE("Threaded BitMask")
 {
     BitMask mask{};
@@ -66,7 +61,7 @@ TEST_CASE("Threaded BitMask")
         uint32_t const firstFreeIndex = GENERATE(0U, 1U, 10U);
         for(uint32_t i = 0; i < firstFreeIndex; ++i)
         {
-            mask.set(acc, i);
+            mask.set(accSerial, i);
         }
 
         uint32_t result = BitMaskSize;
@@ -77,11 +72,11 @@ TEST_CASE("Threaded BitMask")
                 {
                     for(uint32_t i = firstFreeIndex + 1; i < BitMaskSize; ++i)
                     {
-                        mask.flip(acc, i);
+                        mask.flip(accSerial, i);
                     }
                 }
             });
-        std::thread([&mask, &result]() { result = mask.firstFreeBit(acc); }).join();
+        std::thread([&mask, &result]() { result = mask.firstFreeBit(accSerial); }).join();
         std::this_thread::sleep_for(20ms);
         CHECK(result == firstFreeIndex);
         noiseThread.request_stop();

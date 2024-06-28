@@ -25,29 +25,26 @@
   THE SOFTWARE.
 */
 
+#include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
+#include <alpaka/dim/DimIntegralConst.hpp>
+#include <alpaka/idx/Accessors.hpp>
 #include <alpaka/intrinsic/IntrinsicFallback.hpp>
 #include <alpaka/mem/fence/Traits.hpp>
+#include <alpaka/vec/Vec.hpp>
 
-// TODO(lenz): This is a dirty hack. I'm using AtomicAtomicRef instead of an accelerator directly because it turns out
-// that it's very hard to instantiate an accelerator and the atomics don't really care what you hand them. But the
-// mem_fence DOES care, so I have to provide this empty implementation. We don't really get a thread fence anymore, of
-// course, but that's okay because we are single-threaded in this file. Never do this in production, of course!
-template<>
-struct alpaka::trait::MemFence<alpaka::AtomicAtomicRef, alpaka::memory_scope::Device, void>
+// This is very hacky: AccCpuSerial (and in general all Accellerators) are very reluctant to be instantiated, so we do
+// it the oldschool way and simply malloc some memory pretending to be that accellerator. Let's hope that null-ing it
+// is a valid initialisation. The final class only has one mutable data member, so that's probably not half bad but I
+// didn't go through all those hundreds of base classes. Usually, we only need the time anyways.
+inline auto constructAcc()
 {
-    template<typename... T>
-    ALPAKA_FN_ACC static void mem_fence(T... /*We're just providing a general interface.*/)
-    {
-    }
-};
+    using Acc = alpaka::AccCpuSerial<alpaka::DimInt<1U>, size_t>;
+    void* myPointer = malloc(sizeof(Acc));
+    memset(myPointer, 0U, sizeof(Acc));
+    return static_cast<Acc*>(myPointer);
+}
 
-template<>
-struct alpaka::trait::Ffs<alpaka::AtomicAtomicRef, void> : alpaka::trait::Ffs<alpaka::IntrinsicFallback, void>
-{
-    template<typename T, typename... TArgs>
-    static auto ffs(T /*intrinsic*/, TArgs... args)
-    {
-        return Ffs<alpaka::IntrinsicFallback, void>::ffs(alpaka::IntrinsicFallback{}, args...);
-    }
-};
+//
+inline static auto const accPointer = constructAcc();
+inline static auto const& accSerial = *accPointer;

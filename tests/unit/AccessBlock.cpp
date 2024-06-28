@@ -57,9 +57,6 @@ constexpr uint32_t const pageTableEntrySize = 8U;
 constexpr uint32_t const pageSize1 = 1024U;
 constexpr uint32_t const pageSize2 = 4096U;
 
-// This is just passed through to select one backend to serial parts of the tests.
-inline static constexpr auto const acc = alpaka::AtomicAtomicRef{};
-
 using BlockAndPageSizes = std::tuple<
     // single page:
     std::tuple<
@@ -87,7 +84,7 @@ auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const 
         std::end(pointers),
         [&accessBlock, chunkSize]()
         {
-            void* pointer = accessBlock.create(acc, chunkSize);
+            void* pointer = accessBlock.create(accSerial, chunkSize);
             REQUIRE(pointer != nullptr);
             return pointer;
         });
@@ -120,7 +117,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         uint32_t actualNumOccupied = numOccupied;
         for(uint32_t i = 0; i < numOccupied; ++i)
         {
-            if(accessBlock.create(acc, chunkSize) == nullptr)
+            if(accessBlock.create(accSerial, chunkSize) == nullptr)
             {
                 actualNumOccupied--;
             }
@@ -146,20 +143,20 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // This is not a particularly hard thing to do because any uninitialised pointer that could be returned is
             // most likely not exactly the nullptr. We just leave this in as it currently doesn't hurt anybody to keep
             // it.
-            CHECK(accessBlock.create(acc, chunkSize) != nullptr);
+            CHECK(accessBlock.create(accSerial, chunkSize) != nullptr);
         }
 
         SECTION("memory that can be written to and read from.")
         {
             uint32_t const arbitraryValue = 42;
-            auto* ptr = static_cast<uint32_t*>(accessBlock.create(acc, chunkSize));
+            auto* ptr = static_cast<uint32_t*>(accessBlock.create(accSerial, chunkSize));
             *ptr = arbitraryValue;
             CHECK(*ptr == arbitraryValue);
         }
 
         SECTION("second memory somewhere else.")
         {
-            CHECK(accessBlock.create(acc, chunkSize) != accessBlock.create(acc, chunkSize));
+            CHECK(accessBlock.create(accSerial, chunkSize) != accessBlock.create(accSerial, chunkSize));
         }
 
         SECTION("memory of different chunk size in different pages.")
@@ -170,8 +167,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // one of the test cases at the time of writing). But that technically passes this test, too.
 
             CHECK(
-                accessBlock.pageIndex(accessBlock.create(acc, chunkSize))
-                != accessBlock.pageIndex(accessBlock.create(acc, chunkSize2)));
+                accessBlock.pageIndex(accessBlock.create(accSerial, chunkSize))
+                != accessBlock.pageIndex(accessBlock.create(accSerial, chunkSize2)));
         }
 
         SECTION("nullptr if there's no page with fitting chunk size")
@@ -182,16 +179,16 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             {
                 const auto differentChunkSize = chunkSize + 1U + index;
                 REQUIRE(chunkSize != differentChunkSize);
-                accessBlock.create(acc, differentChunkSize);
+                accessBlock.create(accSerial, differentChunkSize);
             }
 
-            CHECK(accessBlock.create(acc, chunkSize) == nullptr);
+            CHECK(accessBlock.create(accSerial, chunkSize) == nullptr);
         }
 
         SECTION("nullptr if all pages have full filling level.")
         {
             fillWith(accessBlock, chunkSize);
-            CHECK(accessBlock.create(acc, chunkSize) == nullptr);
+            CHECK(accessBlock.create(accSerial, chunkSize) == nullptr);
         }
 
         SECTION("last remaining chunk.")
@@ -199,8 +196,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             auto pointers = fillWith(accessBlock, chunkSize);
             size_t const index = GENERATE(0U, 1U, 42U);
             void* pointer = pointers[std::min(index, pointers.size() - 1)];
-            accessBlock.destroy(acc, pointer);
-            CHECK(accessBlock.create(acc, chunkSize) == pointer);
+            accessBlock.destroy(accSerial, pointer);
+            CHECK(accessBlock.create(accSerial, chunkSize) == pointer);
         }
 
         SECTION("memory larger than page size.")
@@ -208,7 +205,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // We give a strong guarantee that this searches the first possible block, so we know the index here.
             if(accessBlock.numPages() >= 2U)
             {
-                CHECK(accessBlock.pageIndex(accessBlock.create(acc, 2U * pageSize)) == 0U);
+                CHECK(accessBlock.pageIndex(accessBlock.create(accSerial, 2U * pageSize)) == 0U);
             }
         }
 
@@ -217,7 +214,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             // larger than the available memory but in some cases smaller than the block size even after subtracting
             // the space for the page table:
             uint32_t const excessiveChunkSize = accessBlock.numPages() * pageSize + 1U;
-            CHECK(accessBlock.create(acc, excessiveChunkSize) == nullptr);
+            CHECK(accessBlock.create(accSerial, excessiveChunkSize) == nullptr);
         }
 
         SECTION("in the correct place for larger than page size.")
@@ -230,18 +227,20 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
                 // can be served.
                 size_t index = GENERATE(0U, 1U, 5U);
                 index = std::min(index, pointers.size() - 2);
-                accessBlock.destroy(acc, pointers[index]);
-                accessBlock.destroy(acc, pointers[index + 1]);
+                accessBlock.destroy(accSerial, pointers[index]);
+                accessBlock.destroy(accSerial, pointers[index + 1]);
 
                 // Must be exactly where we free'd the pages:
-                CHECK(accessBlock.pageIndex(accessBlock.create(acc, 2U * pageSize)) == index);
+                CHECK(
+                    accessBlock.pageIndex(accessBlock.create(accSerial, 2U * pageSize))
+                    == static_cast<ssize_t>(index));
             }
         }
 
         SECTION("a pointer and knows it's valid afterwards.")
         {
-            void* pointer = accessBlock.create(acc, chunkSize);
-            CHECK(accessBlock.isValid(acc, pointer));
+            void* pointer = accessBlock.create(accSerial, chunkSize);
+            CHECK(accessBlock.isValid(accSerial, pointer));
         }
 
         SECTION("the last pointer in page and its allocation does not reach into the bit field.")
@@ -253,8 +252,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             auto lastOfPage0 = pointers[slots / accessBlock.numPages() - 1];
 
             // Free the first bit of the bit field by destroying the first allocation in the first page:
-            accessBlock.destroy(acc, pointers[0]);
-            REQUIRE(not accessBlock.isValid(acc, pointers[0]));
+            accessBlock.destroy(accSerial, pointers[0]);
+            REQUIRE(not accessBlock.isValid(accSerial, pointers[0]));
 
             // Write all ones to the last of the first page: If there is an overlap between the region of the last
             // chunk and the bit field, our recently free'd first chunk will have its bit set by this operation.
@@ -263,8 +262,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             std::fill(begin, end, 255U);
 
             // Now, we try to allocate one more chunk. It must be the one we free'd before.
-            CHECK(accessBlock.create(acc, chunkSize) == pointers[0]);
-            REQUIRE(accessBlock.isValid(acc, pointers[0]));
+            CHECK(accessBlock.create(accSerial, chunkSize) == pointers[0]);
+            REQUIRE(accessBlock.isValid(accSerial, pointers[0]));
         }
 
         SECTION("and writes something very close to page size.")
@@ -291,20 +290,20 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 
     SECTION("destroys")
     {
-        void* pointer = accessBlock.create(acc, chunkSize);
-        REQUIRE(accessBlock.isValid(acc, pointer));
+        void* pointer = accessBlock.create(accSerial, chunkSize);
+        REQUIRE(accessBlock.isValid(accSerial, pointer));
 
         SECTION("a pointer thereby invalidating it.")
         {
-            accessBlock.destroy(acc, pointer);
-            CHECK(not accessBlock.isValid(acc, pointer));
+            accessBlock.destroy(accSerial, pointer);
+            CHECK(not accessBlock.isValid(accSerial, pointer));
         }
 
         SECTION("the whole page if last pointer is destroyed.")
         {
             REQUIRE(chunkSize != pageSize);
             REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages() - 1);
-            accessBlock.destroy(acc, pointer);
+            accessBlock.destroy(accSerial, pointer);
             CHECK(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
         }
 
@@ -318,18 +317,18 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             while(accessBlock.getAvailableSlots(pageSize) != unOccupiedPages)
             {
                 unOccupiedPages = accessBlock.getAvailableSlots(pageSize);
-                newPointer = accessBlock.create(acc, chunkSize);
+                newPointer = accessBlock.create(accSerial, chunkSize);
             }
-            accessBlock.destroy(acc, newPointer);
+            accessBlock.destroy(accSerial, newPointer);
             CHECK(accessBlock.getAvailableSlots(pageSize) == unOccupiedPages);
         }
 
         SECTION("one slot without touching the others.")
         {
             // this won't be touched:
-            accessBlock.create(acc, chunkSize);
+            accessBlock.create(accSerial, chunkSize);
             auto originalSlots = accessBlock.getAvailableSlots(chunkSize);
-            accessBlock.destroy(acc, pointer);
+            accessBlock.destroy(accSerial, pointer);
             CHECK(accessBlock.getAvailableSlots(chunkSize) == originalSlots + 1U);
         }
 
@@ -347,18 +346,18 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         {
             if(accessBlock.numPages() > 1U)
             {
-                accessBlock.destroy(acc, pointer);
+                accessBlock.destroy(accSerial, pointer);
                 REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages());
 
-                pointer = accessBlock.create(acc, 2U * pageSize);
+                pointer = accessBlock.create(accSerial, 2U * pageSize);
                 REQUIRE(accessBlock.getAvailableSlots(pageSize) == accessBlock.numPages() - 2);
-                REQUIRE(accessBlock.isValid(acc, pointer));
+                REQUIRE(accessBlock.isValid(accSerial, pointer));
 
-                accessBlock.destroy(acc, pointer);
+                accessBlock.destroy(accSerial, pointer);
 
                 SECTION("thereby invalidating it.")
                 {
-                    CHECK(not accessBlock.isValid(acc, pointer));
+                    CHECK(not accessBlock.isValid(accSerial, pointer));
                 }
 
                 SECTION("thereby freeing up their pages.")
