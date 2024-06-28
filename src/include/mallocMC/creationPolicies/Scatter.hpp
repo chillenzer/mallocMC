@@ -134,7 +134,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
             if(chunkSize >= multiPageThreshold())
             {
-                destroyOverMultiplePages(index, chunkSize);
+                destroyOverMultiplePages(acc, index, chunkSize);
             }
             else
             {
@@ -383,13 +383,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
 
-        ALPAKA_FN_ACC void destroyOverMultiplePages(size_t const pageIndex, uint32_t const chunkSize)
+        ALPAKA_FN_ACC void destroyOverMultiplePages(auto const& acc, size_t const pageIndex, uint32_t const chunkSize)
         {
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
-                pageTable._chunkSizes[pageIndex + i] = 0U;
-                pageTable._fillingLevels[pageIndex + i] = 0U;
+                leavePage(acc, pageIndex + i);
             }
         }
     };
