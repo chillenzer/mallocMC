@@ -233,7 +233,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 leavePage(acc, index);
                 ++index;
                 index = choosePage(acc, numBytes, index);
-                pointer = PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc);
+                pointer = index != noFreePageFound()
+                    ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
+                    : nullptr;
             }
 
             return pointer;
