@@ -132,7 +132,7 @@ ALPAKA_FN_ACC auto forAll(auto const& acc, auto size, auto functor)
 {
     auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
     auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-    for(auto i = 0; i < numElements; ++i)
+    for(uint32_t i = 0; i < numElements; ++i)
     {
         auto idx = idx0 + i;
         if(idx < size)
@@ -148,13 +148,13 @@ struct Create
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
         forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSize); });
-    };
+    }
 
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
     {
         forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSizes[idx]); });
-    };
+    }
 };
 
 struct CreateUntilSuccess
@@ -172,7 +172,7 @@ struct CreateUntilSuccess
                     pointers[idx] = accessBlock->create(acc, chunkSize);
                 }
             });
-    };
+    }
 };
 
 
@@ -182,7 +182,7 @@ struct Destroy
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers) const
     {
         forAll(acc, pointers.size, [&](auto idx) { accessBlock->destroy(acc, pointers[idx]); });
-    };
+    }
 };
 
 struct IsValid
@@ -342,7 +342,7 @@ struct CheckContent
     {
         auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
         auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-        for(auto i = 0; i < numElements; ++i)
+        for(uint32_t i = 0; i < numElements; ++i)
         {
             auto idx = idx0 + i;
             if(idx < pointers.size)
@@ -435,7 +435,7 @@ struct FillAllUpAndWriteToThem
     {
         auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
         auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-        for(auto i = 0; i < numElements; ++i)
+        for(uint32_t i = 0; i < numElements; ++i)
         {
             auto idx = idx0 + i;
             if(idx < pointers.size)
@@ -650,7 +650,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
         // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
         alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
-        auto const workDiv = createWorkDiv<Acc>(devAcc, 1U);
 
         alpaka::exec<Acc>(
             queue,
