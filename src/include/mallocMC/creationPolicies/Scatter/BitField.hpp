@@ -28,7 +28,6 @@
 #pragma once
 
 #include "mallocMC/auxiliary.hpp"
-#include "mallocMC/creationPolicies/Scatter/Hash.hpp"
 #include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
