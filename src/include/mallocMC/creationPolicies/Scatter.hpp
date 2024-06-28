@@ -49,7 +49,7 @@
 #include <functional>
 #include <iterator>
 #include <numeric>
-#include <optional>
+#include <sys/types.h>
 #include <vector>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -72,13 +72,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return T_blockSize / (T_pageSize + pageTableEntrySize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableSlots(uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
         {
             if(chunkSize < T_pageSize)
             {
                 return getAvailableChunks(chunkSize);
             }
-            return getAvailableMultiPages(chunkSize);
+            return getAvailableMultiPages(acc, chunkSize);
         }
 
         ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> ssize_t
@@ -110,7 +110,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
             {
-                pointer = createOverMultiplePages(numBytes);
+                pointer = createOverMultiplePages(acc, numBytes);
             }
             else
             {
@@ -173,43 +173,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableMultiPages(uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableMultiPages(auto const& acc, uint32_t const chunkSize) -> size_t
         {
             // This is the most inefficient but simplest and only thread-safe way I could come up with. If we ever
             // need this in production, we might want to revisit this.
             void* pointer = nullptr;
             std::vector<void*> pointers;
-            while((pointer = createOverMultiplePages(chunkSize)))
+            while((pointer = createOverMultiplePages(acc, chunkSize)))
             {
                 pointers.push_back(pointer);
             }
-            // TODO(lenz): This is a dirty hack! There is a template TAcc and I provide something explicit. This only
-            // works because multiple pages are not yet thread-safe.
-            std::for_each(
-                std::begin(pointers),
-                std::end(pointers),
-                [&](auto ptr) { destroyOverMultiplePages(pageIndex(ptr), chunkSize); });
+            std::for_each(std::begin(pointers), std::end(pointers), [&](auto ptr) { destroy(acc, ptr); });
             return pointers.size();
         }
 
-        ALPAKA_FN_ACC auto createOverMultiplePages(uint32_t const numBytes) -> void*
+        ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
             if(numPagesNeeded > numPages())
             {
                 return nullptr;
             }
-            auto chunk = createContiguousPages(numPagesNeeded);
-            if(chunk)
-            {
-                for(uint32_t i = 0; i < numPagesNeeded; ++i)
-                {
-                    pageTable._chunkSizes[chunk.value().index + i] = numBytes;
-                    pageTable._fillingLevels[chunk.value().index + i] = 1U;
-                }
-                return chunk.value().pointer;
-            }
-            return nullptr;
+            return createContiguousPages(acc, numPagesNeeded, numBytes);
         }
 
         ALPAKA_FN_ACC static auto noFreePageFound()
@@ -282,19 +267,55 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return appropriate;
         }
 
-        ALPAKA_FN_ACC auto createContiguousPages(uint32_t const numPagesNeeded) -> std::optional<Chunk>
+        ALPAKA_FN_ACC auto createContiguousPages(
+            auto const& acc,
+            uint32_t const numPagesNeeded,
+            uint32_t const numBytes)
         {
-            for(size_t index = 0; index < numPages() - (numPagesNeeded - 1); ++index)
+            void* result{nullptr};
+            // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
+            // chunk available.
+            auto dummyChunkSize = T_pageSize / 2;
+            for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
+                ++firstIndex)
             {
-                if(std::all_of(
-                       &pageTable._chunkSizes[index],
-                       &pageTable._chunkSizes[index + numPagesNeeded],
-                       [](auto const val) { return val == 0U; }))
+                size_t numPagesAcquired{};
+                for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                 {
-                    return std::optional<Chunk>({static_cast<uint32_t>(index), &pages[index]});
+                    if(not thisPageIsAppropriate(acc, firstIndex + numPagesAcquired, dummyChunkSize))
+                    {
+                        for(size_t cleanupIndex = numPagesAcquired; cleanupIndex > 0; --cleanupIndex)
+                        {
+                            leavePage(acc, firstIndex + cleanupIndex - 1);
+                        }
+                        break;
+                    }
+                }
+                if(numPagesAcquired == numPagesNeeded)
+                {
+                    // At this point, we have acquired all the pages we need and nobody can mess with them anymore. We
+                    // still have to replace the dummy chunkSize with the real one.
+                    for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
+                    {
+#ifndef NDEBUG
+                        auto oldChunkSize =
+#endif
+                            atomicCAS(
+                                acc,
+                                pageTable._chunkSizes[firstIndex + numPagesAcquired],
+                                T_pageSize / 2,
+                                numBytes);
+#ifndef NDEBUG
+                        if(oldChunkSize != dummyChunkSize)
+                        {
+                            throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
+                        }
+#endif // !NDEBUG
+                    }
+                    result = &pages[firstIndex];
                 };
             }
-            return std::nullopt;
+            return result;
         }
 
         template<typename TAcc>

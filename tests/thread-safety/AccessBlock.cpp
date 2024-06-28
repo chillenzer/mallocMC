@@ -387,9 +387,9 @@ auto checkContent(
 
 struct GetAvailableSlots
 {
-    ALPAKA_FN_ACC auto operator()(auto const& /*acc*/, auto* accessBlock, auto chunkSize, auto* result) const
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, auto chunkSize, auto* result) const
     {
-        *result = accessBlock->getAvailableSlots(chunkSize);
+        *result = accessBlock->getAvailableSlots(acc, chunkSize);
     };
 };
 
@@ -949,5 +949,24 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         std::sort(std::begin(tmpPointers), std::end(tmpPointers));
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
+    SECTION("creates second memory somewhere in multi-page mode.")
+    {
+        size_t const size = 2U;
+        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
+            pageSize);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(pointers.m_onHost[0] != pointers.m_onHost[1]);
+    }
+
     alpaka::wait(queue);
 }
