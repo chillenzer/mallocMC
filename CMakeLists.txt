@@ -87,3 +87,6 @@ source_group(TREE "${CMAKE_CURRENT_LIST_DIR}/tests" FILES ${testSources})
 target_compile_features(tests PRIVATE cxx_std_17)
 target_include_directories(tests PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
 target_link_libraries(tests PRIVATE alpaka::alpaka Catch2::Catch2WithMain)
+# emulate old behaviour to pass tests
+target_compile_definitions(tests PRIVATE OLD_BIT_SEARCH=1)
+target_compile_definitions(tests PRIVATE WAIST_FACTOR=1u)

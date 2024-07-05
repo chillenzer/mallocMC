@@ -4,7 +4,7 @@
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf,
                  CERN
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -74,16 +74,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
 
-        ALPAKA_FN_ACC auto startIndex() const
+        ALPAKA_FN_ACC auto startIndex(uint32_t const hashValue) const
         {
-            return 199 * _chunkSize + smid();
+            return (hashValue >> 16);
         }
 
+        //! @param hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
+        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0u) -> void*
         {
             auto field = bitField();
-            auto const index = field.firstFreeBit(acc, numChunks(), startIndex());
+            auto const index = field.firstFreeBit(acc, numChunks(), startIndex(hashValue));
             return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
         }
 
@@ -92,7 +93,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(_chunkSize == 0)
             {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
                     "Attempted to destroy a pointer with chunkSize==0. Likely this page was recently "
                     "(and potentially pre-maturely) freed."};
@@ -100,7 +101,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return;
             }
             auto chunkIndex = chunkNumberOf(pointer);
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
             if(not isValid(acc, chunkIndex))
             {
                 throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
@@ -115,6 +116,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // This method is not thread-safe by itself. But it is supposed to be called after acquiring a "lock" in
             // the form of setting the filling level, so that's fine.
             memset(&_data.data[T_pageSize - maxBitFieldSize()], 0U, maxBitFieldSize());
+        }
+
+        ALPAKA_FN_ACC auto resetBitfields() -> void
+        {
+            memset((void*) bitFieldStart(), 0U, bitFieldSize());
         }
 
         template<typename TAcc>
@@ -154,6 +160,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return bitFieldSize(_chunkSize);
         }
 
+        /**
+         * @return bytes
+         */
         ALPAKA_FN_ACC [[nodiscard]] static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
         {
             return sizeof(BitMask) * ceilingDivision(numChunks(chunkSize), BitMaskSize);
@@ -161,6 +170,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_ACC [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
         {
+            // 1U is wrong we need to take the mallocMC allignment policy into account to know the smallest allocation
+            // size
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 

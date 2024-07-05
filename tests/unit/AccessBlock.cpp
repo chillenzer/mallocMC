@@ -4,7 +4,7 @@
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf,
                  CERN
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -276,11 +276,11 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 #ifndef NDEBUG
             REQUIRE(sizeof(BitMaskStorageType<>) > 1U);
             auto localChunkSize = pageSize - 1U;
-            auto slots = accessBlock.getAvailableSlots(localChunkSize);
-            auto pointer = accessBlock.create(acc, localChunkSize);
-            REQUIRE(slots == accessBlock.getAvailableSlots(localChunkSize) + 1);
+            auto slots = accessBlock.getAvailableSlots(accSerial, localChunkSize);
+            auto pointer = accessBlock.create(accSerial, localChunkSize);
+            REQUIRE(slots == accessBlock.getAvailableSlots(accSerial, localChunkSize) + 1);
             memset(pointer, 0, localChunkSize);
-            CHECK_NOTHROW(accessBlock.destroy(acc, pointer));
+            CHECK_NOTHROW(accessBlock.destroy(accSerial, pointer));
 #else
             SUCCEED("This bug actually never had any observable behaviour in NDEBUG mode because the corrupted bit "
                     "mask is never read again.");
@@ -337,7 +337,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 #ifndef NDEBUG
             pointer = nullptr;
             CHECK_THROWS(
-                accessBlock.destroy(acc, pointer),
+                accessBlock.destroy(accSerial, pointer),
                 std::runtime_error{"Attempted to destroy an invalid pointer!"});
 #endif // NDEBUG
         }

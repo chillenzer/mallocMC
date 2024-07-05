@@ -4,7 +4,7 @@
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf,
                  CERN
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -30,25 +30,9 @@
 #include <cstddef>
 #include <cstdint>
 
-template<typename TAcc, typename TFunctor, typename... TArgs>
-ALPAKA_FN_ACC [[nodiscard]] inline auto internalWrappingLoop(
-    TAcc const& acc,
-    size_t const startIndex,
-    size_t const endIndex,
-    auto failureValue,
-    TFunctor func,
-    TArgs... args)
-{
-    auto result = failureValue;
-    for(uint32_t i = startIndex; i < endIndex && result == failureValue; ++i)
-    {
-        result = func(acc, i, args...);
-    }
-    return result;
-}
 
 template<typename TAcc, typename TFunctor, typename... TArgs>
-ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
+ALPAKA_FN_ACC inline auto wrappingLoop(
     TAcc const& acc,
     size_t const startIndex,
     size_t const size,
@@ -56,10 +40,12 @@ ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
     TFunctor func,
     TArgs... args)
 {
-    auto result = internalWrappingLoop(acc, startIndex, size, failureValue, func, args...);
-    if(result == failureValue)
+    auto result = failureValue;
+    for(uint32_t i = 0; i < size; ++i)
     {
-        result = internalWrappingLoop(acc, 0U, startIndex, failureValue, func, args...);
+        result = func(acc, (i + startIndex) % size, args...);
+        if(result != failureValue)
+            break;
     }
     return result;
 }
