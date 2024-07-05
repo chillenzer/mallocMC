@@ -4,7 +4,7 @@
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf,
                  CERN
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,7 @@
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
+#include <alpaka/alpaka.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/core/Common.hpp>
 #include <alpaka/core/Positioning.hpp>
@@ -49,12 +50,11 @@
 #include <functional>
 #include <iterator>
 #include <numeric>
-#include <sys/types.h>
+#include <optional>
 #include <vector>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t pageTableEntrySize = 4U + 4U;
 
     template<size_t T_numPages>
     struct PageTable
@@ -69,7 +69,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     public:
         ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numPages() -> size_t
         {
-            return T_blockSize / (T_pageSize + pageTableEntrySize);
+            constexpr auto x = T_blockSize / (T_pageSize + sizeof(PageTable<1>));
+            // check that the page table entries does not have a padding
+            static_assert(sizeof(PageTable<x>) == x * sizeof(PageTable<1>));
+            return x;
         }
 
         ALPAKA_FN_ACC [[nodiscard]] auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
@@ -104,8 +107,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 : interpret(index, chunkSize).isValid(acc, pointer);
         }
 
+        //! @param  hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue = 0u) -> void*
         {
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
@@ -114,7 +118,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             else
             {
-                pointer = createChunk(acc, numBytes);
+                pointer = createChunk(acc, numBytes, hashValue);
             }
             return pointer;
         }
@@ -123,9 +127,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* const pointer) -> void
         {
             auto const index = pageIndex(pointer);
-            if(index > static_cast<ssize_t>(numPages()) || index < 0)
+            if(index >= static_cast<ssize_t>(numPages()) || index < 0)
             {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
                     "Attempted to destroy an invalid pointer! Pointer does not point to any page."};
 #endif // NDEBUG
@@ -145,6 +149,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
+        char padding[T_blockSize - sizeof(DataPage<T_pageSize>) * numPages() - sizeof(PageTable<numPages()>)];
 
         ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
         {
@@ -202,15 +207,20 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
-        ALPAKA_FN_ACC static auto startIndex(auto const& acc)
+        ALPAKA_FN_ACC static auto startIndex(auto const& acc, uint32_t const hashValue)
         {
-            return (laneid() * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numPages();
+            return (hashValue >> 8u) % numPages();
+        }
+
+        ALPAKA_FN_ACC bool isValidPageIdx(uint32_t const index) const
+        {
+            return index != noFreePageFound() && index < numPages();
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue) -> void*
         {
-            auto index = startIndex(acc);
+            auto index = startIndex(acc, hashValue);
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -223,42 +233,62 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            index = choosePage(acc, numBytes, index);
-            void* pointer = index != noFreePageFound()
-                ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
-                : nullptr;
-
-            while(index != noFreePageFound() and pointer == nullptr)
+            void* pointer = nullptr;
+            do
             {
-                leavePage(acc, index);
-                ++index;
-                index = choosePage(acc, numBytes, index);
-                pointer = PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc);
-            }
-
+                index = (index + 1) % numPages();
+                uint32_t chunkSize = numBytes;
+                index = choosePage(acc, numBytes, chunkSize, index);
+                if(isValidPageIdx(index))
+                {
+                    pointer = PageInterpretation<T_pageSize>{pages[index], chunkSize}.create(acc, hashValue);
+                    if(pointer == nullptr)
+                        leavePage(acc, index);
+                }
+            } while(isValidPageIdx(index) and pointer == nullptr);
             return pointer;
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
+        ALPAKA_FN_ACC auto choosePage(
+            TAcc const& acc,
+            uint32_t const numBytes,
+            uint32_t& chunkSize,
+            size_t const startIndex = 0) -> size_t
         {
             return wrappingLoop(
                 acc,
                 startIndex,
                 numPages(),
                 noFreePageFound(),
-                [this, numBytes](auto const& localAcc, auto const index)
-                { return thisPageIsAppropriate(localAcc, index, numBytes) ? index : noFreePageFound(); });
+                [this, numBytes, &chunkSize](auto const& localAcc, auto const index)
+                { return thisPageIsAppropriate(localAcc, index, numBytes, chunkSize) ? index : noFreePageFound(); });
         }
 
+
+#ifndef WAIST_FACTOR
+#    define WAIST_FACTOR 2u
+#endif
         template<typename TAcc>
-        ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
+        ALPAKA_FN_ACC auto thisPageIsAppropriate(
+            TAcc const& acc,
+            size_t const index,
+            uint32_t const numBytes,
+            uint32_t& chunkSize) -> bool
         {
             bool appropriate = false;
             if(enterPage(acc, index, numBytes))
             {
                 auto oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
+#if 0
                 appropriate = (oldChunkSize == 0U || oldChunkSize == numBytes);
+                chunkSize = std::max(oldChunkSize, numBytes);
+#else
+                constexpr uint32_t waistFactor = WAIST_FACTOR;
+                appropriate
+                    = (oldChunkSize == 0U || (oldChunkSize >= numBytes && oldChunkSize <= numBytes * waistFactor));
+                chunkSize = std::max(oldChunkSize, numBytes);
+#endif
             }
             if(not appropriate)
             {
@@ -276,13 +306,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
             // chunk available.
             auto dummyChunkSize = T_pageSize / 2;
+            uint32_t chunkSize = numBytes;
             for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
                 ++firstIndex)
             {
                 size_t numPagesAcquired{};
                 for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                 {
-                    if(not thisPageIsAppropriate(acc, firstIndex + numPagesAcquired, dummyChunkSize))
+                    if(not thisPageIsAppropriate(acc, firstIndex + numPagesAcquired, dummyChunkSize, chunkSize))
                     {
                         for(size_t cleanupIndex = numPagesAcquired; cleanupIndex > 0; --cleanupIndex)
                         {
@@ -297,7 +328,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     // still have to replace the dummy chunkSize with the real one.
                     for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                     {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                         auto oldChunkSize =
 #endif
                             atomicCAS(
@@ -305,7 +336,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                                 pageTable._chunkSizes[firstIndex + numPagesAcquired],
                                 T_pageSize / 2,
                                 numBytes);
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                         if(oldChunkSize != dummyChunkSize)
                         {
                             throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
@@ -364,7 +395,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                         // Furthermore, chunkSize cannot have changed because we maintain the invariant that the
                         // filling level is always considered first, so no other thread can have passed that barrier to
                         // reset it.
-                        PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
+                        PageInterpretation<T_pageSize>{pages[pageIndex], 1u}.resetBitfields();
                         alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
 
                         // It is important to keep this after the clean-up line above: Otherwise another thread with a
@@ -398,9 +429,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         size_t heapSize{};
         AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
+        volatile uint32_t block = 0u;
 
         ALPAKA_FN_ACC [[nodiscard]] auto numBlocks() const -> size_t
         {
+            // Guarantee that each access block start address is aligned.
+            static_assert(
+                T_blockSize == sizeof(AccessBlock<T_blockSize, T_pageSize>),
+                "accessblock should equal to the use given block size to have a guaranteed alignment for pointers.");
             return heapSize / T_blockSize;
         }
 
@@ -409,27 +445,59 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_ACC auto startIndex(auto const& acc, uint32_t const numBytes) const
+        ALPAKA_FN_ACC auto hash(auto const& acc, uint32_t const numBytes) const
         {
-            return (numBytes * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numBlocks();
+            constexpr uint32_t hashingK = 38183u;
+            constexpr uint32_t hashingDistMP = 17497u;
+            constexpr uint32_t hashingDistWP = 1u;
+            constexpr uint32_t hashingDistWPRel = 1u;
+
+            const uint32_t numpages = AccessBlock<T_blockSize, T_pageSize>::numPages();
+            const uint32_t pagesperblock = numpages / numBlocks();
+            const uint32_t reloff = warpSize * numBytes / T_pageSize;
+            const uint32_t hash
+                = (numBytes * hashingK + hashingDistMP * smid()
+                   + (hashingDistWP + hashingDistWPRel * reloff) * warpid());
+            return hash;
+        }
+
+        ALPAKA_FN_ACC auto startIndex(auto const&, uint32_t const blockValue, uint32_t const hashValue)
+        {
+#if 1
+            constexpr uint32_t blockStride = 4;
+            return ((hashValue % blockStride) + (blockValue * blockStride)) % numBlocks();
+#else
+            return (block + hashValue) % numBlocks();
+#endif
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
-        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
+        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
+            auto blockValue = block;
+            auto hashValue = hash(acc, bytes);
+            auto startIdx = startIndex(acc, blockValue, hashValue);
             return wrappingLoop(
                 acc,
-                startIndex(acc, bytes),
+                startIdx,
                 numBlocks(),
                 static_cast<void*>(nullptr),
-                [this, bytes](auto const& localAcc, auto const index)
-                { return accessBlocks[index].create(localAcc, bytes); });
+                [this, bytes, &acc, startIdx, &hashValue, blockValue](auto const& localAcc, auto const index) mutable
+                {
+                    auto ptr = accessBlocks[index].create(localAcc, bytes, hashValue);
+                    if(!ptr && index == startIdx)
+                        if(blockValue == block)
+                            block = blockValue + 1;
+                    return ptr;
+                });
         }
 
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
         {
-            auto blockIndex = indexOf(pointer, accessBlocks, T_blockSize);
+            // indexOf requires the access block size instead of T_blockSize in case the reinterpreted AccessBlock
+            // object is smaller than T_blockSize.
+            auto blockIndex = indexOf(pointer, accessBlocks, sizeof(AccessBlock<T_blockSize, T_pageSize>));
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
     };
@@ -454,7 +522,7 @@ struct InitKernel
 namespace mallocMC::CreationPolicies
 {
 
-    template<typename T_HeapConfig, typename T_HashConfig>
+    template<typename T_HeapConfig, typename T_HashConfig = void>
     struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
     {
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
