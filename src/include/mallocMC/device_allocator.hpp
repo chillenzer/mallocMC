@@ -70,6 +70,8 @@ namespace mallocMC
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC auto malloc(const AlpakaAcc& acc, size_t bytes) -> void*
         {
+            if(bytes == 0u)
+                return nullptr;
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
             const uint32 req_size = distributionPolicy.collect(acc, bytes);
@@ -84,7 +86,10 @@ namespace mallocMC
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC void free(const AlpakaAcc& acc, void* p)
         {
-            CreationPolicy::destroy(acc, p);
+            if(p != nullptr)
+            {
+                CreationPolicy::destroy(acc, p);
+            }
         }
 
         /** Provide the number of available free slots.

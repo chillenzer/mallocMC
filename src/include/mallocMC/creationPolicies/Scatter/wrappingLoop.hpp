@@ -29,22 +29,6 @@
 #include <cstddef>
 #include <cstdint>
 
-template<typename TAcc, typename TFunctor, typename... TArgs>
-ALPAKA_FN_ACC [[nodiscard]] inline auto internalWrappingLoop(
-    TAcc const& acc,
-    size_t const startIndex,
-    size_t const endIndex,
-    auto failureValue,
-    TFunctor func,
-    TArgs... args)
-{
-    auto result = failureValue;
-    for(uint32_t i = startIndex; i < endIndex && result == failureValue; ++i)
-    {
-        result = func(acc, i, args...);
-    }
-    return result;
-}
 
 template<typename TAcc, typename TFunctor, typename... TArgs>
 ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
@@ -55,10 +39,14 @@ ALPAKA_FN_ACC [[nodiscard]] inline auto wrappingLoop(
     TFunctor func,
     TArgs... args)
 {
-    auto result = internalWrappingLoop(acc, startIndex, size, failureValue, func, args...);
-    if(result == failureValue)
+    auto result = failureValue;
+    for(uint32_t i = 0; i < size; ++i)
     {
-        result = internalWrappingLoop(acc, 0U, startIndex, failureValue, func, args...);
+        result = func(acc, (i + startIndex) % size, args...);
+        if(result != failureValue)
+        {
+            break;
+        }
     }
     return result;
 }
