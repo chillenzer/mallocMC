@@ -1,8 +1,7 @@
 /*
   mallocMC: Memory Allocator for Many Core Architectures.
 
-  Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf,
-                 CERN
+  Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf
 
   Author(s):  Julian Johannes Lenz
 
