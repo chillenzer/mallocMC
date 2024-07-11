@@ -3,7 +3,7 @@
 
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -73,16 +73,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
 
-        ALPAKA_FN_ACC auto startIndex() const
+        ALPAKA_FN_ACC auto startIndex(uint32_t const hashValue) const
         {
-            return 199 * _chunkSize + smid();
+            return (hashValue >> 16);
         }
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0U) -> void*
         {
             auto field = bitField();
-            auto const index = field.firstFreeBit(acc, numChunks(), startIndex());
+            auto const index = field.firstFreeBit(acc, numChunks(), startIndex(hashValue));
             return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
         }
 
@@ -91,7 +91,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(_chunkSize == 0)
             {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
                     "Attempted to destroy a pointer with chunkSize==0. Likely this page was recently "
                     "(and potentially pre-maturely) freed."};
@@ -99,7 +99,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 return;
             }
             auto chunkIndex = chunkNumberOf(pointer);
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
             if(not isValid(acc, chunkIndex))
             {
                 throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
@@ -160,6 +160,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_ACC [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
         {
+            // TODO: 1U is likely too generous we need to take the mallocMC allignment policy into account to know the
+            // smallest allocation size
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
