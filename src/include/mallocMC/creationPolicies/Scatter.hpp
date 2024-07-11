@@ -107,7 +107,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         //! @param  hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue = 0u) -> void*
         {
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
@@ -410,6 +410,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         size_t heapSize{};
         AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
+        volatile uint32_t block = 0u;
 
         ALPAKA_FN_ACC [[nodiscard]] auto numBlocks() const -> size_t
         {
@@ -421,27 +422,53 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_ACC auto startIndex(auto const& acc, uint32_t const numBytes) const
+        ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const
         {
-            return (numBytes * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numBlocks();
+            constexpr uint32_t hashingK = 38183U;
+            constexpr uint32_t hashingDistMP = 17497U;
+            constexpr uint32_t hashingDistWP = 1U;
+            constexpr uint32_t hashingDistWPRel = 1U;
+
+            const uint32_t reloff = warpSize * numBytes / T_pageSize;
+            const uint32_t hash
+                = (numBytes * hashingK + hashingDistMP * smid()
+                   + (hashingDistWP + hashingDistWPRel * reloff) * warpid());
+            return hash;
+        }
+
+        ALPAKA_FN_ACC auto startIndex(auto const& /*acc*/, uint32_t const blockValue, uint32_t const hashValue)
+        {
+            constexpr uint32_t blockStride = 4;
+            return ((hashValue % blockStride) + (blockValue * blockStride)) % numBlocks();
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
         ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
         {
+            auto blockValue = block;
+            auto hashValue = hash(acc, bytes);
+            auto startIdx = startIndex(acc, blockValue, hashValue);
             return wrappingLoop(
                 acc,
-                startIndex(acc, bytes),
+                startIdx,
                 numBlocks(),
                 static_cast<void*>(nullptr),
-                [this, bytes](auto const& localAcc, auto const index)
-                { return accessBlocks[index].create(localAcc, bytes); });
+                [this, bytes, &acc, startIdx, &hashValue, blockValue](auto const& localAcc, auto const index) mutable
+                {
+                    auto ptr = accessBlocks[index].create(localAcc, bytes, hashValue);
+                    if(!ptr && index == startIdx)
+                        if(blockValue == block)
+                            block = blockValue + 1;
+                    return ptr;
+                });
         }
 
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
         {
-            auto blockIndex = indexOf(pointer, accessBlocks, T_blockSize);
+            // indexOf requires the access block size instead of T_blockSize in case the reinterpreted AccessBlock
+            // object is smaller than T_blockSize.
+            auto blockIndex = indexOf(pointer, accessBlocks, sizeof(AccessBlock<T_blockSize, T_pageSize>));
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
     };
