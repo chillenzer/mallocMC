@@ -79,7 +79,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc) -> void*
+        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0U) -> void*
         {
             auto field = bitField();
             auto const index = field.firstFreeBit(acc, numChunks(), startIndex());

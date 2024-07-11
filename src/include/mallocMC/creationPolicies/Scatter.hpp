@@ -3,7 +3,7 @@
 
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,6 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    constexpr const uint32_t pageTableEntrySize = 4U + 4U;
 
     template<size_t T_numPages>
     struct PageTable
@@ -68,7 +67,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     public:
         ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numPages() -> size_t
         {
-            return T_blockSize / (T_pageSize + pageTableEntrySize);
+            constexpr auto numberOfPages = T_blockSize / (T_pageSize + sizeof(PageTable<1>));
+            // check that the page table entries does not have a padding
+            static_assert(sizeof(PageTable<numberOfPages>) == numberOfPages * sizeof(PageTable<1>));
+            return numberOfPages;
         }
 
         ALPAKA_FN_ACC [[nodiscard]] auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
@@ -103,6 +105,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 : interpret(index, chunkSize).isValid(acc, pointer);
         }
 
+        //! @param  hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
         ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes) -> void*
         {
@@ -201,15 +204,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
-        ALPAKA_FN_ACC static auto startIndex(auto const& acc)
+        ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue = 0U)
         {
-            return (laneid() * alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc).sum()) % numPages();
+            return (hashValue >> 8U) % numPages();
+        }
+
+        ALPAKA_FN_ACC auto isValidPageIdx(uint32_t const index) const -> bool
+        {
+            return index != noFreePageFound() && index < numPages();
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue = 0U)
+            -> void*
         {
-            auto index = startIndex(acc);
+            auto index = startIndex(acc, hashValue);
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -222,23 +231,25 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             //
             // In the latter case, it is considered desirable to wrap around multiple times until the thread was fast
             // enough to acquire some memory.
-            index = choosePage(acc, numBytes, index);
-            void* pointer = index != noFreePageFound()
-                ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
-                : nullptr;
-
-            while(index != noFreePageFound() and pointer == nullptr)
+            void* pointer = nullptr;
+            do
             {
-                leavePage(acc, index);
-                ++index;
+                // TODO(lenz): This can probably be index++.
+                index = (index + 1) % numPages();
+                uint32_t chunkSize = numBytes;
                 index = choosePage(acc, numBytes, index);
-                pointer = index != noFreePageFound()
-                    ? PageInterpretation<T_pageSize>{pages[index], numBytes}.create(acc)
-                    : nullptr;
-            }
-
+                if(isValidPageIdx(index))
+                {
+                    pointer = PageInterpretation<T_pageSize>{pages[index], chunkSize}.create(acc, hashValue);
+                    if(pointer == nullptr)
+                    {
+                        leavePage(acc, index);
+                    }
+                }
+            } while(isValidPageIdx(index) and pointer == nullptr);
             return pointer;
         }
+
 
         template<typename TAcc>
         ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
@@ -298,7 +309,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     // still have to replace the dummy chunkSize with the real one.
                     for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                     {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                         auto oldChunkSize =
 #endif
                             atomicCAS(
@@ -306,7 +317,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                                 pageTable._chunkSizes[firstIndex + numPagesAcquired],
                                 T_pageSize / 2,
                                 numBytes);
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                         if(oldChunkSize != dummyChunkSize)
                         {
                             throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
