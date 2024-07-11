@@ -3,7 +3,7 @@
 
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -53,15 +53,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename TAcc>
     ALPAKA_FN_ACC inline auto allOnesUpTo(BitMaskStorageType<> const index) -> BitMaskStorageType<>
     {
-        if(index == 0U)
-            return 0U;
-        if(index == BitMaskSize)
-            return allOnes;
-        // A global constexpr variable cannot be referenced (because it doesn't necessarily exist in memory but could
-        // be inlined everywhere by the compiler). Most compilers don't really care but nvcc apparently does, so we get
-        // a variable in local scope to reference BitMaskSize.
-        constexpr auto referencableBitMaskSize = BitMaskSize;
-        return allOnes >> (referencableBitMaskSize - std::min(std::max(index, 0U), referencableBitMaskSize));
+        return index == 0 ? 0 : (allOnes >> (BitMaskSize - index));
     }
 
     struct BitMask
@@ -122,56 +114,57 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return (mask - other.mask);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto none() const
+        ALPAKA_FN_ACC auto none() const
         {
             return mask == 0U;
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC [[nodiscard]] auto all(TAcc const& acc) const
+        ALPAKA_FN_ACC auto all(TAcc const& acc) const
         {
             return atomicAnd(acc, mask, allOnes);
         }
 
 
         template<typename TAcc>
-        ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBit(
+        ALPAKA_FN_ACC inline auto firstFreeBit(
             TAcc const& acc,
             uint32_t const startIndex = 0,
             uint32_t const numValidBits = BitMaskSize) -> uint32_t
         {
-            // This function almost reproduces the structure of `wrappingLoop` but internally the
-            // `firstFreeBitInBetween` function makes different jumps. I decided against de-duplication here in favor
-            // of keeping the interface of `wrappingLoop` a little simpler.
-            auto const correctStartIndex = startIndex % BitMaskSize;
-            auto result = firstFreeBitInBetween(acc, correctStartIndex, numValidBits);
-            if(result == noFreeBitFound())
-            {
-                result = firstFreeBitInBetween(acc, 0U, std::min(correctStartIndex, numValidBits));
-            }
-            return result;
+            return firstFreeBitInBetween(acc, startIndex % BitMaskSize, numValidBits);
         }
 
     private:
+        /**
+         *
+         * @tparam TAcc
+         * @param acc
+         * @param startIndex range [0;BitMaskSize)
+         * @param endIndex range (0;BitMaskSize]
+         * @return
+         */
         template<typename TAcc>
-        ALPAKA_FN_ACC [[nodiscard]] inline auto firstFreeBitInBetween(
+        ALPAKA_FN_ACC inline auto firstFreeBitInBetween(
             TAcc const& acc,
             uint32_t const startIndex,
             uint32_t const endIndex) -> uint32_t
         {
             auto result = noFreeBitFound();
-            for(uint32_t i = startIndex; i < endIndex and result == noFreeBitFound();)
+            auto oldMask = 0U;
+
+            auto const selectedStartBit = startIndex >= endIndex ? 0U : startIndex;
+            for(uint32_t i = selectedStartBit; i < endIndex and result == noFreeBitFound();)
             {
-                auto oldMask = atomicOr(acc, mask, singleBit(i)) | allOnesUpTo<TAcc>(startIndex);
+                oldMask = atomicOr(acc, mask, singleBit(i));
                 if((oldMask & singleBit(i)) == 0U)
                 {
                     result = i;
                 }
-                i = oldMask == allOnes
-                    ? noFreeBitFound()
-                    // For some reason, the interface of ffs takes signed integers, so we have to cast explicitly.
-                    : alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
+
+                i = alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
             }
+
             return result;
         }
     };
@@ -181,12 +174,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         std::span<BitMask> data;
 
         template<typename TAcc>
-        ALPAKA_FN_ACC [[nodiscard]] auto get(TAcc const& acc, uint32_t index) const -> bool
+        ALPAKA_FN_ACC auto get(TAcc const& acc, uint32_t index) const -> bool
         {
             return data[index / BitMaskSize](acc, index % BitMaskSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto operator[](uint32_t index) const -> BitMask&
+        ALPAKA_FN_ACC auto operator[](uint32_t index) const -> BitMask&
         {
             return data[index];
         }
@@ -203,22 +196,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             data[index / BitMaskSize].unset(acc, index % BitMaskSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto begin() const
+        ALPAKA_FN_ACC auto begin() const
         {
             return std::begin(data);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto end() const
+        ALPAKA_FN_ACC auto end() const
         {
             return std::end(data);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto numMasks() const
+        ALPAKA_FN_ACC auto numMasks() const
         {
             return data.size();
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto numBits() const
+        ALPAKA_FN_ACC auto numBits() const
         {
             return numMasks() * BitMaskSize;
         }
@@ -239,34 +232,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 { return firstFreeBitAt(localAcc, numValidBits, index); });
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] inline auto noFreeBitFound() const -> uint32_t
+        ALPAKA_FN_ACC inline auto noFreeBitFound() const -> uint32_t
         {
             return numBits();
         }
 
     private:
-        ALPAKA_FN_ACC [[nodiscard]] static auto startIndex()
+        ALPAKA_FN_ACC static auto startIndex()
         {
-            return warpid() * warpSize + laneid();
+            return laneid();
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] static auto isThisLastMask(uint32_t const numValidBits, uint32_t const index)
+        ALPAKA_FN_ACC static auto isThisLastMask(uint32_t const numValidBits, uint32_t const index)
         {
-            return (index + 1) * BitMaskSize > numValidBits;
+            return (index + 1) * BitMaskSize >= numValidBits;
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC inline auto firstFreeBitAt(TAcc const& acc, uint32_t const numValidBits, uint32_t const index)
+        ALPAKA_FN_ACC inline auto firstFreeBitAt(TAcc const& acc, uint32_t const numValidBits, uint32_t const maskIdx)
             -> uint32_t
         {
-            auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1u) % BitMaskSize + 1u) : 0u);
-            auto indexInMask = this->operator[](index).firstFreeBit(
+            auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
+            auto indexInMask = this->operator[](maskIdx).firstFreeBit(
                 acc,
                 startIndex(),
-                isThisLastMask(numValidBits, index) ? numValidBitsInLastMask : BitMaskSize);
+                isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize);
             if(indexInMask < BitMask::noFreeBitFound())
             {
-                uint32_t freeBitIndex = indexInMask + BitMaskSize * index;
+                uint32_t freeBitIndex = indexInMask + BitMaskSize * maskIdx;
                 if(freeBitIndex < numValidBits)
                 {
                     return freeBitIndex;

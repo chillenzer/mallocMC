@@ -95,8 +95,6 @@ TEST_CASE("BitMask")
 
     SECTION("knows the first free bit with startIndex.")
     {
-        // The search is supposed to wrap around. So, the "first free bit" is always the smaller one unless startIndex
-        // lies in between the two indices.
         mask.set(accSerial);
         size_t index1 = GENERATE(0, 5);
         size_t index2 = GENERATE(0, 11);
@@ -107,9 +105,9 @@ TEST_CASE("BitMask")
         size_t const startIndex = GENERATE(0, 4, 5, 6);
         mask.unset(accSerial, index1);
         mask.unset(accSerial, index2);
-        CHECK(
-            mask.firstFreeBit(accSerial, startIndex)
-            == ((startIndex > index1 and startIndex <= index2) ? index2 : index1));
+        // This is the currently implemented algorithm and could be considered overspecifying the result.
+        // The minimal requirement we should have is that firstFreeBit is an element of {index1, index2}.
+        CHECK(mask.firstFreeBit(accSerial, startIndex) == ((startIndex == index2) ? index2 : index1));
     }
 }
 
