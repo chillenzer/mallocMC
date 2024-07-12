@@ -199,8 +199,87 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 return nullptr;
             }
-            return createContiguousPages(acc, numPagesNeeded, numBytes);
+
+            void* result{nullptr};
+            // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
+            // chunk available.
+            for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
+                ++firstIndex)
+            {
+                auto numPagesAcquired = acquirePages(acc, firstIndex, numPagesNeeded);
+                if(numPagesAcquired == numPagesNeeded)
+                {
+                    // At this point, we have acquired all the pages we need and nobody can mess with them anymore. We
+                    // still have to set the chunk size correctly.
+                    setChunkSizes(acc, firstIndex, numPagesNeeded, numBytes);
+                    result = &pages[firstIndex];
+                }
+                else
+                {
+                    releasePages(acc, firstIndex, numPagesAcquired);
+                };
+            }
+            return result;
         }
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto acquirePages(
+            auto const& acc,
+            size_t const firstIndex,
+            uint32_t const numPagesNeeded) -> uint32_t
+        {
+            return managePageOwnerships(acc, firstIndex, numPagesNeeded, 0U, T_pageSize);
+        }
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto releasePages(
+            auto const& acc,
+            size_t const firstIndex,
+            uint32_t const numPagesNeeded) -> uint32_t
+        {
+            return managePageOwnerships(acc, firstIndex, numPagesNeeded, T_pageSize, 0U);
+        }
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto managePageOwnerships(
+            auto const& acc,
+            size_t const firstIndex,
+            uint32_t const numPages,
+            uint32_t const expectedFilling,
+            uint32_t const newFilling) -> uint32_t
+        {
+            uint32_t index = 0U;
+            uint32_t oldFilling = expectedFilling;
+            for(index = 0U; index < numPages; ++index)
+            {
+                oldFilling = atomicCAS(acc, pageTable._fillingLevels[firstIndex + index], expectedFilling, newFilling);
+                if(oldFilling != expectedFilling)
+                {
+                    break;
+                }
+            }
+            return index;
+        }
+
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto setChunkSizes(
+            auto const& acc,
+            size_t const firstIndex,
+            uint32_t const numPagesNeeded,
+            uint32_t const numBytes) -> void
+        {
+            for(uint32_t numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
+            {
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
+                auto oldChunkSize =
+#endif
+                    atomicCAS(acc, pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
+                if(oldChunkSize != 0U)
+                {
+                    throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
+                }
+#endif // !NDEBUG
+            }
+        }
+
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto noFreePageFound()
         {
@@ -308,64 +387,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             uint32_t dummyCache{};
             return thisPageIsAppropriate(acc, index, numBytes, dummyCache);
-        }
-
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createContiguousPages(
-            auto const& acc,
-            uint32_t const numPagesNeeded,
-            uint32_t const numBytes)
-        {
-            void* result{nullptr};
-            // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
-            // chunk available.
-            auto lock = T_pageSize;
-            for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
-                ++firstIndex)
-            {
-                uint32_t numPagesAcquired{};
-                for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
-                {
-                    auto oldFilling
-                        = atomicCAS(acc, pageTable._fillingLevels[firstIndex + numPagesAcquired], 0U, lock);
-                    if(oldFilling != 0U)
-                    {
-                        for(size_t cleanupIndex = numPagesAcquired; cleanupIndex > 0; --cleanupIndex)
-                        {
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                            auto latestFilling =
-#endif
-                                atomicCAS(acc, pageTable._fillingLevels[firstIndex + cleanupIndex], lock, 0U);
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                            if(latestFilling != lock)
-                            {
-                                throw std::runtime_error{"Unexpected intermediate filling in multi-page allocation."};
-                            }
-#endif // !NDEBUG
-                        }
-                        break;
-                    }
-                }
-                if(numPagesAcquired == numPagesNeeded)
-                {
-                    // At this point, we have acquired all the pages we need and nobody can mess with them anymore. We
-                    // still have to replace the dummy chunkSize with the real one.
-                    for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
-                    {
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                        auto oldChunkSize =
-#endif
-                            atomicCAS(acc, pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                        if(oldChunkSize != 0U)
-                        {
-                            throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
-                        }
-#endif // !NDEBUG
-                    }
-                    result = &pages[firstIndex];
-                };
-            }
-            return result;
         }
 
         template<typename TAcc>
