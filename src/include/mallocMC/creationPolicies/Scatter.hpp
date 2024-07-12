@@ -116,7 +116,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             else
             {
-                pointer = createChunk(acc, numBytes);
+                pointer = createChunk(acc, numBytes, hashValue);
             }
             return pointer;
         }
@@ -127,7 +127,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const index = pageIndex(pointer);
             if(index > static_cast<ssize_t>(numPages()) || index < 0)
             {
-#ifndef NDEBUG
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
                     "Attempted to destroy an invalid pointer! Pointer does not point to any page."};
 #endif // NDEBUG
@@ -237,7 +237,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 // TODO(lenz): This can probably be index++.
                 index = (index + 1) % numPages();
                 uint32_t chunkSize = numBytes;
-                index = choosePage(acc, numBytes, index);
+                index = choosePage(acc, numBytes, index, chunkSize);
                 if(isValidPageIdx(index))
                 {
                     pointer = PageInterpretation<T_pageSize>{pages[index], chunkSize}.create(acc, hashValue);
@@ -252,31 +252,55 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto choosePage(TAcc const& acc, uint32_t const numBytes, size_t const startIndex = 0) -> size_t
+        ALPAKA_FN_ACC auto choosePage(
+            TAcc const& acc,
+            uint32_t const numBytes,
+            size_t const startIndex,
+            uint32_t& chunkSizeCache) -> size_t
         {
             return wrappingLoop(
                 acc,
                 startIndex,
                 numPages(),
                 noFreePageFound(),
-                [this, numBytes](auto const& localAcc, auto const index)
-                { return thisPageIsAppropriate(localAcc, index, numBytes) ? index : noFreePageFound(); });
+                [this, numBytes, &chunkSizeCache](auto const& localAcc, auto const index) {
+                    return thisPageIsAppropriate(localAcc, index, numBytes, chunkSizeCache) ? index
+                                                                                            : noFreePageFound();
+                });
+        }
+
+        ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes)
+        {
+            uint32_t const wastefactor = 1;
+            return (chunkSize >= numBytes && chunkSize <= wastefactor * numBytes);
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
+        ALPAKA_FN_ACC auto thisPageIsAppropriate(
+            TAcc const& acc,
+            size_t const index,
+            uint32_t const numBytes,
+            uint32_t& chunkSizeCache) -> bool
         {
             bool appropriate = false;
             if(enterPage(acc, index, numBytes))
             {
-                auto oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
-                appropriate = (oldChunkSize == 0U || oldChunkSize == numBytes);
+                uint32_t oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
+                appropriate = (oldChunkSize == 0U || isInAllowedRange(oldChunkSize, numBytes));
+                chunkSizeCache = std::max(oldChunkSize, numBytes);
             }
             if(not appropriate)
             {
                 leavePage(acc, index);
             }
             return appropriate;
+        }
+
+        template<typename TAcc>
+        ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
+        {
+            uint32_t dummyCache{};
+            return thisPageIsAppropriate(acc, index, numBytes, dummyCache);
         }
 
         ALPAKA_FN_ACC auto createContiguousPages(
