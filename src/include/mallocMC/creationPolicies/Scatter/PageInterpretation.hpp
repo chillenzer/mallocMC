@@ -69,7 +69,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numChunks(_chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator[](uint32_t index) const -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkPointer(uint32_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
@@ -85,7 +85,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto field = bitField();
             auto const index = field.firstFreeBit(acc, numChunks(), startIndex(hashValue));
-            return (index < field.noFreeBitFound()) ? this->operator[](index) : nullptr;
+            return (index < field.noFreeBitFound()) ? chunkPointer(index) : nullptr;
         }
 
         template<typename TAcc>

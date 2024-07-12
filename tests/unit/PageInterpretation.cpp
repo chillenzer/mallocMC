@@ -66,12 +66,12 @@ TEST_CASE("PageInterpretation")
 
     SECTION("refers to the same data it was created with.")
     {
-        CHECK(&data == page[0]);
+        CHECK(&data == page.chunkPointer(0));
     }
 
     SECTION("returns start of data as first chunk.")
     {
-        CHECK(page[0] == &data);
+        CHECK(page.chunkPointer(0) == &data);
     }
 
     SECTION("computes correct number of pages.")
@@ -83,7 +83,11 @@ TEST_CASE("PageInterpretation")
     {
         for(auto i = 0U; i < (pageSize / chunkSize) - 1; ++i)
         {
-            CHECK(distance(reinterpret_cast<char*>(page[i]), reinterpret_cast<char*>(page[i + 1])) == chunkSize);
+            CHECK(
+                distance(
+                    reinterpret_cast<char*>(page.chunkPointer(i)),
+                    reinterpret_cast<char*>(page.chunkPointer(i + 1)))
+                == chunkSize);
         }
     }
 
@@ -139,14 +143,19 @@ TEST_CASE("PageInterpretation.create")
         {
             auto* pointer = page.create(accSerial);
             CHECK(
-                std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer))
-                < std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(page.bitFieldStart())));
+                std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer))
+                < std::distance(
+                    reinterpret_cast<char*>(page.chunkPointer(0)),
+                    reinterpret_cast<char*>(page.bitFieldStart())));
         }
 
         SECTION("returns a pointer to the start of a chunk.")
         {
             auto* pointer = page.create(accSerial);
-            CHECK(std::distance(reinterpret_cast<char*>(page[0]), reinterpret_cast<char*>(pointer)) % chunkSize == 0U);
+            CHECK(
+                std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer))
+                    % chunkSize
+                == 0U);
         }
 
         SECTION("returns nullptr if everything is full.")
