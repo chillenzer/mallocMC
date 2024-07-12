@@ -180,7 +180,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return data[index / BitMaskSize](acc, index % BitMaskSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator[](uint32_t index) const -> BitMask&
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(uint32_t index) const -> BitMask&
         {
             return data[index];
         }
@@ -257,7 +257,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const maskIdx) -> uint32_t
         {
             auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
-            auto indexInMask = this->operator[](maskIdx).firstFreeBit(
+            auto indexInMask = get(maskIdx).firstFreeBit(
                 acc,
                 startIndex(),
                 isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize);
