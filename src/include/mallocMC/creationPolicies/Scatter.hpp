@@ -495,8 +495,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 {
                     auto ptr = accessBlocks[index].create(localAcc, bytes, hashValue);
                     if(!ptr && index == startIdx)
+                    {
+                        // This is not thread-safe but we're fine with that. It's just a fuzzy thing to occasionally
+                        // increment and it's totally okay if its value is not quite deterministic.
                         if(blockValue == block)
+                        {
                             block = blockValue + 1;
+                        }
+                    }
                     return ptr;
                 });
         }

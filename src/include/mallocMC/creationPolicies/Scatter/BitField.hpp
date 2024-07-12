@@ -153,6 +153,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto result = noFreeBitFound();
             auto oldMask = 0U;
 
+            // This avoids a modulo that's not a power of two and is faster thereby.
             auto const selectedStartBit = startIndex >= endIndex ? 0U : startIndex;
             for(uint32_t i = selectedStartBit; i < endIndex and result == noFreeBitFound();)
             {
