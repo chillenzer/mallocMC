@@ -52,22 +52,23 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize)
+            -> BitMask*
         {
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
             return BitMaskSize * T_pageSize / (static_cast<size_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto numChunks() const -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numChunks() const -> uint32_t
         {
             return numChunks(_chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto operator[](size_t index) const -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
@@ -138,34 +139,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return bitField().get(acc, chunkIndex);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitField() const -> BitFieldFlat
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto bitField() const -> BitFieldFlat
         {
             return BitFieldFlat{{bitFieldStart(), ceilingDivision(numChunks(), BitMaskSize)}};
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitFieldStart() const -> BitMask*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto bitFieldStart() const -> BitMask*
         {
             return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitFieldSize() const -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto bitFieldSize() const -> uint32_t
         {
             return bitFieldSize(_chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
         {
             return sizeof(BitMask) * ceilingDivision(numChunks(chunkSize), BitMaskSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  static auto maxBitFieldSize() -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto maxBitFieldSize() -> uint32_t
         {
             // TODO: 1U is likely too generous we need to take the mallocMC allignment policy into account to know the
             // smallest allocation size
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto chunkNumberOf(void* pointer) -> ssize_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) -> ssize_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }

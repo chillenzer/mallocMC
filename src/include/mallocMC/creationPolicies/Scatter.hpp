@@ -107,8 +107,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         //! @param  hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue)
-            -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(
+            TAcc const& acc,
+            uint32_t const numBytes,
+            uint32_t const hashValue = 0U) -> void*
         {
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
@@ -205,7 +207,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue = 0U)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue)
         {
             return (hashValue >> 8U) % numPages();
         }
@@ -219,7 +221,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createChunk(
             TAcc const& acc,
             uint32_t const numBytes,
-            uint32_t const hashValue = 0U) -> void*
+            uint32_t const hashValue) -> void*
         {
             auto index = startIndex(acc, hashValue);
 
