@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt update && sudo apt install libboost-all-dev
       - run: mkdir build_dir
       - working-directory: build_dir
         run: |
