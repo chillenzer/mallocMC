@@ -48,14 +48,6 @@ struct ScatterConfig
     static constexpr auto resetfreedpages = true;
 };
 
-struct ScatterHashParams
-{
-    static constexpr auto hashingK = 38183;
-    static constexpr auto hashingDistMP = 17497;
-    static constexpr auto hashingDistWP = 1;
-    static constexpr auto hashingDistWPRel = 1;
-};
-
 struct AlignmentConfig
 {
     static constexpr auto dataAlignment = 16;
@@ -63,7 +55,7 @@ struct AlignmentConfig
 
 using ScatterAllocator = mallocMC::Allocator<
     Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterConfig, ScatterHashParams>,
+    mallocMC::CreationPolicies::Scatter<ScatterConfig>,
     mallocMC::DistributionPolicies::Noop,
     mallocMC::OOMPolicies::ReturnNull,
     mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,

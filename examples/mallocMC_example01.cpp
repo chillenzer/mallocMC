@@ -50,14 +50,6 @@ struct ScatterHeapConfig
     static constexpr auto resetfreedpages = true;
 };
 
-struct ScatterHashConfig
-{
-    static constexpr auto hashingK = 38183;
-    static constexpr auto hashingDistMP = 17497;
-    static constexpr auto hashingDistWP = 1;
-    static constexpr auto hashingDistWPRel = 1;
-};
-
 struct XMallocConfig
 {
     static constexpr auto pagesize = ScatterHeapConfig::pagesize;
@@ -70,7 +62,7 @@ struct ShrinkConfig
 
 using ScatterAllocator = mallocMC::Allocator<
     Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterHeapConfig, ScatterHashConfig>,
+    mallocMC::CreationPolicies::Scatter<ScatterHeapConfig>,
     mallocMC::DistributionPolicies::Noop,
     mallocMC::OOMPolicies::ReturnNull,
     mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,

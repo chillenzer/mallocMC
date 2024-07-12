@@ -442,7 +442,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-    template<size_t T_blockSize, uint32_t T_pageSize>
+    template<size_t T_blockSize, uint32_t T_pageSize, typename T_HashConfig>
     struct Heap
     {
         size_t heapSize{};
@@ -459,18 +459,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const -> uint32_t
         {
-            constexpr uint32_t hashingK = 38183U;
-            constexpr uint32_t hashingDistMP = 17497U;
-            constexpr uint32_t hashingDistWP = 1U;
-            constexpr uint32_t hashingDistWPRel = 1U;
-
-            const uint32_t reloff = warpSize * numBytes / T_pageSize;
-            const uint32_t hash
-                = (numBytes * hashingK + hashingDistMP * smid()
-                   + (hashingDistWP + hashingDistWPRel * reloff) * warpid());
-            return hash;
+            const uint32_t relative_offset = warpSize * numBytes / T_pageSize;
+            return (
+                numBytes * T_HashConfig::hashingK + T_HashConfig::hashingDistMP * smid()
+                + (T_HashConfig::hashingDistWP + T_HashConfig::hashingDistWPRel * relative_offset) * warpid());
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(
@@ -478,8 +472,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const blockValue,
             uint32_t const hashValue)
         {
-            constexpr uint32_t blockStride = 4;
-            return ((hashValue % blockStride) + (blockValue * blockStride)) % numBlocks();
+            return ((hashValue % T_HashConfig::blockStride) + (blockValue * T_HashConfig::blockStride)) % numBlocks();
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
@@ -519,28 +512,38 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
-
-struct InitKernel
-{
-    template<size_t T_blockSize, uint32_t T_pageSize>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(
-        auto const& /*unused*/,
-        mallocMC::CreationPolicies::ScatterAlloc::Heap<T_blockSize, T_pageSize>* m_heap,
-        void* m_heapmem,
-        size_t const m_memsize) const
+    struct DefaultScatterHashConfig
     {
-        m_heap->accessBlocks
-            = static_cast<mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>*>(m_heapmem);
-        m_heap->heapSize = m_memsize;
-    }
-};
+        static constexpr uint32_t hashingK = 38183;
+        static constexpr uint32_t hashingDistMP = 17497;
+        static constexpr uint32_t hashingDistWP = 1;
+        static constexpr uint32_t hashingDistWPRel = 1;
+        static constexpr uint32_t blockStride = 4;
+    };
+
+    struct InitKernel
+    {
+        template<size_t T_blockSize, uint32_t T_pageSize, typename T_HashConfig>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(
+            auto const& /*unused*/,
+            mallocMC::CreationPolicies::ScatterAlloc::Heap<T_blockSize, T_pageSize, T_HashConfig>* m_heap,
+            void* m_heapmem,
+            size_t const m_memsize) const
+        {
+            m_heap->accessBlocks
+                = static_cast<mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>*>(
+                    m_heapmem);
+            m_heap->heapSize = m_memsize;
+        }
+    };
+
+} // namespace mallocMC::CreationPolicies::ScatterAlloc
 
 namespace mallocMC::CreationPolicies
 {
 
-    template<typename T_HeapConfig, typename T_HashConfig = void>
-    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
+    template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
+    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize, T_HashConfig>
     {
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
         static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
@@ -563,7 +566,7 @@ namespace mallocMC::CreationPolicies
 
             auto workDivSingleThread
                 = alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()};
-            alpaka::exec<TAcc>(queue, workDivSingleThread, InitKernel{}, heap, pool, memsize);
+            alpaka::exec<TAcc>(queue, workDivSingleThread, ScatterAlloc::InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
 
