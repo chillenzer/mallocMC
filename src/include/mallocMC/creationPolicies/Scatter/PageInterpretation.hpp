@@ -75,7 +75,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(uint32_t const hashValue) const
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startBitMaskIndex(uint32_t const hashValue) const
         {
             return (hashValue >> 16);
         }
@@ -84,7 +84,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0U) -> void*
         {
             auto field = bitField();
-            auto const index = field.firstFreeBit(acc, numChunks(), startIndex(hashValue));
+            auto const index = field.firstFreeBit(acc, numChunks(), startBitMaskIndex(hashValue));
             return (index < field.noFreeBitFound()) ? chunkPointer(index) : nullptr;
         }
 

@@ -207,7 +207,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numPages();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startPageIndex(auto const& /*acc*/, uint32_t const hashValue)
         {
             return (hashValue >> 8U) % numPages();
         }
@@ -223,7 +223,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const numBytes,
             uint32_t const hashValue) -> void*
         {
-            auto index = startIndex(acc, hashValue);
+            auto index = startPageIndex(acc, hashValue);
 
             // Under high pressure, this loop could potentially run for a long time because the information where and
             // when we started our search is not maintained and/or used. This is a feature, not a bug: Given a
@@ -472,7 +472,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startBlockIndex(
             auto const& /*acc*/,
             uint32_t const blockValue,
             uint32_t const hashValue)
@@ -485,7 +485,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             auto blockValue = block;
             auto hashValue = T_HashConfig::template hash<T_HeapConfig::pagesize>(acc, bytes);
-            auto startIdx = startIndex(acc, blockValue, hashValue);
+            auto startIdx = startBlockIndex(acc, blockValue, hashValue);
             return wrappingLoop(
                 acc,
                 startIdx,

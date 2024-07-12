@@ -239,7 +239,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
     private:
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startIndex()
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startBitIndex()
         {
             return laneid();
         }
@@ -259,7 +259,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
             auto indexInMask = get(maskIdx).firstFreeBit(
                 acc,
-                startIndex(),
+                startBitIndex(),
                 isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize);
             if(indexInMask < BitMask::noFreeBitFound())
             {
