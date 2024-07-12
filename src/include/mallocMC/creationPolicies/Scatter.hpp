@@ -125,7 +125,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* const pointer) -> void
         {
             auto const index = pageIndex(pointer);
-            if(index > static_cast<ssize_t>(numPages()) || index < 0)
+            if(index >= static_cast<ssize_t>(numPages()) || index < 0)
             {
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
@@ -434,7 +434,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         size_t heapSize{};
         AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
-        volatile uint32_t block = 0u;
+        volatile uint32_t block = 0U;
 
         ALPAKA_FN_ACC [[nodiscard]] auto numBlocks() const -> size_t
         {
@@ -467,7 +467,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
-        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t bytes) -> void*
+        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
             auto hashValue = hash(acc, bytes);
@@ -517,7 +517,7 @@ struct InitKernel
 namespace mallocMC::CreationPolicies
 {
 
-    template<typename T_HeapConfig, typename T_HashConfig>
+    template<typename T_HeapConfig, typename T_HashConfig = void>
     struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>
     {
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
