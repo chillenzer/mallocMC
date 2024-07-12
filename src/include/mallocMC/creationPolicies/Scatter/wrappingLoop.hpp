@@ -3,7 +3,7 @@
 
   Copyright 2024 Helmholtz-Zentrum Dresden - Rossendorf
 
-  Author(s):  Julian Johannes Lenz
+  Author(s):  Julian Johannes Lenz, Rene Widera
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
