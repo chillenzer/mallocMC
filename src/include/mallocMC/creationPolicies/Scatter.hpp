@@ -65,7 +65,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     class AccessBlock
     {
     public:
-        ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numPages() -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numPages() -> size_t
         {
             constexpr auto numberOfPages = T_blockSize / (T_pageSize + sizeof(PageTable<1>));
             // check that the page table entries does not have a padding
@@ -73,7 +73,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numberOfPages;
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
         {
             if(chunkSize < T_pageSize)
             {
@@ -82,13 +82,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return getAvailableMultiPages(acc, chunkSize);
         }
 
-        ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> ssize_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> ssize_t
         {
             return indexOf(pointer, pages, T_pageSize);
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
         {
             if(pointer == nullptr)
             {
@@ -107,7 +107,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         //! @param  hashValue the default makes testing easier because we can avoid adding the hash to each call^^
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue = 0u) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue)
+            -> void*
         {
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
@@ -122,7 +123,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* const pointer) -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* const pointer) -> void
         {
             auto const index = pageIndex(pointer);
             if(index >= static_cast<ssize_t>(numPages()) || index < 0)
@@ -148,17 +149,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
 
-        ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
         {
             return T_pageSize - sizeof(BitMaskStorageType<>);
         }
 
-        ALPAKA_FN_ACC auto interpret(size_t const pageIndex, uint32_t const chunkSize)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto interpret(size_t const pageIndex, uint32_t const chunkSize)
         {
             return PageInterpretation<T_pageSize>(pages[pageIndex], chunkSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
         {
             // This is not thread-safe!
             return std::transform_reduce(
@@ -175,7 +176,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto getAvailableMultiPages(auto const& acc, uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableMultiPages(auto const& acc, uint32_t const chunkSize) -> size_t
         {
             // This is the most inefficient but simplest and only thread-safe way I could come up with. If we ever
             // need this in production, we might want to revisit this.
@@ -189,7 +190,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return pointers.size();
         }
 
-        ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
             if(numPagesNeeded > numPages())
@@ -199,24 +200,26 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return createContiguousPages(acc, numPagesNeeded, numBytes);
         }
 
-        ALPAKA_FN_ACC static auto noFreePageFound()
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto noFreePageFound()
         {
             return numPages();
         }
 
-        ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue = 0U)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startIndex(auto const& /*acc*/, uint32_t const hashValue = 0U)
         {
             return (hashValue >> 8U) % numPages();
         }
 
-        ALPAKA_FN_ACC auto isValidPageIdx(uint32_t const index) const -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValidPageIdx(uint32_t const index) const -> bool
         {
             return index != noFreePageFound() && index < numPages();
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto createChunk(TAcc const& acc, uint32_t const numBytes, uint32_t const hashValue = 0U)
-            -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createChunk(
+            TAcc const& acc,
+            uint32_t const numBytes,
+            uint32_t const hashValue = 0U) -> void*
         {
             auto index = startIndex(acc, hashValue);
 
@@ -252,7 +255,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto choosePage(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto choosePage(
             TAcc const& acc,
             uint32_t const numBytes,
             size_t const startIndex,
@@ -269,14 +272,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
-        ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes)
         {
             uint32_t const wastefactor = 1;
             return (chunkSize >= numBytes && chunkSize <= wastefactor * numBytes);
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto thisPageIsAppropriate(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsAppropriate(
             TAcc const& acc,
             size_t const index,
             uint32_t const numBytes,
@@ -297,13 +300,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto thisPageIsAppropriate(TAcc const& acc, size_t const index, uint32_t const numBytes) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsAppropriate(
+            TAcc const& acc,
+            size_t const index,
+            uint32_t const numBytes) -> bool
         {
             uint32_t dummyCache{};
             return thisPageIsAppropriate(acc, index, numBytes, dummyCache);
         }
 
-        ALPAKA_FN_ACC auto createContiguousPages(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createContiguousPages(
             auto const& acc,
             uint32_t const numPagesNeeded,
             uint32_t const numBytes)
@@ -355,7 +361,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC void destroyChunk(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC void destroyChunk(
             TAcc const& acc,
             void* pointer,
             uint32_t const pageIndex,
@@ -367,8 +373,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto enterPage(TAcc const& acc, uint32_t const pageIndex, uint32_t const expectedChunkSize)
-            -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto enterPage(
+            TAcc const& acc,
+            uint32_t const pageIndex,
+            uint32_t const expectedChunkSize) -> bool
         {
             auto const oldFilling = atomicAdd(acc, pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
@@ -377,7 +385,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC void leavePage(TAcc const& acc, uint32_t const pageIndex)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC void leavePage(TAcc const& acc, uint32_t const pageIndex)
         {
             // This outermost atomicSub is an optimisation: We can fast-track this if we are not responsible for the
             // clean-up. Using 0U -> 1U in the atomicCAS and comparison further down would have the same effect (if the
@@ -419,7 +427,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
 
-        ALPAKA_FN_ACC void destroyOverMultiplePages(auto const& acc, size_t const pageIndex, uint32_t const chunkSize)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC void destroyOverMultiplePages(
+            auto const& acc,
+            size_t const pageIndex,
+            uint32_t const chunkSize)
         {
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
@@ -436,17 +447,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
         volatile uint32_t block = 0U;
 
-        ALPAKA_FN_ACC [[nodiscard]] auto numBlocks() const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> size_t
         {
             return heapSize / T_blockSize;
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto noFreeBlockFound() const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBlockFound() const -> size_t
         {
             return numBlocks();
         }
 
-        ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const
         {
             constexpr uint32_t hashingK = 38183U;
             constexpr uint32_t hashingDistMP = 17497U;
@@ -460,14 +471,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return hash;
         }
 
-        ALPAKA_FN_ACC auto startIndex(auto const& /*acc*/, uint32_t const blockValue, uint32_t const hashValue)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(
+            auto const& /*acc*/,
+            uint32_t const blockValue,
+            uint32_t const hashValue)
         {
             constexpr uint32_t blockStride = 4;
             return ((hashValue % blockStride) + (blockValue * blockStride)) % numBlocks();
         }
 
         template<typename AlignmentPolicy, typename AlpakaAcc>
-        ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
             auto hashValue = hash(acc, bytes);
@@ -488,7 +502,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
         {
             // indexOf requires the access block size instead of T_blockSize in case the reinterpreted AccessBlock
             // object is smaller than T_blockSize.
@@ -502,7 +516,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 struct InitKernel
 {
     template<size_t T_blockSize, uint32_t T_pageSize>
-    ALPAKA_FN_ACC auto operator()(
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(
         auto const& /*unused*/,
         mallocMC::CreationPolicies::ScatterAlloc::Heap<T_blockSize, T_pageSize>* m_heap,
         void* m_heapmem,
@@ -523,7 +537,7 @@ namespace mallocMC::CreationPolicies
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
         static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
 
-        ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
         }

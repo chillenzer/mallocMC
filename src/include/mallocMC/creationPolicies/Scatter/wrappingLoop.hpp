@@ -31,7 +31,7 @@
 
 
 template<typename TAcc, typename TFunctor, typename... TArgs>
-ALPAKA_FN_ACC inline auto wrappingLoop(
+ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto wrappingLoop(
     TAcc const& acc,
     size_t const startIndex,
     size_t const size,

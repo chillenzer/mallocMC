@@ -46,40 +46,40 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     public:
         // this is needed to instantiate this in-place in an std::optional
-        ALPAKA_FN_ACC PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize)
             : _data(data)
             , _chunkSize(chunkSize)
         {
         }
 
-        ALPAKA_FN_ACC static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto bitFieldStart(DataPage<T_pageSize>& data, uint32_t const chunkSize) -> BitMask*
         {
             return PageInterpretation<T_pageSize>(data, chunkSize).bitFieldStart();
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
             return BitMaskSize * T_pageSize / (static_cast<size_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto numChunks() const -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto numChunks() const -> uint32_t
         {
             return numChunks(_chunkSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto operator[](size_t index) const -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto operator[](size_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
 
 
-        ALPAKA_FN_ACC auto startIndex(uint32_t const hashValue) const
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(uint32_t const hashValue) const
         {
             return (hashValue >> 16);
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0U) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(TAcc const& acc, uint32_t const hashValue = 0U) -> void*
         {
             auto field = bitField();
             auto const index = field.firstFreeBit(acc, numChunks(), startIndex(hashValue));
@@ -87,7 +87,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* pointer) -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* pointer) -> void
         {
             if(_chunkSize == 0)
             {
@@ -109,7 +109,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             bitField().unset(acc, chunkIndex);
         }
 
-        ALPAKA_FN_ACC auto cleanup() -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanup() -> void
         {
             // This method is not thread-safe by itself. But it is supposed to be called after acquiring a "lock" in
             // the form of setting the filling level, so that's fine.
@@ -117,7 +117,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
         {
             // This function is neither thread-safe nor particularly performant. It is supposed to be used in tests and
             // debug mode.
@@ -126,46 +126,46 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     private:
         template<typename TAcc>
-        ALPAKA_FN_ACC auto isValid(TAcc const& acc, ssize_t const chunkIndex) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, ssize_t const chunkIndex) -> bool
         {
             return chunkIndex >= 0 and chunkIndex < numChunks() and isAllocated(acc, chunkIndex);
         }
 
     public:
         template<typename TAcc>
-        ALPAKA_FN_ACC auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
         {
             return bitField().get(acc, chunkIndex);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto bitField() const -> BitFieldFlat
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitField() const -> BitFieldFlat
         {
             return BitFieldFlat{{bitFieldStart(), ceilingDivision(numChunks(), BitMaskSize)}};
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto bitFieldStart() const -> BitMask*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitFieldStart() const -> BitMask*
         {
             return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto bitFieldSize() const -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto bitFieldSize() const -> uint32_t
         {
             return bitFieldSize(_chunkSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  static auto bitFieldSize(uint32_t const chunkSize) -> uint32_t
         {
             return sizeof(BitMask) * ceilingDivision(numChunks(chunkSize), BitMaskSize);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] static auto maxBitFieldSize() -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  static auto maxBitFieldSize() -> uint32_t
         {
             // TODO: 1U is likely too generous we need to take the mallocMC allignment policy into account to know the
             // smallest allocation size
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        ALPAKA_FN_ACC [[nodiscard]] auto chunkNumberOf(void* pointer) -> ssize_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto chunkNumberOf(void* pointer) -> ssize_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }
