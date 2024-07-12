@@ -35,7 +35,7 @@ BreakConstructorInitializers: BeforeComma
 BreakInheritanceList: BeforeComma
 BreakStringLiterals: true
 ColumnLimit: 119
-CommentPragmas:  '^ COMMENT pragma:'
+CommentPragmas: "^ COMMENT pragma:"
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 4
@@ -46,8 +46,8 @@ DerivePointerAlignment: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
 IncludeBlocks: Regroup
-IncludeIsMainRegex: '(Test)?$'
-IncludeIsMainSourceRegex: ''
+IncludeIsMainRegex: "(Test)?$"
+IncludeIsMainSourceRegex: ""
 IndentCaseBlocks: true
 IndentCaseLabels: false
 IndentExternBlock: AfterExternBlock
@@ -56,8 +56,8 @@ IndentPPDirectives: AfterHash
 IndentWidth: 4
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
-MacroBlockBegin: ''
-MacroBlockEnd:   ''
+MacroBlockBegin: ""
+MacroBlockEnd: ""
 MaxEmptyLinesToKeep: 2
 NamespaceIndentation: All
 PenaltyBreakAssignment: 2
@@ -84,7 +84,7 @@ SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyBlock: false
 SpaceInEmptyParentheses: false
 SpacesBeforeTrailingComments: 1
-SpacesInAngles:  false
+SpacesInAngles: false
 SpacesInConditionalStatement: false
 SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: false
@@ -111,4 +111,6 @@ UseTab: Never
 # BitFieldColonSpacing: Both
 # OperandAlignmentStyle: Align
 
-...
+---
+Language: Json
+BasedOnStyle: llvm

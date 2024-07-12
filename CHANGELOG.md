@@ -6,7 +6,7 @@ Change Log / Release Log for mallocMC
 **Date:** 2021-02-18
 
 This release removes the native usage of CUDA by alpaka.
-Attention: This release depends on an unreleased [alpaka 0.5.0dev](https://github.com/alpaka-group/alpaka/commit/34870a73ecf702069465aa030fbdf301c4d22c61) 
+Attention: This release depends on an unreleased [alpaka 0.5.0dev](https://github.com/alpaka-group/alpaka/commit/34870a73ecf702069465aa030fbdf301c4d22c61)
 version before the heavy alpaka namespace refactoring.
 
 ### Changes to mallocMC 2.4.0crp
@@ -41,7 +41,7 @@ This release removes the Boost dependency and switched to C++11.
 
 **Bug fixes**
   - Choose the value for the -arch nvcc flag depending on CUDA version #164 #165
- 
+
 **Misc:**
   - Travis CI: GCC 5.5.0 + CUDA 9.1.85 #170
   - Adding headers to projects and applied clang-tidy #171

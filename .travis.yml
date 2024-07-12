@@ -17,7 +17,7 @@ env:
     - INSTALL_DIR=~/mylibs
     - CXXFLAGS="-Werror"
     - PATH: $HOME/.cache/cmake-3.15.0/bin:$PATH
-    
+
 install:
   if [ ! -f $HOME/.cache/cmake-3.15.0/bin/cmake ]; then
     wget -O cmake.sh https://cmake.org/files/v3.15/cmake-3.15.0-Linux-x86_64.sh &&
@@ -53,4 +53,3 @@ before_script:
 
 after_script:
   - ls -halR $INSTALL_DIR
-
