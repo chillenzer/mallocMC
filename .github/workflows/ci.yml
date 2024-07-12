@@ -12,6 +12,9 @@ jobs:
       - uses: pre-commit-ci/lite-action@v1.0.2
         if: always()
   cpu-tests:
+    # This action only runs on various CPU backends.
+    # As such, this is not a fully-fletched production-like test.
+    # Hopefully, it will still save us from a few stupid mistakes.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
