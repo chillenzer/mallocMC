@@ -442,16 +442,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-    template<size_t T_blockSize, uint32_t T_pageSize, typename T_HashConfig>
+    template<typename T_HeapConfig, typename T_HashConfig>
     struct Heap
     {
+        using MyAccessBlock = AccessBlock<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>;
+
         size_t heapSize{};
-        AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
+        MyAccessBlock* accessBlocks{};
         volatile uint32_t block = 0U;
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> uint32_t
         {
-            return heapSize / T_blockSize;
+            return heapSize / T_HeapConfig::accessblocksize;
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBlockFound() const -> uint32_t
@@ -471,7 +473,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
-            auto hashValue = T_HashConfig::template hash<T_pageSize>(acc, bytes);
+            auto hashValue = T_HashConfig::template hash<T_HeapConfig::pagesize>(acc, bytes);
             auto startIdx = startIndex(acc, blockValue, hashValue);
             return wrappingLoop(
                 acc,
@@ -497,9 +499,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename AlpakaAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
         {
-            // indexOf requires the access block size instead of T_blockSize in case the reinterpreted AccessBlock
-            // object is smaller than T_blockSize.
-            auto blockIndex = indexOf(pointer, accessBlocks, sizeof(AccessBlock<T_blockSize, T_pageSize>));
+            // indexOf requires the access block size instead of blockSize in case the reinterpreted AccessBlock
+            // object is smaller than blockSize.
+            auto blockIndex = indexOf(pointer, accessBlocks, sizeof(MyAccessBlock));
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
     };
@@ -524,16 +526,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct InitKernel
     {
-        template<size_t T_blockSize, uint32_t T_pageSize, typename T_HashConfig>
+        template<typename T_HeapConfig, typename T_HashConfig>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(
             auto const& /*unused*/,
-            mallocMC::CreationPolicies::ScatterAlloc::Heap<T_blockSize, T_pageSize, T_HashConfig>* m_heap,
+            Heap<T_HeapConfig, T_HashConfig>* m_heap,
             void* m_heapmem,
             size_t const m_memsize) const
         {
-            m_heap->accessBlocks
-                = static_cast<mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_blockSize, T_pageSize>*>(
-                    m_heapmem);
+            m_heap->accessBlocks = static_cast<Heap<T_HeapConfig, T_HashConfig>::MyAccessBlock*>(m_heapmem);
             m_heap->heapSize = m_memsize;
         }
     };
@@ -544,7 +544,7 @@ namespace mallocMC::CreationPolicies
 {
 
     template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
-    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize, T_HashConfig>
+    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig, T_HashConfig>
     {
         static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
         static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
