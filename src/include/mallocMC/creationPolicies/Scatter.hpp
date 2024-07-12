@@ -318,18 +318,29 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             void* result{nullptr};
             // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
             // chunk available.
-            auto dummyChunkSize = T_pageSize / 2;
+            auto lock = T_pageSize;
             for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
                 ++firstIndex)
             {
                 uint32_t numPagesAcquired{};
                 for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                 {
-                    if(not thisPageIsAppropriate(acc, firstIndex + numPagesAcquired, dummyChunkSize))
+                    auto oldFilling
+                        = atomicCAS(acc, pageTable._fillingLevels[firstIndex + numPagesAcquired], 0U, lock);
+                    if(oldFilling != 0U)
                     {
                         for(size_t cleanupIndex = numPagesAcquired; cleanupIndex > 0; --cleanupIndex)
                         {
-                            leavePage(acc, firstIndex + cleanupIndex - 1);
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
+                            auto latestFilling =
+#endif
+                                atomicCAS(acc, pageTable._fillingLevels[firstIndex + cleanupIndex], lock, 0U);
+#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
+                            if(latestFilling != lock)
+                            {
+                                throw std::runtime_error{"Unexpected intermediate filling in multi-page allocation."};
+                            }
+#endif // !NDEBUG
                         }
                         break;
                     }
@@ -343,13 +354,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                         auto oldChunkSize =
 #endif
-                            atomicCAS(
-                                acc,
-                                pageTable._chunkSizes[firstIndex + numPagesAcquired],
-                                T_pageSize / 2,
-                                numBytes);
+                            atomicCAS(acc, pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                        if(oldChunkSize != dummyChunkSize)
+                        if(oldChunkSize != 0U)
                         {
                             throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
                         }
@@ -436,7 +443,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
-                leavePage(acc, pageIndex + i);
+                auto myIndex = pageIndex + i;
+                PageInterpretation<T_pageSize>{pages[myIndex], 1U}.cleanup();
+                alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
+                atomicCAS(acc, pageTable._chunkSizes[myIndex], chunkSize, 0U);
+                atomicCAS(acc, pageTable._fillingLevels[myIndex], T_pageSize, 0U);
             }
         }
     };
