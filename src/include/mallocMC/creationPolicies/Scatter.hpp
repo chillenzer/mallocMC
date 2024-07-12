@@ -61,7 +61,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    template<size_t T_blockSize, uint32_t T_pageSize>
+    template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U>
     class AccessBlock
     {
     public:
@@ -276,8 +276,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes)
         {
-            uint32_t const wastefactor = 1;
-            return (chunkSize >= numBytes && chunkSize <= wastefactor * numBytes);
+            return (chunkSize >= numBytes && chunkSize <= T_wasteFactor * numBytes);
         }
 
         template<typename TAcc>
@@ -445,7 +444,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename T_HeapConfig, typename T_HashConfig>
     struct Heap
     {
-        using MyAccessBlock = AccessBlock<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize>;
+        using MyAccessBlock
+            = AccessBlock<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize, T_HeapConfig::wastefactor>;
 
         size_t heapSize{};
         MyAccessBlock* accessBlocks{};
