@@ -31,7 +31,7 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    template<size_t T_pageSize>
+    template<uint32_t T_pageSize>
     struct DataPage
     {
         char data[T_pageSize]{};

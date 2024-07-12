@@ -30,17 +30,17 @@
 #include <cstdint>
 
 
-template<typename TAcc, typename TFunctor, typename... TArgs>
-ALPAKA_FN_INLINE ALPAKA_FN_ACC  auto wrappingLoop(
+template<typename TAcc, typename T_size, typename TFunctor, typename... TArgs>
+ALPAKA_FN_INLINE ALPAKA_FN_ACC auto wrappingLoop(
     TAcc const& acc,
-    size_t const startIndex,
-    size_t const size,
+    T_size const startIndex,
+    T_size const size,
     auto failureValue,
     TFunctor func,
     TArgs... args)
 {
     auto result = failureValue;
-    for(uint32_t i = 0; i < size; ++i)
+    for(T_size i = 0; i < size; ++i)
     {
         result = func(acc, (i + startIndex) % size, args...);
         if(result != failureValue)

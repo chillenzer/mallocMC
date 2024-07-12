@@ -66,8 +66,9 @@ namespace mallocMC
         return counter;
     }
 
-    ALPAKA_FN_ACC inline auto indexOf(void const* const pointer, void const* const start, ssize_t const stepSize)
-        -> ssize_t
+    template<typename T_size>
+    ALPAKA_FN_ACC inline auto indexOf(void const* const pointer, void const* const start, T_size const stepSize)
+        -> std::make_signed_t<T_size>
     {
         return std::distance(reinterpret_cast<char const*>(start), reinterpret_cast<char const*>(pointer)) / stepSize;
     }

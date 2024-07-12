@@ -323,7 +323,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
                 ++firstIndex)
             {
-                size_t numPagesAcquired{};
+                uint32_t numPagesAcquired{};
                 for(numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
                 {
                     if(not thisPageIsAppropriate(acc, firstIndex + numPagesAcquired, dummyChunkSize))
@@ -449,12 +449,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         AccessBlock<T_blockSize, T_pageSize>* accessBlocks{};
         volatile uint32_t block = 0U;
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> uint32_t
         {
             return heapSize / T_blockSize;
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBlockFound() const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBlockFound() const -> uint32_t
         {
             return numBlocks();
         }

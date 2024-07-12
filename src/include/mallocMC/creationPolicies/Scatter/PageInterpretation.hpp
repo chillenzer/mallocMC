@@ -33,11 +33,12 @@
 
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 #include <unistd.h>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    template<size_t T_pageSize>
+    template<uint32_t T_pageSize>
     struct PageInterpretation
     {
     private:
@@ -60,7 +61,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
-            return BitMaskSize * T_pageSize / (static_cast<size_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
+            return BitMaskSize * T_pageSize / (static_cast<uint32_t>(BitMaskSize * chunkSize) + sizeof(BitMask));
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numChunks() const -> uint32_t
@@ -68,7 +69,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numChunks(_chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator[](size_t index) const -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator[](uint32_t index) const -> void*
         {
             return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
         }
@@ -127,9 +128,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     private:
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, ssize_t const chunkIndex) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, int32_t const chunkIndex) -> bool
         {
-            return chunkIndex >= 0 and chunkIndex < numChunks() and isAllocated(acc, chunkIndex);
+            return chunkIndex >= 0 and chunkIndex < static_cast<int32_t>(numChunks()) and isAllocated(acc, chunkIndex);
         }
 
     public:
@@ -166,7 +167,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) -> ssize_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) -> int32_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }
