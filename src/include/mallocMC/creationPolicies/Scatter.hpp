@@ -459,14 +459,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numBlocks();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto hash(auto const& /*acc*/, uint32_t const numBytes) const -> uint32_t
-        {
-            const uint32_t relative_offset = warpSize * numBytes / T_pageSize;
-            return (
-                numBytes * T_HashConfig::hashingK + T_HashConfig::hashingDistMP * smid()
-                + (T_HashConfig::hashingDistWP + T_HashConfig::hashingDistWPRel * relative_offset) * warpid());
-        }
-
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startIndex(
             auto const& /*acc*/,
             uint32_t const blockValue,
@@ -479,7 +471,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
-            auto hashValue = hash(acc, bytes);
+            auto hashValue = T_HashConfig::template hash<T_pageSize>(acc, bytes);
             auto startIdx = startIndex(acc, blockValue, hashValue);
             return wrappingLoop(
                 acc,
@@ -514,6 +506,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct DefaultScatterHashConfig
     {
+        template<uint32_t T_pageSize>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(auto const& /*acc*/, uint32_t const numBytes) -> uint32_t
+        {
+            const uint32_t relative_offset = warpSize * numBytes / T_pageSize;
+            return (
+                numBytes * hashingK + hashingDistMP * smid()
+                + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid());
+        }
+
         static constexpr uint32_t hashingK = 38183;
         static constexpr uint32_t hashingDistMP = 17497;
         static constexpr uint32_t hashingDistWP = 1;
