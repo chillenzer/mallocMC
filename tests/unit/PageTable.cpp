@@ -24,7 +24,7 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter.hpp"
+#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

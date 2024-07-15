@@ -58,7 +58,6 @@
 #include <cstdio>
 #include <functional>
 #include <iterator>
-#include <mallocMC/creationPolicies/Scatter.hpp>
 #include <span>
 #include <tuple>
 #include <type_traits>

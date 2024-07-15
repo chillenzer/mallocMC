@@ -46,7 +46,6 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
-#include <mallocMC/creationPolicies/Scatter.hpp>
 #include <stdexcept>
 #include <type_traits>
 
