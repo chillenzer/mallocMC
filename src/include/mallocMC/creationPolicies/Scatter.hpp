@@ -168,10 +168,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 std::cbegin(pageTable._fillingLevels),
                 0U,
                 std::plus<size_t>{},
-                [chunkSize](auto const localChunkSize, auto const fillingLevel)
+                [this, chunkSize](auto const localChunkSize, auto const fillingLevel)
                 {
-                    return chunkSize == localChunkSize or localChunkSize == 0U
-                        ? PageInterpretation<T_pageSize>::numChunks(chunkSize) - fillingLevel
+                    return isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U
+                        ? PageInterpretation<T_pageSize>::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize)
+                            - fillingLevel
                         : 0U;
                 });
         }
@@ -355,7 +356,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes) const
         {
             return (chunkSize >= numBytes && chunkSize <= T_wasteFactor * numBytes);
         }

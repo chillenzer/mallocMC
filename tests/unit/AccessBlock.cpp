@@ -74,8 +74,9 @@ using BlockAndPageSizes = std::tuple<
         std::integral_constant<uint32_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
         std::integral_constant<uint32_t, pageSize2>>>;
 
-template<size_t T_blockSize, uint32_t T_pageSize>
-auto fillWith(AccessBlock<T_blockSize, T_pageSize>& accessBlock, uint32_t const chunkSize) -> std::vector<void*>
+template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wastefactor = 1U>
+auto fillWith(AccessBlock<T_blockSize, T_pageSize, T_wastefactor>& accessBlock, uint32_t const chunkSize)
+    -> std::vector<void*>
 {
     std::vector<void*> pointers(accessBlock.getAvailableSlots(accSerial, chunkSize));
     std::generate(
@@ -284,6 +285,37 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             SUCCEED("This bug actually never had any observable behaviour in NDEBUG mode because the corrupted bit "
                     "mask is never read again.");
 #endif // NDEBUG
+        }
+
+        SECTION("with waste factor")
+        {
+            constexpr uint32_t const wastefactor = 3U;
+            AccessBlock<blockSize, pageSize, wastefactor> wastedAccessBlock{};
+            auto pointers = fillWith(wastedAccessBlock, chunkSize);
+
+            auto smallerChunkSize = chunkSize / (wastefactor - 1U);
+            REQUIRE(smallerChunkSize < chunkSize);
+
+            wastedAccessBlock.destroy(accSerial, pointers[0]);
+            SECTION("knows its available slots.")
+            {
+                REQUIRE(
+                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                        ->getAvailableSlots(accSerial, smallerChunkSize)
+                    == 0U);
+
+                CHECK(wastedAccessBlock.getAvailableSlots(accSerial, smallerChunkSize) == 1U);
+            }
+
+            SECTION("creates a smaller chunk size.")
+            {
+                REQUIRE(
+                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                        ->create(accSerial, smallerChunkSize)
+                    == nullptr);
+
+                CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
+            }
         }
     }
 
