@@ -137,19 +137,6 @@ namespace mallocMC
 #endif
     }
 
-    ALPAKA_FN_ACC inline auto lanemask_lt()
-    {
-#if defined(__CUDA_ARCH__)
-        std::uint32_t lanemask;
-        asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
-        return lanemask;
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        return __lanemask_lt();
-#else
-        return 0u;
-#endif
-    }
-
     ALPAKA_FN_ACC inline auto ballot(int pred)
     {
 #if defined(__CUDA_ARCH__)
@@ -162,18 +149,6 @@ namespace mallocMC
 #endif
     }
 
-
-    ALPAKA_FN_ACC inline auto activemask()
-    {
-#if defined(__CUDA_ARCH__)
-        return __activemask();
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        // return value is 64bit for HIP-clang
-        return ballot(1);
-#else
-        return 1u;
-#endif
-    }
 
     template<class T>
     ALPAKA_FN_HOST_ACC inline auto divup(T a, T b) -> T
@@ -201,27 +176,6 @@ namespace mallocMC
             alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc),
             alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc))[0];
         return localId / warpSize;
-    }
-
-    template<typename T>
-    ALPAKA_FN_ACC inline auto ffs(T mask) -> std::uint32_t
-    {
-#if defined(__CUDA_ARCH__)
-        return ::__ffs(mask);
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        // return value is 64bit for HIP-clang
-        return ::__ffsll(static_cast<unsigned long long int>(mask));
-#else
-        if(mask == 0)
-            return 0;
-        auto i = 1u;
-        while((mask & 1) == 0)
-        {
-            mask >>= 1;
-            i++;
-        }
-        return i;
-#endif
     }
 
     template<typename T>
