@@ -74,7 +74,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc)
         {
-            alpaka::atomicOr(acc, &mask, allOnes);
+            alpaka::atomicOr(acc, &mask, +allOnes);
         }
 
         template<typename TAcc>
@@ -92,7 +92,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc)
         {
-            return alpaka::atomicXor(acc, &mask, allOnes);
+            return alpaka::atomicXor(acc, &mask, +allOnes);
         }
 
         template<typename TAcc>
