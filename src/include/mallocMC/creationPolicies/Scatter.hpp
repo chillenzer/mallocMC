@@ -48,8 +48,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename T_HeapConfig, typename T_HashConfig>
     struct Heap
     {
-        using MyAccessBlock
-            = AccessBlock<T_HeapConfig::accessblocksize, T_HeapConfig::pagesize, T_HeapConfig::wastefactor>;
+        using MyAccessBlock = AccessBlock<
+            T_HeapConfig::accessblocksize,
+            T_HeapConfig::pagesize,
+            T_HeapConfig::wastefactor,
+            T_HeapConfig::resetfreedpages>;
 
         size_t heapSize{};
         MyAccessBlock* accessBlocks{};
@@ -170,9 +173,6 @@ namespace mallocMC::CreationPolicies
     template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
     struct Scatter : public ScatterAlloc::Heap<T_HeapConfig, T_HashConfig>
     {
-        static_assert(T_HeapConfig::resetfreedpages, "resetfreedpages = false is no longer implemented.");
-        static_assert(T_HeapConfig::wastefactor == 1, "A wastefactor is no yet implemented.");
-
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
