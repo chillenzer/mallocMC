@@ -59,7 +59,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U>
+    template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
     class AccessBlock
     {
     public:
@@ -421,38 +421,43 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // clean-up. Using 0U -> 1U in the atomicCAS and comparison further down would have the same effect (if the
             // else branch contained the simple subtraction). It's a matter of which case shall have one operation
             // less.
-            if(alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], 1U) == 1U)
+            auto originalFilling = alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], 1U);
+            if constexpr(resetfreedpages)
             {
-                // This number depends on the chunk size which will at some point get reset to 0 and might even get set
-                // to another value by another thread before our task is complete here. Naively, one could expect this
-                // "weakens" the lock and makes it insecure. But not the case and having it like this is a feature, not
-                // a bug, as is proven in the comments below.
-                auto lock = T_pageSize;
-                auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
-                if(latestFilling == 0U)
+                if(originalFilling == 1U)
                 {
-                    auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[pageIndex]);
-                    if(chunkSize != 0)
+                    // This number depends on the chunk size which will at some point get reset to 0 and might even get
+                    // set to another value by another thread before our task is complete here. Naively, one could
+                    // expect this "weakens" the lock and makes it insecure. But not the case and having it like this
+                    // is a feature, not a bug, as is proven in the comments below.
+                    auto lock = T_pageSize;
+                    auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
+                    if(latestFilling == 0U)
                     {
-                        // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
-                        // Furthermore, chunkSize cannot have changed because we maintain the invariant that the
-                        // filling level is always considered first, so no other thread can have passed that barrier to
-                        // reset it.
-                        PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
-                        alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
+                        auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[pageIndex]);
+                        if(chunkSize != 0)
+                        {
+                            // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
+                            // Furthermore, chunkSize cannot have changed because we maintain the invariant that the
+                            // filling level is always considered first, so no other thread can have passed that
+                            // barrier to reset it.
+                            PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
+                            alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
 
-                        // It is important to keep this after the clean-up line above: Otherwise another thread with a
-                        // smaller chunk size might circumvent our lock and already start allocating before we're done
-                        // cleaning up.
-                        alpaka::atomicCas(acc, &pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+                            // It is important to keep this after the clean-up line above: Otherwise another thread
+                            // with a smaller chunk size might circumvent our lock and already start allocating before
+                            // we're done cleaning up.
+                            alpaka::atomicCas(acc, &pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+                        }
+
+                        // TODO(lenz): Original version had a thread fence at this point in order to invalidate
+                        // potentially cached bit masks. Check if that's necessary!
+
+                        // At this point, there might already be another thread (with another chunkSize) on this page
+                        // but that's fine. It won't see the full capacity but we can just subtract what we've added
+                        // before:
+                        alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], lock);
                     }
-
-                    // TODO(lenz): Original version had a thread fence at this point in order to invalidate potentially
-                    // cached bit masks. Check if that's necessary!
-
-                    // At this point, there might already be another thread (with another chunkSize) on this page but
-                    // that's fine. It won't see the full capacity but we can just subtract what we've added before:
-                    alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], lock);
                 }
             }
         }
@@ -466,9 +471,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
                 auto myIndex = pageIndex + i;
-                PageInterpretation<T_pageSize>{pages[myIndex], 1U}.cleanup();
-                alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
-                alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
+                if constexpr(resetfreedpages)
+                {
+                    PageInterpretation<T_pageSize>{pages[myIndex], 1U}.cleanup();
+                    alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
+                    alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
+                }
                 alpaka::atomicCas(acc, &pageTable._fillingLevels[myIndex], T_pageSize, 0U);
             }
         }

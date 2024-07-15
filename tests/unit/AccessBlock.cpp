@@ -398,5 +398,34 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
                 }
             }
         }
+
+        SECTION("and doesn't reset the page.")
+        {
+            auto& unresettingAccessBlock
+                = *reinterpret_cast<AccessBlock<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(&accessBlock);
+            auto const differentChunkSize = GENERATE(17, 2048);
+            REQUIRE(differentChunkSize != chunkSize);
+            auto const slots = unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize);
+
+            unresettingAccessBlock.destroy(accSerial, pointer);
+            CHECK(unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize) == slots);
+        }
+
+        SECTION("and doesn't reset the page for larger than page size.")
+        {
+            auto* largePointer = accessBlock.create(accSerial, pageSize);
+            if(largePointer != nullptr)
+            {
+                auto& unresettingAccessBlock
+                    = *reinterpret_cast<AccessBlock<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(
+                        &accessBlock);
+                auto const differentChunkSize = GENERATE(17, 2048);
+                REQUIRE(differentChunkSize != chunkSize);
+                auto const slots = unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize);
+
+                unresettingAccessBlock.destroy(accSerial, largePointer);
+                CHECK(unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize) == slots);
+            }
+        }
     }
 }
