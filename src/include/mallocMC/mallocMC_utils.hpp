@@ -40,11 +40,7 @@
 #    include <intrin.h>
 #endif
 
-#include <atomic>
 #include <cstdint>
-#include <sstream>
-#include <stdexcept>
-#include <string>
 #include <type_traits>
 
 /* HIP-clang is doing something wrong and uses the host path of the code when __HIP_DEVICE_COMPILE__
