@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 #include "mocks.hpp"

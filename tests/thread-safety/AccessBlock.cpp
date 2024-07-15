@@ -25,6 +25,8 @@
 */
 
 
+#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>

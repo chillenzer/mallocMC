@@ -118,7 +118,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* const pointer) const -> bool
         {
             // This function is neither thread-safe nor particularly performant. It is supposed to be used in tests and
             // debug mode.
@@ -127,14 +127,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     private:
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, int32_t const chunkIndex) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, int32_t const chunkIndex) const -> bool
         {
             return chunkIndex >= 0 and chunkIndex < static_cast<int32_t>(numChunks()) and isAllocated(acc, chunkIndex);
         }
 
     public:
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isAllocated(TAcc const& acc, uint32_t const chunkIndex) const -> bool
         {
             return bitField().get(acc, chunkIndex);
         }
@@ -166,7 +166,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return PageInterpretation<T_pageSize>::bitFieldSize(1U);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) -> int32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) const -> int32_t
         {
             return indexOf(pointer, &_data, _chunkSize);
         }

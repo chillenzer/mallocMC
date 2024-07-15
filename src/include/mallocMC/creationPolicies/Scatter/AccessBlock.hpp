@@ -86,7 +86,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* pointer) -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isValid(TAcc const& acc, void* const pointer) -> bool
         {
             if(pointer == nullptr)
             {
@@ -283,7 +283,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
         }
 
-
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto noFreePageFound()
         {
             return numPages();
@@ -380,16 +379,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 leavePage(acc, index);
             }
             return appropriate;
-        }
-
-        template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsAppropriate(
-            TAcc const& acc,
-            size_t const index,
-            uint32_t const numBytes) -> bool
-        {
-            uint32_t dummyCache{};
-            return thisPageIsAppropriate(acc, index, numBytes, dummyCache);
         }
 
         template<typename TAcc>

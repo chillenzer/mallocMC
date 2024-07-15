@@ -179,7 +179,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return data[index / BitMaskSize](acc, index % BitMaskSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(uint32_t index) const -> BitMask&
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(uint32_t const index) const -> BitMask&
         {
             return data[index];
         }
