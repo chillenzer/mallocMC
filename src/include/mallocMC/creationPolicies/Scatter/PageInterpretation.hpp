@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include "mallocMC/auxiliary.hpp"
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
 #include "mallocMC/mallocMC_utils.hpp"

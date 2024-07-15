@@ -25,7 +25,7 @@
 */
 
 
-#include "mallocMC/auxiliary.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
 #include <alpaka/acc/AccCpuSerial.hpp>

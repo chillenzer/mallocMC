@@ -24,7 +24,7 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/auxiliary.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>

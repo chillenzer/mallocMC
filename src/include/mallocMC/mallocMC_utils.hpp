@@ -149,13 +149,6 @@ namespace mallocMC
 #endif
     }
 
-
-    template<class T>
-    ALPAKA_FN_HOST_ACC inline auto divup(T a, T b) -> T
-    {
-        return (a + b - 1) / b;
-    }
-
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
      *
      * https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capabilities
@@ -197,5 +190,26 @@ namespace mallocMC
         }
         return count;
 #endif
+    }
+
+    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr auto ceilingDivision(T const numerator, U const denominator) -> T
+    {
+        return (numerator + (denominator - 1)) / denominator;
+    }
+
+    template<typename T_size>
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto indexOf(
+        void const* const pointer,
+        void const* const start,
+        T_size const stepSize) -> std::make_signed_t<T_size>
+    {
+        return std::distance(reinterpret_cast<char const*>(start), reinterpret_cast<char const*>(pointer)) / stepSize;
+    }
+
+    template<typename TAcc, typename T>
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicLoad(TAcc const& acc, T& target)
+    {
+        return alpaka::atomicCas(acc, &target, 0U, 0U);
     }
 } // namespace mallocMC
