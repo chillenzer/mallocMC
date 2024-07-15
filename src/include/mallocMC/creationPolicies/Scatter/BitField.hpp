@@ -75,31 +75,31 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc)
         {
-            atomicOr(acc, mask, allOnes);
+            alpaka::atomicOr(acc, &mask, allOnes);
         }
 
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc, auto const index)
         {
-            return atomicOr(acc, mask, singleBit(index));
+            return alpaka::atomicOr(acc, &mask, singleBit(index));
         }
 
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto unset(TAcc const& acc, auto const index)
         {
-            return atomicAnd(acc, mask, allOnes ^ singleBit(index));
+            return alpaka::atomicAnd(acc, &mask, allOnes ^ singleBit(index));
         }
 
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc)
         {
-            return atomicXor(acc, mask, allOnes);
+            return alpaka::atomicXor(acc, &mask, allOnes);
         }
 
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc, auto const index)
         {
-            return atomicXor(acc, mask, singleBit(index));
+            return alpaka::atomicXor(acc, &mask, singleBit(index));
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator==(auto const other) const
@@ -122,7 +122,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto all(TAcc const& acc) const
         {
-            return atomicAnd(acc, mask, allOnes);
+            return alpaka::atomicAnd(acc, &mask, allOnes);
         }
 
 
@@ -157,7 +157,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const selectedStartBit = startIndex >= endIndex ? 0U : startIndex;
             for(uint32_t i = selectedStartBit; i < endIndex and result == noFreeBitFound();)
             {
-                oldMask = atomicOr(acc, mask, singleBit(i));
+                oldMask = alpaka::atomicOr(acc, &mask, singleBit(i));
                 if((oldMask & singleBit(i)) == 0U)
                 {
                     result = i;

@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/atomic/Op.hpp>
 #include <alpaka/atomic/Traits.hpp>
 #include <iterator>
@@ -76,44 +75,8 @@ namespace mallocMC
     }
 
     template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicAdd(TAcc const& acc, T& lhs, T const rhs)
-    {
-        return alpaka::atomicAdd(acc, &lhs, rhs);
-    }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicSub(TAcc const& acc, T& lhs, T const rhs)
-    {
-        return alpaka::atomicSub(acc, &lhs, rhs);
-    }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicCAS(TAcc const& acc, T& target, T const cmp, T const val)
-    {
-        return alpaka::atomicCas(acc, &target, cmp, val);
-    }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicXor(TAcc const& acc, T& target, T const value)
-    {
-        return alpaka::atomicXor(acc, &target, value);
-    }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicOr(TAcc const& acc, T& target, T const value)
-    {
-        return alpaka::atomicOr(acc, &target, value);
-    }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicAnd(TAcc const& acc, T& target, T const value)
-    {
-        return alpaka::atomicAnd(acc, &target, value);
-    }
-
-    template<typename TAcc, typename T>
     ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicLoad(TAcc const& acc, T& target)
     {
-        return atomicCAS(acc, target, 0U, 0U);
+        return alpaka::atomicCas(acc, &target, 0U, 0U);
     }
 } // namespace mallocMC

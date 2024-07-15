@@ -33,7 +33,6 @@
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
-#include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/core/Common.hpp>
 #include <alpaka/core/Positioning.hpp>
 #include <alpaka/idx/Accessors.hpp>
@@ -249,7 +248,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t oldFilling = expectedFilling;
             for(index = 0U; index < numPages; ++index)
             {
-                oldFilling = atomicCAS(acc, pageTable._fillingLevels[firstIndex + index], expectedFilling, newFilling);
+                oldFilling = alpaka::atomicCas(
+                    acc,
+                    &pageTable._fillingLevels[firstIndex + index],
+                    expectedFilling,
+                    newFilling);
                 if(oldFilling != expectedFilling)
                 {
                     break;
@@ -270,7 +273,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 auto oldChunkSize =
 #endif
-                    atomicCAS(acc, pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
+                    alpaka::atomicCas(acc, &pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 if(oldChunkSize != 0U)
                 {
@@ -368,7 +371,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             bool appropriate = false;
             if(enterPage(acc, index, numBytes))
             {
-                uint32_t oldChunkSize = atomicCAS(acc, pageTable._chunkSizes[index], 0U, numBytes);
+                uint32_t oldChunkSize = alpaka::atomicCas(acc, &pageTable._chunkSizes[index], 0U, numBytes);
                 appropriate = (oldChunkSize == 0U || isInAllowedRange(oldChunkSize, numBytes));
                 chunkSizeCache = std::max(oldChunkSize, numBytes);
             }
@@ -407,7 +410,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const pageIndex,
             uint32_t const expectedChunkSize) -> bool
         {
-            auto const oldFilling = atomicAdd(acc, pageTable._fillingLevels[pageIndex], 1U);
+            auto const oldFilling = alpaka::atomicAdd(acc, &pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
             // must be 0, too) or the next check will fail.
             return oldFilling < PageInterpretation<T_pageSize>::numChunks(expectedChunkSize);
@@ -420,14 +423,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // clean-up. Using 0U -> 1U in the atomicCAS and comparison further down would have the same effect (if the
             // else branch contained the simple subtraction). It's a matter of which case shall have one operation
             // less.
-            if(atomicSub(acc, pageTable._fillingLevels[pageIndex], 1U) == 1U)
+            if(alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], 1U) == 1U)
             {
                 // This number depends on the chunk size which will at some point get reset to 0 and might even get set
                 // to another value by another thread before our task is complete here. Naively, one could expect this
                 // "weakens" the lock and makes it insecure. But not the case and having it like this is a feature, not
                 // a bug, as is proven in the comments below.
                 auto lock = T_pageSize;
-                auto latestFilling = atomicCAS(acc, pageTable._fillingLevels[pageIndex], 0U, lock);
+                auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
                 if(latestFilling == 0U)
                 {
                     auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[pageIndex]);
@@ -443,7 +446,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                         // It is important to keep this after the clean-up line above: Otherwise another thread with a
                         // smaller chunk size might circumvent our lock and already start allocating before we're done
                         // cleaning up.
-                        atomicCAS(acc, pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+                        alpaka::atomicCas(acc, &pageTable._chunkSizes[pageIndex], chunkSize, 0U);
                     }
 
                     // TODO(lenz): Original version had a thread fence at this point in order to invalidate potentially
@@ -451,7 +454,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
                     // At this point, there might already be another thread (with another chunkSize) on this page but
                     // that's fine. It won't see the full capacity but we can just subtract what we've added before:
-                    atomicSub(acc, pageTable._fillingLevels[pageIndex], lock);
+                    alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], lock);
                 }
             }
         }
@@ -467,8 +470,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto myIndex = pageIndex + i;
                 PageInterpretation<T_pageSize>{pages[myIndex], 1U}.cleanup();
                 alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
-                atomicCAS(acc, pageTable._chunkSizes[myIndex], chunkSize, 0U);
-                atomicCAS(acc, pageTable._fillingLevels[myIndex], T_pageSize, 0U);
+                alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
+                alpaka::atomicCas(acc, &pageTable._fillingLevels[myIndex], T_pageSize, 0U);
             }
         }
     };
