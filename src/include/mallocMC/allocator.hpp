@@ -32,7 +32,6 @@
 #include "mallocMC_allocator_handle.hpp"
 #include "mallocMC_constraints.hpp"
 #include "mallocMC_traits.hpp"
-#include "mallocMC_utils.hpp"
 
 #include <alpaka/alpaka.hpp>
 #include <cstdint>

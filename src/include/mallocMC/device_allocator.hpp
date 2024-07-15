@@ -28,9 +28,7 @@
 
 #pragma once
 
-#include "mallocMC_constraints.hpp"
 #include "mallocMC_traits.hpp"
-#include "mallocMC_utils.hpp"
 
 #include <alpaka/core/Common.hpp>
 #include <cstdint>
@@ -70,8 +68,10 @@ namespace mallocMC
         template<typename AlpakaAcc>
         ALPAKA_FN_ACC auto malloc(const AlpakaAcc& acc, size_t bytes) -> void*
         {
-            if(bytes == 0u)
+            if(bytes == 0U)
+            {
                 return nullptr;
+            }
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
             const uint32 req_size = distributionPolicy.collect(acc, bytes);
@@ -84,11 +84,11 @@ namespace mallocMC
         }
 
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC void free(const AlpakaAcc& acc, void* p)
+        ALPAKA_FN_ACC void free(const AlpakaAcc& acc, void* pointer)
         {
-            if(p != nullptr)
+            if(pointer != nullptr)
             {
-                CreationPolicy::destroy(acc, p);
+                CreationPolicy::destroy(acc, pointer);
             }
         }
 
@@ -105,9 +105,13 @@ namespace mallocMC
         {
             slotSize = AlignmentPolicy::applyPadding(slotSize);
             if constexpr(Traits<DeviceAllocator>::providesAvailableSlots)
+            {
                 return CreationPolicy::template getAvailableSlotsAccelerator<AlignmentPolicy>(acc, slotSize);
+            }
             else
-                return 0u;
+            {
+                return 0U;
+            }
         }
     };
 
