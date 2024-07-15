@@ -128,8 +128,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBit(
             TAcc const& acc,
-            uint32_t const startIndex = 0,
-            uint32_t const numValidBits = BitMaskSize) -> uint32_t
+            uint32_t const numValidBits = BitMaskSize,
+            uint32_t const startIndex = 0) -> uint32_t
         {
             return firstFreeBitInBetween(acc, startIndex % BitMaskSize, numValidBits);
         }
@@ -219,7 +219,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBit(
             TAcc const& acc,
-            uint32_t numValidBits = 0U,
+            uint32_t numValidBits,
             uint32_t const startIndex = 0U) -> uint32_t
         {
             numValidBits = numValidBits == 0 ? numBits() : numValidBits;
@@ -258,8 +258,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
             auto indexInMask = get(maskIdx).firstFreeBit(
                 acc,
-                startBitIndex(),
-                isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize);
+                isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize,
+                startBitIndex());
             if(indexInMask < BitMask::noFreeBitFound())
             {
                 uint32_t freeBitIndex = indexInMask + BitMaskSize * maskIdx;

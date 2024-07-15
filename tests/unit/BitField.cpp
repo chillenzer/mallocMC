@@ -84,13 +84,13 @@ TEST_CASE("BitMask")
         mask.flip(accSerial);
         size_t const index = GENERATE(0, 3);
         mask.flip(accSerial, index);
-        CHECK(mask.firstFreeBit(accSerial) == index);
+        CHECK(mask.firstFreeBit(accSerial, BitMaskSize) == index);
     }
 
     SECTION("returns BitMaskSize as first free bit if there is none.")
     {
         mask.flip(accSerial);
-        CHECK(mask.firstFreeBit(accSerial) == BitMaskSize);
+        CHECK(mask.firstFreeBit(accSerial, BitMaskSize) == BitMaskSize);
     }
 
     SECTION("knows the first free bit with startIndex.")
@@ -107,7 +107,7 @@ TEST_CASE("BitMask")
         mask.unset(accSerial, index2);
         // This is the currently implemented algorithm and could be considered overspecifying the result.
         // The minimal requirement we should have is that firstFreeBit is an element of {index1, index2}.
-        CHECK(mask.firstFreeBit(accSerial, startIndex) == ((startIndex == index2) ? index2 : index1));
+        CHECK(mask.firstFreeBit(accSerial, BitMaskSize, startIndex) == ((startIndex == index2) ? index2 : index1));
     }
 }
 
@@ -129,7 +129,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{data};
 
-        CHECK(field.firstFreeBit(accSerial) == index);
+        CHECK(field.firstFreeBit(accSerial, numChunks) == index);
     }
 
     SECTION("knows a free bit if later ones are free, too.")
@@ -146,7 +146,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{data};
 
-        CHECK(field.firstFreeBit(accSerial) >= index);
+        CHECK(field.firstFreeBit(accSerial, numChunks) >= index);
     }
 
     SECTION("knows its first free bit for different numChunks.")
@@ -162,7 +162,7 @@ TEST_CASE("BitFieldFlat")
 
         BitFieldFlat field{localData};
 
-        CHECK(field.firstFreeBit(accSerial) == index);
+        CHECK(field.firstFreeBit(accSerial, numChunks) == index);
     }
 
     SECTION("sets a bit.")
@@ -196,7 +196,7 @@ TEST_CASE("BitFieldFlat")
         {
             field.set(accSerial, i);
         }
-        CHECK(field.firstFreeBit(accSerial) == numChunks);
+        CHECK(field.firstFreeBit(accSerial, numChunks) == numChunks);
     }
 
     SECTION("returns numChunks if free bit is not valid.")
