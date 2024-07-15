@@ -39,32 +39,6 @@ namespace mallocMC
         return (numerator + (denominator - 1)) / denominator;
     }
 
-    // power function for integers, returns base^exp
-    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr auto powInt(T const base, U const exp) -> T
-    {
-        auto result = 1U;
-        for(auto i = 0U; i < exp; ++i)
-        {
-            result *= base;
-        }
-        return result;
-    }
-
-    // integer logarithm, i.e. "how many times can I divide value by base", its the inverse of powInt for appropriately
-    // defined target spaces
-    template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr auto logInt(T value, U const base) -> T
-    {
-        T counter = 0U;
-        while(value > 0U)
-        {
-            counter++;
-            value /= base;
-        }
-        return counter;
-    }
-
     template<typename T_size>
     ALPAKA_FN_INLINE ALPAKA_FN_ACC auto indexOf(
         void const* const pointer,
