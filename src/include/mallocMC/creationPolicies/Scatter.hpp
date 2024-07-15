@@ -39,6 +39,8 @@
 #include <alpaka/workdiv/WorkDivMembers.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <numeric>
 #include <sys/types.h>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
@@ -105,6 +107,26 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // object is smaller than blockSize.
             auto blockIndex = indexOf(pointer, accessBlocks, sizeof(MyAccessBlock));
             accessBlocks[blockIndex].destroy(acc, pointer);
+        }
+
+        template<typename T_AlignmentPolicy>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsDeviceFunction(auto const& acc, uint32_t const chunkSize)
+            -> size_t
+        {
+            // TODO(lenz): Not thread-safe.
+            return std::transform_reduce(
+                accessBlocks,
+                accessBlocks + numBlocks(),
+                0U,
+                std::plus<size_t>{},
+                [&acc, chunkSize](auto& accessBlock) { return accessBlock.getAvailableSlots(acc, chunkSize); });
+        }
+
+        template<typename T_AlignmentPolicy>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsAccelerator(auto const& acc, uint32_t const chunkSize)
+            -> size_t
+        {
+            return getAvailableSlotsDeviceFunction<T_AlignmentPolicy>(acc, chunkSize);
         }
     };
 
@@ -173,7 +195,48 @@ namespace mallocMC::CreationPolicies
             alpaka::wait(queue);
         }
 
-        constexpr const static bool providesAvailableSlots = false;
+        constexpr const static bool providesAvailableSlots = true;
+
+        template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
+        static auto getAvailableSlotsHost(
+            AlpakaDevice& dev,
+            AlpakaQueue& queue,
+            size_t const slotSize,
+            T_DeviceAllocator* heap) -> unsigned
+        {
+            using Dim = typename alpaka::trait::DimType<AlpakaAcc>::type;
+            using Idx = typename alpaka::trait::IdxType<AlpakaAcc>::type;
+            using VecType = alpaka::Vec<Dim, Idx>;
+
+            auto d_slots = alpaka::allocBuf<size_t, Idx>(dev, Idx{1});
+            alpaka::memset(queue, d_slots, 0, 1);
+            auto d_slotsPtr = alpaka::getPtrNative(d_slots);
+
+            auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(const AlpakaAcc& acc) -> void
+            {
+                *d_slotsPtr
+                    = heap->template getAvailableSlotsDeviceFunction<typename T_DeviceAllocator::AlignmentPolicy>(
+                        acc,
+                        slotSize);
+            };
+
+            alpaka::wait(queue);
+            alpaka::exec<AlpakaAcc>(
+                queue,
+                alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()},
+                getAvailableSlotsKernel);
+            alpaka::wait(queue);
+
+            auto const platform = alpaka::Platform<alpaka::DevCpu>{};
+            const auto hostDev = alpaka::getDevByIdx(platform, 0);
+
+            auto h_slots = alpaka::allocBuf<size_t, Idx>(hostDev, Idx{1});
+            alpaka::memcpy(queue, h_slots, d_slots);
+            alpaka::wait(queue);
+
+            return *alpaka::getPtrNative(h_slots);
+        }
+
         static auto classname() -> std::string
         {
             return "Scatter";

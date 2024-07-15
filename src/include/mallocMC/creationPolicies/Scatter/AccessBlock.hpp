@@ -71,7 +71,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return numberOfPages;
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) const
+            -> size_t
         {
             if(chunkSize < T_pageSize)
             {
@@ -161,7 +162,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
         {
-            // This is not thread-safe!
+            // TODO(lenz): This is not thread-safe!
             return std::transform_reduce(
                 std::cbegin(pageTable._chunkSizes),
                 std::cend(pageTable._chunkSizes),
@@ -177,18 +178,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableMultiPages(auto const& acc, uint32_t const chunkSize) -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableMultiPages(auto const& /*acc*/, uint32_t const chunkSize) const
+            -> size_t
         {
-            // This is the most inefficient but simplest and only thread-safe way I could come up with. If we ever
-            // need this in production, we might want to revisit this.
-            void* pointer = nullptr;
-            std::vector<void*> pointers;
-            while((pointer = createOverMultiplePages(acc, chunkSize)))
+            // TODO(lenz): This is not thread-safe!
+            auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
+            size_t sum = 0U;
+            for(uint32_t i = 0; i < numPages() - numPagesNeeded + 1;)
             {
-                pointers.push_back(pointer);
+                if(std::all_of(
+                       &pageTable._chunkSizes[i],
+                       &pageTable._chunkSizes[i + numPagesNeeded],
+                       [](auto const& val) { return val == 0; }))
+                {
+                    sum += 1;
+                    i += numPagesNeeded;
+                }
+                else
+                {
+                    ++i;
+                }
             }
-            std::for_each(std::begin(pointers), std::end(pointers), [&](auto ptr) { destroy(acc, ptr); });
-            return pointers.size();
+            return sum;
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
@@ -200,8 +211,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
 
             void* result{nullptr};
-            // Using T_pageSize/2 as chunkSize when entering the page means that the page reports to have at most one
-            // chunk available.
             for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
                 ++firstIndex)
             {
