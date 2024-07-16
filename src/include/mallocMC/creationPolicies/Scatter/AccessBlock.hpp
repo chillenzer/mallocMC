@@ -59,6 +59,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         uint32_t _fillingLevels[T_numPages]{};
     };
 
+    template<size_t T_size>
+    struct Padding
+    {
+        char padding[T_size]{};
+    };
+
+    template<>
+    struct Padding<0U>
+    {
+    };
+
     template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
     class AccessBlock
     {
@@ -149,6 +160,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     private:
         DataPage<T_pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
+        Padding<T_blockSize - sizeof(pages) - sizeof(pageTable)> padding{};
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
         {

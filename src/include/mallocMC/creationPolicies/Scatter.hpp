@@ -60,6 +60,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> uint32_t
         {
+            static_assert(
+                T_HeapConfig::accessblocksize == sizeof(MyAccessBlock),
+                "accessblock should equal to the use given block size in order to make alignment more easily "
+                "predictable.");
             return heapSize / T_HeapConfig::accessblocksize;
         }
 
