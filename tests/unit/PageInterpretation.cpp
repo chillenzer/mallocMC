@@ -218,7 +218,7 @@ TEST_CASE("PageInterpretation.destroy")
         {
             pointer = nullptr;
             CHECK_THROWS_WITH(
-                page.destroy(pointer),
+                page.destroy(accSerial, pointer),
                 Catch::Contains("Attempted to destroy out-of-bounds pointer. Chunk index out of range!"));
         }
 
@@ -227,7 +227,7 @@ TEST_CASE("PageInterpretation.destroy")
             // This test documents the state as is. We haven't defined this outcome as a requirement but if we change
             // it, we might still want to be aware of this because users might want to be informed.
             pointer = reinterpret_cast<void*>(reinterpret_cast<char*>(pointer) + chunkSize / 2);
-            CHECK_NOTHROW(page.destroy(pointer));
+            CHECK_NOTHROW(page.destroy(accSerial, pointer));
         }
 #endif // NDEBUG
 
