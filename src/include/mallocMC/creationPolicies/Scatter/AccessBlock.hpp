@@ -90,7 +90,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) const
             -> size_t
         {
-            if(chunkSize < T_pageSize)
+            if(chunkSize < multiPageThreshold())
             {
                 return getAvailableChunks(chunkSize);
             }
