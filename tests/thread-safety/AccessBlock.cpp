@@ -475,34 +475,7 @@ struct CreateAndDestroMultipleTimes
             });
     }
 };
-struct CreateAndDestroyWithDifferentSizes
-{
-    size_t num2{};
-    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
-    {
-        forAll(
-            acc,
-            pointers.size,
-            [&](auto idx)
-            {
-                auto myChunkSize = idx % 2 == 1 and idx <= num2 ? chunkSizes[1] : chunkSizes[0];
-                for(uint32_t j = 0; j < idx; ++j)
-                {
-                    // `.isValid()` is not thread-safe, so we use this direct assessment:
-                    while(pointers[idx] == nullptr)
-                    {
-                        pointers[idx] = accessBlock->create(acc, myChunkSize);
-                    }
-                    accessBlock->destroy(acc, pointers[idx]);
-                    pointers[idx] = nullptr;
-                }
-                while(pointers[idx] == nullptr)
-                {
-                    pointers[idx] = accessBlock->create(acc, myChunkSize);
-                }
-            });
-    }
-};
+
 struct OversubscribedCreation
 {
     uint32_t oversubscriptionFactor{};
@@ -848,45 +821,8 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
 
-    SECTION("creates and destroys multiple times with different sizes.")
-    {
-        SKIP("This test appears to be brittle due to reasons described in the comments.");
-        // CAUTION: This test can fail because we are currently using exactly as much space as is available but with
-        // multiple different chunk sizes. That means that if one of them occupies more pages than it minimally needs,
-        // the other one will lack pages to with their respective chunk size. This seems not to be a problem currently
-        // but it might be more of a problem once we move to device and once we include proper scattering.
-
-        // TODO(lenz): This could be solved by "fixing the chunk sizes beforehand", e.g., one could allocate
-        // one chunk
-        // on each page such that half the pages have one chunk size and the other half has the other chunk size.
-
-        // Make sure that num2 > num1.
-        auto num1 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
-        auto num2 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
-        auto totalSlots = num1 / 2 + num2 / 2;
-
-        alpaka::WorkDivMembers<Dim, Idx> const workDiv{Idx{1}, Idx{totalSlots}, Idx{1}};
-
-        alpaka::exec<Acc>(
-            queue,
-            workDiv,
-            CreateAndDestroyWithDifferentSizes{num2},
-            accessBlock,
-            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
-            alpaka::getPtrNative(chunkSizes.m_onDevice));
-        alpaka::wait(queue);
-
-        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-        alpaka::wait(queue);
-
-        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), MyAccessBlock::numPages());
-        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
-        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
-    }
-
     SECTION("can handle oversubscription.")
     {
-        SKIP("Somehow this test is flaky. Haven't found out why yet.");
         uint32_t oversubscriptionFactor = 2U;
         auto availableSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
 
