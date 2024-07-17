@@ -217,9 +217,10 @@ TEST_CASE("PageInterpretation.destroy")
         SECTION("throws if given an invalid pointer.")
         {
             pointer = nullptr;
-            CHECK_THROWS_WITH(
+            CHECK_THROWS(
                 page.destroy(accSerial, pointer),
-                Catch::Contains("Attempted to destroy out-of-bounds pointer. Chunk index out of range!"));
+                throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
+                                         "to a valid chunk or it is not marked as allocated."});
         }
 
         SECTION("allows pointers to anywhere in the chunk.")
