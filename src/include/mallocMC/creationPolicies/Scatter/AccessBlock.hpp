@@ -200,6 +200,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             // TODO(lenz): This is not thread-safe!
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
+            if(numPagesNeeded > numPages())
+            {
+                return 0U;
+            }
             size_t sum = 0U;
             for(uint32_t i = 0; i < numPages() - numPagesNeeded + 1;)
             {
