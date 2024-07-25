@@ -190,7 +190,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 {
                     auto const numChunks
                         = PageInterpretation<T_pageSize>::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
-                    return ((isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U)
+                    return ((this->isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U)
                             and fillingLevel < numChunks)
                         ? numChunks - fillingLevel
                         : 0U;
@@ -382,8 +382,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 numPages(),
                 noFreePageFound(),
                 [this, numBytes, &chunkSizeCache](auto const& localAcc, auto const index) {
-                    return thisPageIsAppropriate(localAcc, index, numBytes, chunkSizeCache) ? index
-                                                                                            : noFreePageFound();
+                    return this->thisPageIsAppropriate(localAcc, index, numBytes, chunkSizeCache) ? index
+                                                                                                  : noFreePageFound();
                 });
         }
 

@@ -91,7 +91,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 startIdx,
                 numBlocks(),
                 static_cast<void*>(nullptr),
-                [this, bytes, &acc, startIdx, &hashValue, blockValue](auto const& localAcc, auto const index) mutable
+                [this, bytes, startIdx, &hashValue, blockValue](auto const& localAcc, auto const index) mutable
                 {
                     auto ptr = accessBlocks[index].create(localAcc, bytes, hashValue);
                     if(!ptr && index == startIdx)

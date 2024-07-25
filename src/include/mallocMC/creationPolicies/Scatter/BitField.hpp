@@ -231,7 +231,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 numMasks(),
                 noFreeBitFound(),
                 [this, numValidBits](TAcc const& localAcc, auto const index)
-                { return firstFreeBitAt(localAcc, numValidBits, index); });
+                { return this->firstFreeBitAt(localAcc, numValidBits, index); });
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBitFound() const -> uint32_t
