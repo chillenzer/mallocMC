@@ -188,9 +188,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 std::plus<size_t>{},
                 [this, chunkSize](auto const localChunkSize, auto const fillingLevel)
                 {
-                    return isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U
-                        ? PageInterpretation<T_pageSize>::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize)
-                            - fillingLevel
+                    auto const numChunks
+                        = PageInterpretation<T_pageSize>::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
+                    return ((isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U)
+                            and fillingLevel < numChunks)
+                        ? numChunks - fillingLevel
                         : 0U;
                 });
         }
