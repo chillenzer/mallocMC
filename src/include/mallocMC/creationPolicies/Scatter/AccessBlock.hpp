@@ -494,7 +494,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
                     alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
                 }
-                alpaka::atomicCas(acc, &pageTable._fillingLevels[myIndex], T_pageSize, 0U);
+                alpaka::atomicSub(acc, &pageTable._fillingLevels[myIndex], T_pageSize);
             }
         }
     };

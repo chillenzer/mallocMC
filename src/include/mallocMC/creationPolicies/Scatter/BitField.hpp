@@ -162,6 +162,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     result = i;
                 }
 
+                // In case of no free bit found, this will return -1. Storing it in a uint32_t will underflow and
+                // result in 0xffffffff but that's okay because it also ends the loop as intended.
                 i = alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
             }
 
