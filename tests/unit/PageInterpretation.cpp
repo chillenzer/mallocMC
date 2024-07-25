@@ -44,6 +44,7 @@
 #include <alpaka/platform/Traits.hpp>
 #include <alpaka/queue/Properties.hpp>
 #include <alpaka/queue/Traits.hpp>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
@@ -76,7 +77,13 @@ TEST_CASE("PageInterpretation")
 
     SECTION("computes correct number of pages.")
     {
-        CHECK(page.numChunks() == 31U);
+        std::array<uint32_t, 9> chunkSizes{1, 2, 4, 5, 10, 11, 31, 32, 512};
+        std::array<uint32_t, 9> expectedNumChunks{908, 480, 248, 199, 100, 92, 32, 31, 1};
+
+        for(uint32_t i = 0U; i < 9; ++i)
+        {
+            CHECK(PageInterpretation<pageSize>::numChunks(chunkSizes[i]) == expectedNumChunks[i]);
+        }
     }
 
     SECTION("jumps by chunkSize between indices.")
