@@ -204,9 +204,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             for(uint32_t i = 0; i < numPages() - numPagesNeeded + 1;)
             {
                 if(std::all_of(
-                       &pageTable._chunkSizes[i],
-                       &pageTable._chunkSizes[i + numPagesNeeded],
-                       [](auto const& val) { return val == 0; }))
+                       pageTable._chunkSizes + i,
+                       pageTable._chunkSizes + i + numPagesNeeded,
+                       [](auto const& val) { return val == 0U; }))
                 {
                     sum += 1;
                     i += numPagesNeeded;
