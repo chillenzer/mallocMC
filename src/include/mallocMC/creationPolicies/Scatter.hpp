@@ -40,8 +40,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <numeric>
 #include <sys/types.h>
+#include <type_traits>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
@@ -54,16 +56,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             T_HeapConfig::wastefactor,
             T_HeapConfig::resetfreedpages>;
 
+        static_assert(
+            T_HeapConfig::accessblocksize
+                < std::numeric_limits<std::make_signed_t<decltype(T_HeapConfig::accessblocksize)>>::max(),
+            "Your access block size must be smaller than the maximal value of its signed type because we are using "
+            "differences in the code occasionally.");
+
+        static_assert(
+            T_HeapConfig::pagesize < std::numeric_limits<std::make_signed_t<decltype(T_HeapConfig::pagesize)>>::max(),
+            "Your page size must be smaller than the maximal value of its signed type because we are using "
+            "differences in the code occasionally.");
+
+        static_assert(
+            T_HeapConfig::accessblocksize == sizeof(MyAccessBlock),
+            "The real access block must have the same size as configured in order to make alignment more easily "
+            "predictable.");
+
         size_t heapSize{};
         MyAccessBlock* accessBlocks{};
         volatile uint32_t block = 0U;
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> uint32_t
         {
-            static_assert(
-                T_HeapConfig::accessblocksize == sizeof(MyAccessBlock),
-                "accessblock should equal to the use given block size in order to make alignment more easily "
-                "predictable.");
             return heapSize / T_HeapConfig::accessblocksize;
         }
 
