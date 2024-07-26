@@ -94,7 +94,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return ((hashValue % T_HashConfig::blockStride) + (blockValue * T_HashConfig::blockStride)) % numBlocks();
         }
 
-        template<typename AlignmentPolicy, typename AlpakaAcc>
+        template<typename AlpakaAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
@@ -130,7 +130,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
 
-        template<typename T_AlignmentPolicyLocal>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsDeviceFunction(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
@@ -143,11 +142,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 [&acc, chunkSize](auto& accessBlock) { return accessBlock.getAvailableSlots(acc, chunkSize); });
         }
 
-        template<typename T_AlignmentPolicyLocal>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsAccelerator(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
-            return getAvailableSlotsDeviceFunction<T_AlignmentPolicyLocal>(acc, chunkSize);
+            return getAvailableSlotsDeviceFunction(acc, chunkSize);
         }
 
     protected:
@@ -244,12 +242,7 @@ namespace mallocMC::CreationPolicies
             auto d_slotsPtr = alpaka::getPtrNative(d_slots);
 
             auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(const AlpakaAcc& acc) -> void
-            {
-                *d_slotsPtr
-                    = heap->template getAvailableSlotsDeviceFunction<typename T_DeviceAllocator::AlignmentPolicy>(
-                        acc,
-                        slotSize);
-            };
+            { *d_slotsPtr = heap->getAvailableSlotsDeviceFunction(acc, slotSize); };
 
             alpaka::wait(queue);
             alpaka::exec<AlpakaAcc>(

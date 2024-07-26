@@ -76,10 +76,7 @@ namespace mallocMC
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
             const uint32 req_size = distributionPolicy.collect(acc, bytes);
-            void* memBlock
-                = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::template create<AlignmentPolicy>(
-                    acc,
-                    req_size);
+            void* memBlock = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::create(acc, req_size);
             if(CreationPolicy::isOOM(memBlock, req_size))
             {
                 memBlock = OOMPolicy::handleOOM(memBlock);
@@ -110,8 +107,9 @@ namespace mallocMC
             slotSize = AlignmentPolicy::applyPadding(slotSize);
             if constexpr(Traits<DeviceAllocator>::providesAvailableSlots)
             {
-                return CreationPolicy::template AlignmentAwarePolicy<
-                    T_AlignmentPolicy>::template getAvailableSlotsAccelerator<AlignmentPolicy>(acc, slotSize);
+                return CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::getAvailableSlotsAccelerator(
+                    acc,
+                    slotSize);
             }
             else
             {
