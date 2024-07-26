@@ -52,14 +52,14 @@
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
 
-    template<size_t T_numPages>
+    template<uint32_t T_numPages>
     struct PageTable
     {
         uint32_t _chunkSizes[T_numPages]{};
         uint32_t _fillingLevels[T_numPages]{};
     };
 
-    template<size_t T_size>
+    template<uint32_t T_size>
     struct Padding
     {
         char padding[T_size]{};
@@ -70,7 +70,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
     };
 
-    template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
+    template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
     class AccessBlock
     {
     protected:
@@ -79,7 +79,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         AccessBlock() = default;
 
     public:
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numPages() -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numPages() -> uint32_t
         {
             constexpr auto numberOfPages = T_blockSize / (T_pageSize + sizeof(PageTable<1>));
             // check that the page table entries does not have a padding
@@ -88,7 +88,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlots(auto const& acc, uint32_t const chunkSize) const
-            -> size_t
+            -> uint32_t
         {
             if(chunkSize < multiPageThreshold())
             {
@@ -97,7 +97,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return getAvailableMultiPages(acc, chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> ssize_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> int32_t
         {
             return indexOf(pointer, pages, T_pageSize);
         }
@@ -143,7 +143,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* const pointer) -> void
         {
             auto const index = pageIndex(pointer);
-            if(index >= static_cast<ssize_t>(numPages()) || index < 0)
+            if(index >= static_cast<int32_t>(numPages()) || index < 0)
             {
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
@@ -172,12 +172,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return T_pageSize - sizeof(BitMaskStorageType<>);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto interpret(size_t const pageIndex, uint32_t const chunkSize)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto interpret(uint32_t const pageIndex, uint32_t const chunkSize)
         {
             return PageInterpretation<T_pageSize>(pages[pageIndex], chunkSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> size_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> uint32_t
         {
             // TODO(lenz): This is not thread-safe!
             return std::transform_reduce(
@@ -185,7 +185,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 std::cend(pageTable._chunkSizes),
                 std::cbegin(pageTable._fillingLevels),
                 0U,
-                std::plus<size_t>{},
+                std::plus<uint32_t>{},
                 [this, chunkSize](auto const localChunkSize, auto const fillingLevel)
                 {
                     auto const numChunks
@@ -198,7 +198,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableMultiPages(auto const& /*acc*/, uint32_t const chunkSize) const
-            -> size_t
+            -> uint32_t
         {
             // TODO(lenz): This is not thread-safe!
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
@@ -206,7 +206,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             {
                 return 0U;
             }
-            size_t sum = 0U;
+            uint32_t sum = 0U;
             for(uint32_t i = 0; i < numPages() - numPagesNeeded + 1;)
             {
                 if(std::all_of(
@@ -234,7 +234,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
 
             void* result{nullptr};
-            for(size_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
+            for(uint32_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
                 ++firstIndex)
             {
                 auto numPagesAcquired = acquirePages(acc, firstIndex, numPagesNeeded);
@@ -255,7 +255,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto acquirePages(
             auto const& acc,
-            size_t const firstIndex,
+            uint32_t const firstIndex,
             uint32_t const numPagesNeeded) -> uint32_t
         {
             return managePageOwnerships(acc, firstIndex, numPagesNeeded, 0U, T_pageSize);
@@ -263,7 +263,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto releasePages(
             auto const& acc,
-            size_t const firstIndex,
+            uint32_t const firstIndex,
             uint32_t const numPagesNeeded) -> uint32_t
         {
             return managePageOwnerships(acc, firstIndex, numPagesNeeded, T_pageSize, 0U);
@@ -271,7 +271,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto managePageOwnerships(
             auto const& acc,
-            size_t const firstIndex,
+            uint32_t const firstIndex,
             uint32_t const numPages,
             uint32_t const expectedFilling,
             uint32_t const newFilling) -> uint32_t
@@ -296,7 +296,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto setChunkSizes(
             auto const& acc,
-            size_t const firstIndex,
+            uint32_t const firstIndex,
             uint32_t const numPagesNeeded,
             uint32_t const numBytes) -> void
         {
@@ -373,8 +373,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto choosePage(
             TAcc const& acc,
             uint32_t const numBytes,
-            size_t const startIndex,
-            uint32_t& chunkSizeCache) -> size_t
+            uint32_t const startIndex,
+            uint32_t& chunkSizeCache) -> uint32_t
         {
             return wrappingLoop(
                 acc,
@@ -395,7 +395,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsAppropriate(
             TAcc const& acc,
-            size_t const index,
+            uint32_t const index,
             uint32_t const numBytes,
             uint32_t& chunkSizeCache) -> bool
         {
@@ -487,7 +487,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC void destroyOverMultiplePages(
             auto const& acc,
-            size_t const pageIndex,
+            uint32_t const pageIndex,
             uint32_t const chunkSize)
         {
             auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);

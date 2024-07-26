@@ -224,7 +224,7 @@ namespace mallocMC::CreationPolicies
         static auto getAvailableSlotsHost(
             AlpakaDevice& dev,
             AlpakaQueue& queue,
-            size_t const slotSize,
+            uint32_t const slotSize,
             T_DeviceAllocator* heap) -> unsigned
         {
             using Dim = typename alpaka::trait::DimType<AlpakaAcc>::type;

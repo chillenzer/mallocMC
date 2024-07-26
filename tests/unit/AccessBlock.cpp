@@ -49,7 +49,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
 struct AccessBlock
     : public mallocMC::CreationPolicies::ScatterAlloc::
           AccessBlock<T_blockSize, T_pageSize, T_wasteFactor, resetfreedpages>
@@ -85,7 +85,7 @@ using BlockAndPageSizes = std::tuple<
         std::integral_constant<uint32_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
         std::integral_constant<uint32_t, pageSize2>>>;
 
-template<size_t T_blockSize, uint32_t T_pageSize, uint32_t T_wastefactor = 1U>
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wastefactor = 1U>
 auto fillWith(AccessBlock<T_blockSize, T_pageSize, T_wastefactor>& accessBlock, uint32_t const chunkSize)
     -> std::vector<void*>
 {
@@ -186,7 +186,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         {
             // This requests one chunk of a different chunk size for each page. As a new page is required each time,
             // all pages have a chunk size set at the end. And none of those is `chunkSize`.
-            for(size_t index = 0; index < accessBlock.numPages(); ++index)
+            for(uint32_t index = 0; index < accessBlock.numPages(); ++index)
             {
                 const auto differentChunkSize = chunkSize + 1U + index;
                 REQUIRE(chunkSize != differentChunkSize);
@@ -205,8 +205,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         SECTION("last remaining chunk.")
         {
             auto pointers = fillWith(accessBlock, chunkSize);
-            size_t const index = GENERATE(0U, 1U, 42U);
-            void* pointer = pointers[std::min(index, pointers.size() - 1)];
+            uint32_t const index = GENERATE(0U, 1U, 42U);
+            void* pointer = pointers[std::min(index, static_cast<uint32_t>(pointers.size()) - 1)];
             accessBlock.destroy(accSerial, pointer);
             CHECK(accessBlock.create(accSerial, chunkSize) == pointer);
         }
@@ -236,15 +236,15 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
                 auto pointers = fillWith(accessBlock, pageSize);
                 // Now, we free two contiguous chunks such that there is one deterministic spot wherefrom our request
                 // can be served.
-                size_t index = GENERATE(0U, 1U, 5U);
-                index = std::min(index, pointers.size() - 2);
+                uint32_t index = GENERATE(0U, 1U, 5U);
+                index = std::min(index, static_cast<uint32_t>(pointers.size()) - 2U);
                 accessBlock.destroy(accSerial, pointers[index]);
                 accessBlock.destroy(accSerial, pointers[index + 1]);
 
                 // Must be exactly where we free'd the pages:
                 CHECK(
                     accessBlock.pageIndex(accessBlock.create(accSerial, 2U * pageSize))
-                    == static_cast<ssize_t>(index));
+                    == static_cast<int32_t>(index));
             }
         }
 

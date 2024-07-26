@@ -66,14 +66,14 @@ using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 
 using Dim = alpaka::DimInt<1>;
-using Idx = std::size_t;
+using Idx = std::uint32_t;
 
 
 constexpr uint32_t pageSize = 1024;
-constexpr size_t numPages = 4;
+constexpr uint32_t numPages = 4;
 // Page table entry size = sizeof(chunkSize) + sizeof(fillingLevel):
 constexpr uint32_t pteSize = 4 + 4;
-constexpr size_t blockSize = numPages * (pageSize + pteSize);
+constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 
 using MyAccessBlock = AccessBlock<blockSize, pageSize>;
 
@@ -83,7 +83,7 @@ using MyAccessBlock = AccessBlock<blockSize, pageSize>;
 
 struct FillWith
 {
-    template<typename TAcc, size_t T_blockSize, uint32_t T_pageSize>
+    template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
     ALPAKA_FN_ACC auto operator()(
         TAcc const& acc,
         AccessBlock<T_blockSize, T_pageSize>* accessBlock,
@@ -120,9 +120,9 @@ template<typename T>
 struct span
 {
     T* pointer;
-    size_t size;
+    uint32_t size;
 
-    ALPAKA_FN_ACC auto operator[](size_t index) -> T&
+    ALPAKA_FN_ACC auto operator[](uint32_t index) -> T&
     {
         return pointer[index];
     }
@@ -193,7 +193,7 @@ struct IsValid
         auto* accessBlock,
         void** pointers,
         bool* results,
-        size_t const size) const
+        uint32_t const size) const
     {
         std::span<void*> tmpPointers(pointers, size);
         std::span<bool> tmpResults(results, size);
@@ -244,7 +244,7 @@ auto createChunkSizes(auto const& devHost, auto const& devAcc, auto& queue)
     return chunkSizes;
 }
 
-auto createPointers(auto const& devHost, auto const& devAcc, auto& queue, size_t const size)
+auto createPointers(auto const& devHost, auto const& devAcc, auto& queue, uint32_t const size)
 {
     auto pointers = makeBuffer<void*>(devHost, devAcc, size);
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
@@ -313,7 +313,7 @@ auto fillAllButOne(auto& queue, auto* accessBlock, auto const& chunkSize, auto& 
     return pointer1;
 }
 
-template<typename TAcc, size_t T_blockSize, uint32_t T_pageSize>
+template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
 auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto& pointers)
 {
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
@@ -398,7 +398,7 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
 {
     alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
     alpaka::wait(queue);
-    auto result = makeBuffer<size_t>(devHost, devAcc, 1U);
+    auto result = makeBuffer<uint32_t>(devHost, devAcc, 1U);
     alpaka::wait(queue);
     alpaka::exec<TAcc>(
         queue,
@@ -415,7 +415,7 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
     return tmp;
 }
 
-template<size_t T_blockSize, uint32_t T_pageSize>
+template<uint32_t T_blockSize, uint32_t T_pageSize>
 auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
 {
     // This is a bit dirty: What we should do here is enqueue a kernel that calls accessBlock->pageIndex().
@@ -479,7 +479,7 @@ struct CreateAndDestroMultipleTimes
 struct OversubscribedCreation
 {
     uint32_t oversubscriptionFactor{};
-    size_t availableSlots{};
+    uint32_t availableSlots{};
 
     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
@@ -555,7 +555,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("creates second memory somewhere else.")
     {
-        size_t const size = 2U;
+        uint32_t const size = 2U;
         auto const workDiv = createWorkDiv<Acc>(devAcc, size);
         alpaka::exec<Acc>(
             queue,
@@ -592,7 +592,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("creates partly for insufficient memory with same chunk size.")
     {
-        size_t const size = 2U;
+        uint32_t const size = 2U;
         auto* lastFreeChunk = fillAllButOne<Acc>(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
 
         // Okay, so here we start the actual test. The situation is the following:
@@ -890,7 +890,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("creates second memory somewhere in multi-page mode.")
     {
-        size_t const size = 2U;
+        uint32_t const size = 2U;
         auto const workDiv = createWorkDiv<Acc>(devAcc, size);
         alpaka::exec<Acc>(
             queue,

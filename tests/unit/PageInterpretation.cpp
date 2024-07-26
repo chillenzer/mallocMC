@@ -24,9 +24,6 @@
   THE SOFTWARE.
 */
 
-// This is fine. We're mixing uint32_t and size_t from time to time to do manual index calculations. That will not
-// happen in production code.
-// NOLINTBEGIN(*widening*)
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
 
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
@@ -60,7 +57,7 @@ using std::distance;
 
 TEST_CASE("PageInterpretation")
 {
-    constexpr size_t const pageSize = 1024U;
+    constexpr uint32_t const pageSize = 1024U;
     constexpr uint32_t const chunkSize = 32U;
     DataPage<pageSize> data{};
     PageInterpretation<pageSize> page{data, chunkSize};
@@ -124,7 +121,7 @@ TEST_CASE("PageInterpretation")
 TEST_CASE("PageInterpretation.create")
 {
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize
+    constexpr uint32_t const pageSize
         = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
@@ -207,7 +204,7 @@ TEST_CASE("PageInterpretation.create")
 TEST_CASE("PageInterpretation.destroy")
 {
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr size_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
+    constexpr uint32_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
         + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
@@ -256,7 +253,7 @@ TEST_CASE("PageInterpretation.destroy")
             memset(std::begin(data.data), std::numeric_limits<char>::max(), page.numChunks() * chunkSize);
             page.cleanup();
 
-            for(size_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
+            for(uint32_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
             {
                 CHECK(data.data[i] == 0U);
             }

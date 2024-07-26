@@ -30,7 +30,7 @@
 
 using mallocMC::CreationPolicies::ScatterAlloc::PageTable;
 
-constexpr const size_t numPages = 3;
+constexpr const uint32_t numPages = 3;
 
 TEST_CASE("PageTable")
 {

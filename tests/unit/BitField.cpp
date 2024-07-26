@@ -50,7 +50,7 @@ TEST_CASE("BitMask")
 
     SECTION("can have individual bits read.")
     {
-        for(size_t i = 0; i < BitMaskSize; ++i)
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
             CHECK(mask(accSerial, i) == false);
         }
@@ -58,7 +58,7 @@ TEST_CASE("BitMask")
 
     SECTION("allows to write individual bits.")
     {
-        for(size_t i = 0; i < BitMaskSize; ++i)
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
             mask.set(accSerial, i);
             CHECK(mask(accSerial, i));
@@ -67,10 +67,10 @@ TEST_CASE("BitMask")
 
     SECTION("allows to unset individual bits afterwards.")
     {
-        for(size_t i = 0; i < BitMaskSize; ++i)
+        for(uint32_t i = 0; i < BitMaskSize; ++i)
         {
             mask.set(accSerial, i);
-            for(size_t j = 0; j < BitMaskSize; ++j)
+            for(uint32_t j = 0; j < BitMaskSize; ++j)
             {
                 CHECK(mask(accSerial, j) == (i == j));
             }
@@ -82,7 +82,7 @@ TEST_CASE("BitMask")
     SECTION("knows the first free bit.")
     {
         mask.flip(accSerial);
-        size_t const index = GENERATE(0, 3);
+        uint32_t const index = GENERATE(0, 3);
         mask.flip(accSerial, index);
         CHECK(mask.firstFreeBit(accSerial, BitMaskSize) == index);
     }
@@ -96,13 +96,13 @@ TEST_CASE("BitMask")
     SECTION("knows the first free bit with startIndex.")
     {
         mask.set(accSerial);
-        size_t index1 = GENERATE(0, 5);
-        size_t index2 = GENERATE(0, 11);
+        uint32_t index1 = GENERATE(0, 5);
+        uint32_t index2 = GENERATE(0, 11);
         if(index1 > index2)
         {
             std::swap(index1, index2);
         }
-        size_t const startIndex = GENERATE(0, 4, 5, 6);
+        uint32_t const startIndex = GENERATE(0, 4, 5, 6);
         mask.unset(accSerial, index1);
         mask.unset(accSerial, index2);
         // This is the currently implemented algorithm and could be considered overspecifying the result.
