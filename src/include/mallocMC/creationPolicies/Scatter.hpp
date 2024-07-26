@@ -47,7 +47,7 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    template<typename T_HeapConfig, typename T_HashConfig>
+    template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
     struct Heap
     {
         using MyAccessBlock = AccessBlock<
@@ -130,7 +130,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
 
-        template<typename T_AlignmentPolicy>
+        template<typename T_AlignmentPolicyLocal>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsDeviceFunction(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
@@ -143,11 +143,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 [&acc, chunkSize](auto& accessBlock) { return accessBlock.getAvailableSlots(acc, chunkSize); });
         }
 
-        template<typename T_AlignmentPolicy>
+        template<typename T_AlignmentPolicyLocal>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsAccelerator(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
-            return getAvailableSlotsDeviceFunction<T_AlignmentPolicy>(acc, chunkSize);
+            return getAvailableSlotsDeviceFunction<T_AlignmentPolicyLocal>(acc, chunkSize);
         }
 
     protected:
@@ -176,14 +176,15 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
     struct InitKernel
     {
-        template<typename T_HeapConfig, typename T_HashConfig>
+        template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(
             auto const& /*unused*/,
-            Heap<T_HeapConfig, T_HashConfig>* m_heap,
+            Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>* m_heap,
             void* m_heapmem,
             size_t const m_memsize) const
         {
-            m_heap->accessBlocks = static_cast<Heap<T_HeapConfig, T_HashConfig>::MyAccessBlock*>(m_heapmem);
+            m_heap->accessBlocks
+                = static_cast<Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>::MyAccessBlock*>(m_heapmem);
             m_heap->heapSize = m_memsize;
         }
     };
@@ -192,10 +193,19 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 namespace mallocMC::CreationPolicies
 {
-
     template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
-    struct Scatter : public ScatterAlloc::Heap<T_HeapConfig, T_HashConfig>
+    struct Scatter
     {
+        template<typename T_AlignmentPolicy>
+        using AlignmentAwarePolicy = ScatterAlloc::Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>;
+
+        static auto classname() -> std::string
+        {
+            return "Scatter";
+        }
+
+        constexpr static auto const providesAvailableSlots = true;
+
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
@@ -217,8 +227,6 @@ namespace mallocMC::CreationPolicies
             alpaka::exec<TAcc>(queue, workDivSingleThread, ScatterAlloc::InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
-
-        constexpr const static bool providesAvailableSlots = true;
 
         template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
         static auto getAvailableSlotsHost(
@@ -258,11 +266,6 @@ namespace mallocMC::CreationPolicies
             alpaka::wait(queue);
 
             return *alpaka::getPtrNative(h_slots);
-        }
-
-        static auto classname() -> std::string
-        {
-            return "Scatter";
         }
     };
 } // namespace mallocMC::CreationPolicies

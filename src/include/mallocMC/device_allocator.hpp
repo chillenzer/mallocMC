@@ -56,7 +56,7 @@ namespace mallocMC
         typename T_DistributionPolicy,
         typename T_OOMPolicy,
         typename T_AlignmentPolicy>
-    class DeviceAllocator : public T_CreationPolicy
+    class DeviceAllocator : public T_CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>
     {
         using uint32 = std::uint32_t;
 
@@ -76,7 +76,10 @@ namespace mallocMC
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
             const uint32 req_size = distributionPolicy.collect(acc, bytes);
-            void* memBlock = CreationPolicy::template create<AlignmentPolicy>(acc, req_size);
+            void* memBlock
+                = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::template create<AlignmentPolicy>(
+                    acc,
+                    req_size);
             if(CreationPolicy::isOOM(memBlock, req_size))
             {
                 memBlock = OOMPolicy::handleOOM(memBlock);
@@ -89,7 +92,7 @@ namespace mallocMC
         {
             if(pointer != nullptr)
             {
-                CreationPolicy::destroy(acc, pointer);
+                CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::destroy(acc, pointer);
             }
         }
 
@@ -107,7 +110,8 @@ namespace mallocMC
             slotSize = AlignmentPolicy::applyPadding(slotSize);
             if constexpr(Traits<DeviceAllocator>::providesAvailableSlots)
             {
-                return CreationPolicy::template getAvailableSlotsAccelerator<AlignmentPolicy>(acc, slotSize);
+                return CreationPolicy::template AlignmentAwarePolicy<
+                    T_AlignmentPolicy>::template getAvailableSlotsAccelerator<AlignmentPolicy>(acc, slotSize);
             }
             else
             {

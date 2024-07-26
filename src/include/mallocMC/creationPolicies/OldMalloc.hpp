@@ -48,6 +48,9 @@ namespace mallocMC
             using uint32 = std::uint32_t;
 
         public:
+            template<typename T_AlignmentPolicy>
+            using AlignmentAwarePolicy = OldMalloc;
+
             static constexpr auto providesAvailableSlots = false;
 
             template<typename AlignmentPolicy, typename AlpakaAcc>
