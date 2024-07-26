@@ -27,6 +27,7 @@
 
 #include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
 
+#include "../unit/mocks.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
@@ -75,7 +76,7 @@ constexpr uint32_t numPages = 4;
 constexpr uint32_t pteSize = 4 + 4;
 constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 
-using MyAccessBlock = AccessBlock<blockSize, pageSize>;
+using MyAccessBlock = AccessBlock<HeapConfig<blockSize, pageSize>, AlignmentPolicy>;
 
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
@@ -86,7 +87,7 @@ struct FillWith
     template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
     ALPAKA_FN_ACC auto operator()(
         TAcc const& acc,
-        AccessBlock<T_blockSize, T_pageSize>* accessBlock,
+        AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock,
         uint32_t const chunkSize,
         void** result,
         uint32_t const size) const -> void
@@ -314,7 +315,10 @@ auto fillAllButOne(auto& queue, auto* accessBlock, auto const& chunkSize, auto& 
 }
 
 template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
-auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto& pointers)
+auto freeAllButOneOnFirstPage(
+    auto& queue,
+    AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock,
+    auto& pointers)
 {
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
     std::sort(std::begin(tmp), std::end(tmp));
@@ -323,7 +327,8 @@ auto freeAllButOneOnFirstPage(auto& queue, AccessBlock<T_blockSize, T_pageSize>*
     alpaka::wait(queue);
     alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
     alpaka::wait(queue);
-    auto size = pointers.m_extents[0] / AccessBlock<T_blockSize, T_pageSize>::numPages() - 1;
+    auto size
+        = pointers.m_extents[0] / AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>::numPages() - 1;
     // Delete all other chunks on page 0.
     auto workDiv = createWorkDiv<TAcc>(pointers.m_devAcc, size);
     alpaka::exec<TAcc>(
@@ -416,7 +421,7 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
 }
 
 template<uint32_t T_blockSize, uint32_t T_pageSize>
-auto pageIndex(AccessBlock<T_blockSize, T_pageSize>* accessBlock, auto* pointer)
+auto pageIndex(AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock, auto* pointer)
 {
     // This is a bit dirty: What we should do here is enqueue a kernel that calls accessBlock->pageIndex().
     // But we assume that the access block starts with the first page, so the pointer to the first page equals the

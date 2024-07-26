@@ -50,11 +50,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
     struct Heap
     {
-        using MyAccessBlock = AccessBlock<
-            T_HeapConfig::accessblocksize,
-            T_HeapConfig::pagesize,
-            T_HeapConfig::wastefactor,
-            T_HeapConfig::resetfreedpages>;
+        using MyAccessBlock = AccessBlock<T_HeapConfig, T_AlignmentPolicy>;
 
         static_assert(
             T_HeapConfig::accessblocksize

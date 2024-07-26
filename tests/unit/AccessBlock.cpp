@@ -52,7 +52,7 @@
 template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
 struct AccessBlock
     : public mallocMC::CreationPolicies::ScatterAlloc::
-          AccessBlock<T_blockSize, T_pageSize, T_wasteFactor, resetfreedpages>
+          AccessBlock<HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, resetfreedpages>, AlignmentPolicy>
 {
     // This is already the default but we want to make it explicit: Just for testing purposes we expose the constructor
     // in order to easily get a test instance.

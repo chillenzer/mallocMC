@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#pragma once
+
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>
@@ -47,3 +49,17 @@ inline auto constructAcc()
 //
 inline static auto const accPointer = constructAcc();
 inline static auto const& accSerial = *accPointer;
+
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool T_resetfreedpages = true>
+struct HeapConfig
+{
+    constexpr static auto const accessblocksize = T_blockSize;
+    constexpr static auto const pagesize = T_pageSize;
+    constexpr static auto const wastefactor = T_wasteFactor;
+    constexpr static auto const resetfreedpages = T_resetfreedpages;
+};
+
+struct AlignmentPolicy
+{
+    constexpr static uint32_t const dataAlignment = 1U;
+};
