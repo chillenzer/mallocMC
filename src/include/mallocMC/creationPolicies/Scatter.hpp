@@ -232,7 +232,7 @@ namespace mallocMC::CreationPolicies
             using VecType = alpaka::Vec<Dim, Idx>;
 
             auto d_slots = alpaka::allocBuf<size_t, Idx>(dev, Idx{1});
-            alpaka::memset(queue, d_slots, 0, 1);
+            alpaka::memset(queue, d_slots, 0, Idx{1});
             auto d_slotsPtr = alpaka::getPtrNative(d_slots);
 
             auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(const AlpakaAcc& acc) -> void
