@@ -73,10 +73,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename T_HeapConfig, typename T_AlignmentPolicy>
     class AccessBlock
     {
-        constexpr static uint32_t const T_blockSize = T_HeapConfig::accessblocksize;
-        constexpr static uint32_t const T_pageSize = T_HeapConfig::pagesize;
-        constexpr static uint32_t const T_wasteFactor = T_HeapConfig::wastefactor;
+        constexpr static uint32_t const blockSize = T_HeapConfig::accessblocksize;
+        constexpr static uint32_t const pageSize = T_HeapConfig::pagesize;
+        constexpr static uint32_t const wasteFactor = T_HeapConfig::wastefactor;
         constexpr static bool const resetfreedpages = T_HeapConfig::resetfreedpages;
+
+        using MyPageInterpretation = PageInterpretation<pageSize>;
 
     protected:
         // This class is supposed to be reinterpeted on a piece of raw memory and not instantiated directly. We set it
@@ -86,7 +88,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     public:
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numPages() -> uint32_t
         {
-            constexpr auto numberOfPages = T_blockSize / (T_pageSize + sizeof(PageTable<1>));
+            constexpr auto numberOfPages = blockSize / (pageSize + sizeof(PageTable<1>));
             // check that the page table entries does not have a padding
             static_assert(sizeof(PageTable<numberOfPages>) == numberOfPages * sizeof(PageTable<1>));
             return numberOfPages;
@@ -104,7 +106,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto pageIndex(void* pointer) const -> int32_t
         {
-            return indexOf(pointer, pages, T_pageSize);
+            return indexOf(pointer, pages, pageSize);
         }
 
         template<typename TAcc>
@@ -116,7 +118,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
             auto const index = pageIndex(pointer);
             auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
-            if(chunkSize >= T_pageSize)
+            if(chunkSize >= pageSize)
             {
                 return true;
             }
@@ -168,18 +170,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
 
     private:
-        DataPage<T_pageSize> pages[numPages()]{};
+        DataPage<pageSize> pages[numPages()]{};
         PageTable<numPages()> pageTable{};
-        Padding<T_blockSize - sizeof(pages) - sizeof(pageTable)> padding{};
+        Padding<blockSize - sizeof(pages) - sizeof(pageTable)> padding{};
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
         {
-            return T_pageSize - sizeof(BitMaskStorageType<>);
+            return pageSize - sizeof(BitMaskStorageType<>);
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto interpret(uint32_t const pageIndex, uint32_t const chunkSize)
         {
-            return PageInterpretation<T_pageSize>(pages[pageIndex], chunkSize);
+            return MyPageInterpretation(pages[pageIndex], chunkSize);
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> uint32_t
@@ -194,7 +196,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 [this, chunkSize](auto const localChunkSize, auto const fillingLevel)
                 {
                     auto const numChunks
-                        = PageInterpretation<T_pageSize>::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
+                        = MyPageInterpretation::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
                     return ((this->isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U)
                             and fillingLevel < numChunks)
                         ? numChunks - fillingLevel
@@ -206,7 +208,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             -> uint32_t
         {
             // TODO(lenz): This is not thread-safe!
-            auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
+            auto numPagesNeeded = ceilingDivision(chunkSize, pageSize);
             if(numPagesNeeded > numPages())
             {
                 return 0U;
@@ -232,7 +234,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
         {
-            auto numPagesNeeded = ceilingDivision(numBytes, T_pageSize);
+            auto numPagesNeeded = ceilingDivision(numBytes, pageSize);
             if(numPagesNeeded > numPages())
             {
                 return nullptr;
@@ -263,7 +265,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const firstIndex,
             uint32_t const numPagesNeeded) -> uint32_t
         {
-            return managePageOwnerships(acc, firstIndex, numPagesNeeded, 0U, T_pageSize);
+            return managePageOwnerships(acc, firstIndex, numPagesNeeded, 0U, pageSize);
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto releasePages(
@@ -271,7 +273,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const firstIndex,
             uint32_t const numPagesNeeded) -> uint32_t
         {
-            return managePageOwnerships(acc, firstIndex, numPagesNeeded, T_pageSize, 0U);
+            return managePageOwnerships(acc, firstIndex, numPagesNeeded, pageSize, 0U);
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto managePageOwnerships(
@@ -363,7 +365,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 index = choosePage(acc, numBytes, index, chunkSize);
                 if(isValidPageIdx(index))
                 {
-                    pointer = PageInterpretation<T_pageSize>{pages[index], chunkSize}.create(acc, hashValue);
+                    pointer = MyPageInterpretation{pages[index], chunkSize}.create(acc, hashValue);
                     if(pointer == nullptr)
                     {
                         leavePage(acc, index);
@@ -394,7 +396,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes) const
         {
-            return (chunkSize >= numBytes && chunkSize <= T_wasteFactor * numBytes);
+            return (chunkSize >= numBytes && chunkSize <= wasteFactor * numBytes);
         }
 
         template<typename TAcc>
@@ -439,7 +441,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             auto const oldFilling = alpaka::atomicAdd(acc, &pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
             // must be 0, too) or the next check will fail.
-            return oldFilling < PageInterpretation<T_pageSize>::numChunks(expectedChunkSize);
+            return oldFilling < MyPageInterpretation::numChunks(expectedChunkSize);
         }
 
         template<typename TAcc>
@@ -458,7 +460,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                     // set to another value by another thread before our task is complete here. Naively, one could
                     // expect this "weakens" the lock and makes it insecure. But not the case and having it like this
                     // is a feature, not a bug, as is proven in the comments below.
-                    auto lock = T_pageSize;
+                    auto lock = pageSize;
                     auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
                     if(latestFilling == 0U)
                     {
@@ -469,7 +471,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                             // Furthermore, chunkSize cannot have changed because we maintain the invariant that the
                             // filling level is always considered first, so no other thread can have passed that
                             // barrier to reset it.
-                            PageInterpretation<T_pageSize>{pages[pageIndex], chunkSize}.cleanup();
+                            MyPageInterpretation{pages[pageIndex], chunkSize}.cleanup();
                             alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
 
                             // It is important to keep this after the clean-up line above: Otherwise another thread
@@ -495,17 +497,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const pageIndex,
             uint32_t const chunkSize)
         {
-            auto numPagesNeeded = ceilingDivision(chunkSize, T_pageSize);
+            auto numPagesNeeded = ceilingDivision(chunkSize, pageSize);
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
                 auto myIndex = pageIndex + i;
                 if constexpr(resetfreedpages)
                 {
-                    PageInterpretation<T_pageSize>{pages[myIndex], 1U}.cleanup();
+                    MyPageInterpretation{pages[myIndex], 1U}.cleanup();
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
                     alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
                 }
-                alpaka::atomicSub(acc, &pageTable._fillingLevels[myIndex], +T_pageSize);
+                alpaka::atomicSub(acc, &pageTable._fillingLevels[myIndex], +pageSize);
             }
         }
     };

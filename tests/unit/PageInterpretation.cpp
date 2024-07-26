@@ -52,7 +52,8 @@
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
-using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+template<uint32_t T_pageSize>
+using PageInterpretation = mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation<T_pageSize>;
 using std::distance;
 
 TEST_CASE("PageInterpretation")
