@@ -26,6 +26,8 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/OldMalloc.hpp"
+
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
@@ -38,7 +40,7 @@ using Idx = std::size_t;
 // Define the device accelerator
 using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 
-struct ScatterConfig
+struct ScatterHeapConfig
 {
     static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
     static constexpr size_t accessblocksize = 2U * 1024U * 1024U * 1024U;
@@ -53,19 +55,12 @@ struct AlignmentConfig
     static constexpr auto dataAlignment = 16;
 };
 
-using ScatterAllocator = mallocMC::Allocator<
-    Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterConfig>,
-    mallocMC::DistributionPolicies::Noop,
-    mallocMC::OOMPolicies::ReturnNull,
-    mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
-    mallocMC::AlignmentPolicies::Shrink<AlignmentConfig>>;
-
 ALPAKA_STATIC_ACC_MEM_GLOBAL static int* arA = nullptr;
 
+template<typename T_Allocator>
 struct ExampleKernel
 {
-    ALPAKA_FN_ACC void operator()(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle) const
+    ALPAKA_FN_ACC void operator()(const Acc& acc, T_Allocator::AllocatorHandle allocHandle) const
     {
         const auto id = static_cast<uint32_t>(alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]);
         if(id == 0)
@@ -92,20 +87,38 @@ struct ExampleKernel
     }
 };
 
-auto main() -> int
+template<typename T_CreationPolicy>
+auto example03() -> int
 {
+    using Allocator = mallocMC::Allocator<
+        Acc,
+        T_CreationPolicy,
+        mallocMC::DistributionPolicies::Noop,
+        mallocMC::OOMPolicies::ReturnNull,
+        mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
+        mallocMC::AlignmentPolicies::Shrink<AlignmentConfig>>;
+
     auto const platform = alpaka::Platform<Acc>{};
     const auto dev = alpaka::getDevByIdx(platform, 0);
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
     unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
-    ScatterAllocator scatterAlloc(dev, queue, 2U * 1024U * 1024U * 1024U); // 2GB for device-side malloc
+    Allocator scatterAlloc(dev, queue, 2U * 1024U * 1024U * 1024U); // 2GB for device-side malloc
 
     const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{block}, Idx{1}};
-    alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel{}, scatterAlloc.getAllocatorHandle()));
+    alpaka::enqueue(
+        queue,
+        alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel<Allocator>{}, scatterAlloc.getAllocatorHandle()));
 
     std::cout << "Slots from Host: " << scatterAlloc.getAvailableSlots(dev, queue, 1) << '\n';
 
+    return 0;
+}
+
+auto main(int /*argc*/, char* /*argv*/[]) -> int
+{
+    example03<mallocMC::CreationPolicies::Scatter<ScatterHeapConfig>>();
+    example03<mallocMC::CreationPolicies::OldMalloc>();
     return 0;
 }

@@ -26,6 +26,9 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/OldMalloc.hpp"
+#include "mallocMC/creationPolicies/Scatter.hpp"
+
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
@@ -60,20 +63,21 @@ struct ShrinkConfig
     static constexpr auto dataAlignment = 16;
 };
 
-using ScatterAllocator = mallocMC::Allocator<
-    Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterHeapConfig>,
-    mallocMC::DistributionPolicies::Noop,
-    mallocMC::OOMPolicies::ReturnNull,
-    mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
-    mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>;
-
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arA;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arB;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arC;
 
-auto main() -> int
+template<typename T_CreationPolicy>
+auto example01() -> int
 {
+    using Allocator = mallocMC::Allocator<
+        Acc,
+        T_CreationPolicy,
+        mallocMC::DistributionPolicies::Noop,
+        mallocMC::OOMPolicies::ReturnNull,
+        mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
+        mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>;
+
     constexpr auto length = 100;
 
     auto const platform = alpaka::Platform<Acc>{};
@@ -90,14 +94,14 @@ auto main() -> int
     // init the heap
     std::cerr << "initHeap...";
     auto const heapSize = 2U * 1024U * 1024U * 1024U;
-    ScatterAllocator scatterAlloc(dev, queue, heapSize); // 1GB for device-side malloc
+    Allocator scatterAlloc(dev, queue, heapSize); // 1GB for device-side malloc
     std::cerr << "done\n";
-    std::cout << ScatterAllocator::info("\n") << '\n';
+    std::cout << Allocator::info("\n") << '\n';
 
     // create arrays of arrays on the device
     {
         auto createArrayPointers
-            = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, ScatterAllocator::AllocatorHandle allocHandle)
+            = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, Allocator::AllocatorHandle allocHandle)
         {
             arA<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
             arB<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
@@ -116,8 +120,7 @@ auto main() -> int
 
     // fill 2 of them all with ascending values
     {
-        auto fillArrays
-            = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, ScatterAllocator::AllocatorHandle allocHandle)
+        auto fillArrays = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, Allocator::AllocatorHandle allocHandle)
         {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
@@ -174,7 +177,7 @@ auto main() -> int
     const auto gaussian = n * (n - 1);
     std::cout << "The gaussian sum as comparison: " << gaussian << '\n';
 
-    /*constexpr*/ if(mallocMC::Traits<ScatterAllocator>::providesAvailableSlots)
+    /*constexpr*/ if(mallocMC::Traits<Allocator>::providesAvailableSlots)
     {
         std::cout << "there are ";
         std::cout << scatterAlloc.getAvailableSlots(dev, queue, 1024U * 1024U);
@@ -182,7 +185,7 @@ auto main() -> int
     }
 
     {
-        auto freeArrays = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        auto freeArrays = [] ALPAKA_FN_ACC(const Acc& acc, Allocator::AllocatorHandle allocHandle)
         {
             const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
             allocHandle.free(acc, arA<Acc>[id]);
@@ -194,7 +197,7 @@ auto main() -> int
     }
 
     {
-        auto freeArrayPointers = [] ALPAKA_FN_ACC(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        auto freeArrayPointers = [] ALPAKA_FN_ACC(const Acc& acc, Allocator::AllocatorHandle allocHandle)
         {
             allocHandle.free(acc, arA<Acc>);
             allocHandle.free(acc, arB<Acc>);
@@ -206,5 +209,12 @@ auto main() -> int
             alpaka::createTaskKernel<Acc>(workDiv, freeArrayPointers, scatterAlloc.getAllocatorHandle()));
     }
 
+    return 0;
+}
+
+auto main(int /*argc*/, char* /*argv*/[]) -> int
+{
+    example01<mallocMC::CreationPolicies::Scatter<ScatterHeapConfig>>();
+    example01<mallocMC::CreationPolicies::OldMalloc>();
     return 0;
 }
