@@ -176,8 +176,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto maxBitFieldSize() -> uint32_t
         {
-            // TODO: 1U is likely too generous we need to take the mallocMC allignment policy into account to know the
-            // smallest allocation size
             return PageInterpretation<T_pageSize>::bitFieldSize(minimalChunkSize());
         }
 
