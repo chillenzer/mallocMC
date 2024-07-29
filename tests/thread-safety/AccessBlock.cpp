@@ -77,6 +77,7 @@ constexpr uint32_t pteSize = 4 + 4;
 constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 
 using MyAccessBlock = AccessBlock<HeapConfig<blockSize, pageSize>, AlignmentPolicy>;
+using std::span;
 
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
@@ -117,18 +118,6 @@ struct ContentGenerator
     }
 };
 
-template<typename T>
-struct span
-{
-    T* pointer;
-    uint32_t size;
-
-    ALPAKA_FN_ACC auto operator[](uint32_t index) -> T&
-    {
-        return pointer[index];
-    }
-};
-
 ALPAKA_FN_ACC auto forAll(auto const& acc, auto size, auto functor)
 {
     auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
@@ -148,13 +137,13 @@ struct Create
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
     {
-        forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSize); });
+        forAll(acc, pointers.size(), [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSize); });
     }
 
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
     {
-        forAll(acc, pointers.size, [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSizes[idx]); });
+        forAll(acc, pointers.size(), [&](auto idx) { pointers[idx] = accessBlock->create(acc, chunkSizes[idx]); });
     }
 };
 
@@ -165,7 +154,7 @@ struct CreateUntilSuccess
     {
         forAll(
             acc,
-            pointers.size,
+            pointers.size(),
             [&](auto idx)
             {
                 while(pointers[idx] == nullptr)
@@ -182,7 +171,7 @@ struct Destroy
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers) const
     {
-        forAll(acc, pointers.size, [&](auto idx) { accessBlock->destroy(acc, pointers[idx]); });
+        forAll(acc, pointers.size(), [&](auto idx) { accessBlock->destroy(acc, pointers[idx]); });
     }
 };
 
@@ -350,7 +339,7 @@ struct CheckContent
         for(uint32_t i = 0; i < numElements; ++i)
         {
             auto idx = idx0 + i;
-            if(idx < pointers.size)
+            if(idx < pointers.size())
             {
                 auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
                 auto* end = begin + chunkSize / sizeof(uint32_t);
@@ -443,7 +432,7 @@ struct FillAllUpAndWriteToThem
         for(uint32_t i = 0; i < numElements; ++i)
         {
             auto idx = idx0 + i;
-            if(idx < pointers.size)
+            if(idx < pointers.size())
             {
                 pointers[idx] = accessBlock->create(acc, chunkSize);
                 auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
@@ -459,7 +448,7 @@ struct CreateAndDestroMultipleTimes
     {
         forAll(
             acc,
-            pointers.size,
+            pointers.size(),
             [&](auto idx)
             {
                 pointers[idx] = nullptr;
@@ -490,7 +479,7 @@ struct OversubscribedCreation
     {
         forAll(
             acc,
-            pointers.size,
+            pointers.size(),
             [&](auto idx)
             {
                 pointers[idx] = nullptr;
@@ -517,17 +506,17 @@ struct OversubscribedCreation
 
 struct CreateAllChunkSizes
 {
-    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto* chunkSizes) const
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, span<uint32_t> chunkSizes)
+        const
     {
         forAll(
             acc,
-            pointers.size,
+            pointers.size(),
             [&](auto i)
             {
                 pointers[i] = accessBlock->create(acc, 1U);
 
-                std::span<uint32_t> tmpChunkSizes(chunkSizes, pageSize - BitMaskSize);
-                for(auto chunkSize : tmpChunkSizes)
+                for(auto chunkSize : chunkSizes)
                 {
                     accessBlock->destroy(acc, pointers[i]);
                     pointers[i] = nullptr;
@@ -867,9 +856,9 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("can handle many different chunk sizes.")
     {
-        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize - BitMaskSize);
-        std::span<uint32_t> tmp(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
-        std::iota(std::begin(tmp), std::end(tmp), 1U);
+        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize);
+        std::span<uint32_t> chunkSizesSpan(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
+        std::iota(std::begin(chunkSizesSpan), std::end(chunkSizesSpan), 1U);
         alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
         alpaka::wait(queue);
 
@@ -881,7 +870,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             CreateAllChunkSizes{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), MyAccessBlock::numPages()),
-            alpaka::getPtrNative(chunkSizes.m_onDevice));
+            std::span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
 
         alpaka::wait(queue);
 

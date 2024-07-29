@@ -176,7 +176,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto multiPageThreshold() -> uint32_t
         {
-            return pageSize - sizeof(BitMaskStorageType<>);
+            return ceilingDivision(pageSize - sizeof(BitMaskStorageType<>), 2U);
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto interpret(uint32_t const pageIndex, uint32_t const chunkSize)
@@ -265,34 +265,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const firstIndex,
             uint32_t const numPagesNeeded) -> uint32_t
         {
-            return managePageOwnerships(acc, firstIndex, numPagesNeeded, 0U, pageSize);
-        }
-
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto releasePages(
-            auto const& acc,
-            uint32_t const firstIndex,
-            uint32_t const numPagesNeeded) -> uint32_t
-        {
-            return managePageOwnerships(acc, firstIndex, numPagesNeeded, pageSize, 0U);
-        }
-
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto managePageOwnerships(
-            auto const& acc,
-            uint32_t const firstIndex,
-            uint32_t const numPages,
-            uint32_t const expectedFilling,
-            uint32_t const newFilling) -> uint32_t
-        {
             uint32_t index = 0U;
-            uint32_t oldFilling = expectedFilling;
-            for(index = 0U; index < numPages; ++index)
+            uint32_t oldFilling = 0U;
+            for(index = 0U; index < numPagesNeeded; ++index)
             {
-                oldFilling = alpaka::atomicCas(
-                    acc,
-                    &pageTable._fillingLevels[firstIndex + index],
-                    expectedFilling,
-                    newFilling);
-                if(oldFilling != expectedFilling)
+                oldFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[firstIndex + index], 0U, pageSize);
+                if(oldFilling != 0U)
                 {
                     break;
                 }
@@ -300,6 +278,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return index;
         }
 
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto releasePages(
+            auto const& acc,
+            uint32_t const firstIndex,
+            uint32_t const numPagesAcquired) -> void
+        {
+            for(uint32_t index = 0U; index < numPagesAcquired; ++index)
+            {
+                alpaka::atomicSub(acc, &pageTable._fillingLevels[firstIndex + index], pageSize);
+            }
+        }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto setChunkSizes(
             auto const& acc,
