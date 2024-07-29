@@ -512,19 +512,19 @@ struct CreateAllChunkSizes
         forAll(
             acc,
             pointers.size(),
-            [&](auto i)
+            [&](auto idx)
             {
-                pointers[i] = accessBlock->create(acc, 1U);
+                pointers[idx] = accessBlock->create(acc, 1U);
 
                 for(auto chunkSize : chunkSizes)
                 {
-                    accessBlock->destroy(acc, pointers[i]);
-                    pointers[i] = nullptr;
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
 
                     // `.isValid()` is not thread-safe, so we use this direct assessment:
-                    while(pointers[i] == nullptr)
+                    while(pointers[idx] == nullptr)
                     {
-                        pointers[i] = accessBlock->create(acc, chunkSize);
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
                     }
                 }
             });

@@ -297,16 +297,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             for(uint32_t numPagesAcquired = 0U; numPagesAcquired < numPagesNeeded; ++numPagesAcquired)
             {
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                auto oldChunkSize =
-#endif
-                    alpaka::atomicCas(acc, &pageTable._chunkSizes[firstIndex + numPagesAcquired], 0U, numBytes);
-#if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
-                if(oldChunkSize != 0U)
-                {
-                    throw std::runtime_error{"Unexpected intermediate chunkSize in multi-page allocation."};
-                }
-#endif // !NDEBUG
+                // At this point in the code, we have already locked all the pages. So, we literally don't care what
+                // other threads thought this chunk size would be because we are the only ones legitimately messing
+                // with this page. This chunk size may be non-zero because we could have taken over a page before it
+                // was properly cleaned up. That is okay for us because we're handing out uninitialised memory anyways.
+                // But it is very important to record the correct chunk size here, so the destroy method later on knows
+                // how to handle this memory.
+                alpaka::atomicExch(acc, &pageTable._chunkSizes[firstIndex + numPagesAcquired], numBytes);
             }
         }
 
@@ -440,14 +437,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             // else branch contained the simple subtraction). It's a matter of which case shall have one operation
             // less.
             auto originalFilling = alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], 1U);
+
             if constexpr(resetfreedpages)
             {
                 if(originalFilling == 1U)
                 {
-                    // This number depends on the chunk size which will at some point get reset to 0 and might even get
-                    // set to another value by another thread before our task is complete here. Naively, one could
-                    // expect this "weakens" the lock and makes it insecure. But not the case and having it like this
-                    // is a feature, not a bug, as is proven in the comments below.
+                    // CAUTION: This section has caused a lot of headaches in the past. We're in a state where the
+                    // filling level is 0 but we have not properly cleaned up the page and the metadata yet. This is on
+                    // purpose because another thread might still take over this page and spare us the trouble of
+                    // freeing everything up properly. But this other thread must take into account the possibility
+                    // that it acquired a second-hand page. Look here if you run into another deadlock. It might well
+                    // be related to this section.
+
                     auto lock = pageSize;
                     auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
                     if(latestFilling == 0U)
