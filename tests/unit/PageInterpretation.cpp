@@ -52,8 +52,7 @@
 using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
 using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
-template<uint32_t T_pageSize>
-using PageInterpretation = mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation<T_pageSize>;
+using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
 TEST_CASE("PageInterpretation")
@@ -73,7 +72,7 @@ TEST_CASE("PageInterpretation")
         CHECK(page.chunkPointer(0) == &data);
     }
 
-    SECTION("computes correct number of pages.")
+    SECTION("computes correct number of chunks.")
     {
         std::array<uint32_t, 9> chunkSizes{1, 2, 4, 5, 10, 11, 31, 32, 512};
         std::array<uint32_t, 9> expectedNumChunks{908, 480, 248, 199, 100, 92, 32, 31, 1};
@@ -101,6 +100,9 @@ TEST_CASE("PageInterpretation")
         // 116 allows for 29 bit masks capable of representing 928 1-byte chunks. This would give a total addressable
         // size of 1044, so in this scenario the last 20 bits of the mask would be invalid.
         CHECK(page.maxBitFieldSize() == 116U);
+        CHECK(PageInterpretation<pageSize, 32U>::maxBitFieldSize() == 1U * sizeof(BitMask));
+        CHECK(PageInterpretation<pageSize, 16U>::maxBitFieldSize() == 2U * sizeof(BitMask));
+        CHECK(PageInterpretation<pageSize, 17U>::maxBitFieldSize() == 2U * sizeof(BitMask));
     }
 
     SECTION("reports numChunks that fit the page.")
@@ -249,14 +251,32 @@ TEST_CASE("PageInterpretation.destroy")
         }
 
 
-        SECTION("cleans up in bit field region of page.")
+        SECTION("cleans up in bit field region of page")
         {
-            memset(std::begin(data.data), std::numeric_limits<char>::max(), page.numChunks() * chunkSize);
-            page.cleanup();
-
-            for(uint32_t i = pageSize - page.maxBitFieldSize(); i < pageSize; ++i)
+            // This is larger than any thread would be allowed to write. Threads would only write in the region up to
+            // `page.numChunks() * chunkSize` not up until `pageSize`. We still do that to have a better overview over
+            // what was actually deleted. This also implies that we have to be careful how to formulate the `CHECK`s
+            // below if PageInterpretation::cleanup() should ever acquire are more involved implementation that just
+            // memsetting everything.
+            memset(std::begin(data.data), std::numeric_limits<char>::max(), pageSize);
+            //
+            uint32_t maxBitFieldSize{};
+            SECTION("without explicit minimal chunk size.")
             {
-                CHECK(data.data[i] == 0U);
+                maxBitFieldSize = page.maxBitFieldSize();
+                page.cleanup();
+            }
+
+            SECTION("with explicit minimal chunk size.")
+            {
+                auto localPage = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page);
+                maxBitFieldSize = localPage->maxBitFieldSize();
+                localPage->cleanup();
+            }
+
+            for(uint32_t i = 0; i < pageSize; ++i)
+            {
+                CHECK(data.data[i] == (i < pageSize - maxBitFieldSize ? std::numeric_limits<char>::max() : 0));
             }
         }
     }

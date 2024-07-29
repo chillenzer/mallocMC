@@ -37,7 +37,7 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
-    template<uint32_t T_pageSize>
+    template<uint32_t T_pageSize, uint32_t T_minimalChunkSize = 1U>
     struct PageInterpretation
     {
     private:
@@ -116,7 +116,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto minimalChunkSize() -> uint32_t
         {
-            return 1U;
+            return T_minimalChunkSize;
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanup() -> void
