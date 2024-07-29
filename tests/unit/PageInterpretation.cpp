@@ -74,10 +74,10 @@ TEST_CASE("PageInterpretation")
 
     SECTION("computes correct number of chunks.")
     {
-        std::array<uint32_t, 9> chunkSizes{1, 2, 4, 5, 10, 11, 31, 32, 512};
-        std::array<uint32_t, 9> expectedNumChunks{908, 480, 248, 199, 100, 92, 32, 31, 1};
+        std::array<uint32_t, 9> chunkSizes{1, 2, 4, 5, 10, 11, 31, 32, 512}; // NOLINT(*magic-number*)
+        std::array<uint32_t, 9> expectedNumChunks{908, 480, 248, 199, 100, 92, 32, 31, 1}; // NOLINT(*magic-number*)
 
-        for(uint32_t i = 0U; i < 9; ++i)
+        for(uint32_t i = 0U; i < chunkSizes.size(); ++i)
         {
             CHECK(PageInterpretation<pageSize>::numChunks(chunkSizes[i]) == expectedNumChunks[i]);
         }
@@ -108,7 +108,8 @@ TEST_CASE("PageInterpretation")
     SECTION("reports numChunks that fit the page.")
     {
         CHECK(
-            page.numChunks() * chunkSize + mallocMC::ceilingDivision(page.numChunks(), BitMaskSize) * sizeof(BitMask)
+            page.numChunks() * chunkSize
+                + static_cast<uint32_t>(mallocMC::ceilingDivision(page.numChunks(), BitMaskSize) * sizeof(BitMask))
             <= pageSize);
     }
 
@@ -125,7 +126,7 @@ TEST_CASE("PageInterpretation.create")
 {
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr uint32_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + BitMaskSize * sizeof(BitMask);
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + static_cast<uint32_t>(BitMaskSize * sizeof(BitMask));
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -208,7 +209,7 @@ TEST_CASE("PageInterpretation.destroy")
 {
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr uint32_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
-        + BitMaskSize * BitMaskSize * BitMaskSize * sizeof(BitMask);
+        + BitMaskSize * BitMaskSize * BitMaskSize * static_cast<uint32_t>(sizeof(BitMask));
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -263,14 +264,15 @@ TEST_CASE("PageInterpretation.destroy")
             uint32_t maxBitFieldSize{};
             SECTION("without explicit minimal chunk size.")
             {
-                maxBitFieldSize = page.maxBitFieldSize();
+                maxBitFieldSize = page.maxBitFieldSize(); // NOLINT(*static*)
                 page.cleanup();
             }
 
             SECTION("with explicit minimal chunk size.")
             {
-                auto localPage = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page);
-                maxBitFieldSize = localPage->maxBitFieldSize();
+                auto* localPage
+                    = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page); // NOLINT(*magic-number*)
+                maxBitFieldSize = localPage->maxBitFieldSize(); // NOLINT(*static*)
                 localPage->cleanup();
             }
 
