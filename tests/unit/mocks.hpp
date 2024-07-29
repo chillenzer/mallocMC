@@ -61,5 +61,8 @@ struct HeapConfig
 
 struct AlignmentPolicy
 {
-    constexpr static uint32_t const dataAlignment = 1U;
+    struct Properties
+    {
+        constexpr static uint32_t const dataAlignment = 1U;
+    };
 };

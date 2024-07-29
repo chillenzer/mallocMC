@@ -78,7 +78,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         constexpr static uint32_t const wasteFactor = T_HeapConfig::wastefactor;
         constexpr static bool const resetfreedpages = T_HeapConfig::resetfreedpages;
 
-        using MyPageInterpretation = PageInterpretation<pageSize>;
+        using MyPageInterpretation = PageInterpretation<pageSize, T_AlignmentPolicy::Properties::dataAlignment>;
 
     protected:
         // This class is supposed to be reinterpeted on a piece of raw memory and not instantiated directly. We set it
@@ -503,7 +503,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto myIndex = pageIndex + i;
                 if constexpr(resetfreedpages)
                 {
-                    MyPageInterpretation{pages[myIndex], 1U}.cleanup();
+                    MyPageInterpretation{pages[myIndex], T_AlignmentPolicy::Properties::dataAlignment}.cleanup();
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
                     alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
                 }
