@@ -26,7 +26,6 @@
 
 
 #include <alpaka/core/Common.hpp>
-#include <cstddef>
 #include <cstdint>
 
 template<typename TAcc, typename T_size, typename TFunctor, typename... TArgs>
@@ -42,7 +41,9 @@ ALPAKA_FN_INLINE ALPAKA_FN_ACC auto wrappingLoop(
     {
         auto result = func(acc, (i + startIndex) % size, args...);
         if(result != failureValue)
+        {
             return result;
+        }
     }
     return failureValue;
 }

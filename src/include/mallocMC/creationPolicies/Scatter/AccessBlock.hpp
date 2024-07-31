@@ -137,7 +137,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             void* pointer{nullptr};
             if(numBytes >= multiPageThreshold())
             {
-                pointer = createOverMultiplePages(acc, numBytes);
+                pointer = createOverMultiplePages(acc, numBytes, hashValue);
             }
             else
             {
@@ -232,34 +232,42 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return sum;
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(
+            auto const& acc,
+            uint32_t const numBytes,
+            uint32_t hashValue) -> void*
         {
             auto numPagesNeeded = ceilingDivision(numBytes, +pageSize);
             if(numPagesNeeded > numPages())
             {
-                return nullptr;
+                return static_cast<void*>(nullptr);
             }
 
-            void* result{nullptr};
-            for(uint32_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;)
-            {
-                auto numPagesAcquired = acquirePages(acc, firstIndex, numPagesNeeded);
-                if(numPagesAcquired == numPagesNeeded)
+            // We take a little head start compared to the chunked case in order to not have them interfere with our
+            // laborious search for contiguous pages.
+            auto startIndex = startPageIndex(acc, hashValue) + numPagesNeeded;
+            return wrappingLoop(
+                acc,
+                startIndex,
+                numPages() - (numPagesNeeded - 1),
+                static_cast<void*>(nullptr),
+                [&](auto const& localAcc, auto const& firstIndex)
                 {
-                    // At this point, we have acquired all the pages we need and nobody can mess with them anymore. We
-                    // still have to set the chunk size correctly.
-                    setChunkSizes(acc, firstIndex, numPagesNeeded, numBytes);
-                    result = &pages[firstIndex];
-                }
-                else
-                {
-                    releasePages(acc, firstIndex, numPagesAcquired);
-                }
-                // If we know that there is an obstacle down the road, we don't have to bang our head against that
-                // multiple times:
-                firstIndex += numPagesAcquired + 1;
-            }
-            return result;
+                    void* result{nullptr};
+                    auto numPagesAcquired = acquirePages(localAcc, firstIndex, numPagesNeeded);
+                    if(numPagesAcquired == numPagesNeeded)
+                    {
+                        // At this point, we have acquired all the pages we need and nobody can mess with them anymore.
+                        // We still have to set the chunk size correctly.
+                        setChunkSizes(localAcc, firstIndex, numPagesNeeded, numBytes);
+                        result = &pages[firstIndex];
+                    }
+                    else
+                    {
+                        releasePages(localAcc, firstIndex, numPagesAcquired);
+                    }
+                    return result;
+                });
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto acquirePages(

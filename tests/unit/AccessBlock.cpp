@@ -213,10 +213,9 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 
         SECTION("memory larger than page size.")
         {
-            // We give a strong guarantee that this searches the first possible block, so we know the index here.
             if(accessBlock.numPages() >= 2U)
             {
-                CHECK(accessBlock.pageIndex(accessBlock.create(accSerial, 2U * pageSize)) == 0U);
+                CHECK(accessBlock.isValid(accSerial, accessBlock.create(accSerial, 2U * pageSize)));
             }
         }
 
@@ -234,6 +233,8 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             if(accessBlock.numPages() > 1U)
             {
                 auto pointers = fillWith(accessBlock, pageSize);
+                std::sort(std::begin(pointers), std::end(pointers));
+
                 // Now, we free two contiguous chunks such that there is one deterministic spot wherefrom our request
                 // can be served.
                 uint32_t index = GENERATE(0U, 1U, 5U);
