@@ -234,7 +234,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto createOverMultiplePages(auto const& acc, uint32_t const numBytes) -> void*
         {
-            auto numPagesNeeded = ceilingDivision(numBytes, pageSize);
+            auto numPagesNeeded = ceilingDivision(numBytes, +pageSize);
             if(numPagesNeeded > numPages())
             {
                 return nullptr;
@@ -269,7 +269,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t oldFilling = 0U;
             for(index = 0U; index < numPagesNeeded; ++index)
             {
-                oldFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[firstIndex + index], 0U, pageSize);
+                oldFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[firstIndex + index], 0U, +pageSize);
                 if(oldFilling != 0U)
                 {
                     break;
@@ -285,7 +285,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             for(uint32_t index = 0U; index < numPagesAcquired; ++index)
             {
-                alpaka::atomicSub(acc, &pageTable._fillingLevels[firstIndex + index], pageSize);
+                alpaka::atomicSub(acc, &pageTable._fillingLevels[firstIndex + index], +pageSize);
             }
         }
 
