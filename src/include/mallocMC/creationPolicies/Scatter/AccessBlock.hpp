@@ -241,8 +241,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             }
 
             void* result{nullptr};
-            for(uint32_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;
-                ++firstIndex)
+            for(uint32_t firstIndex = 0; firstIndex < numPages() - (numPagesNeeded - 1) and result == nullptr;)
             {
                 auto numPagesAcquired = acquirePages(acc, firstIndex, numPagesNeeded);
                 if(numPagesAcquired == numPagesNeeded)
@@ -255,7 +254,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 else
                 {
                     releasePages(acc, firstIndex, numPagesAcquired);
-                };
+                }
+                // If we know that there is an obstacle down the road, we don't have to bang our head against that
+                // multiple times:
+                firstIndex += numPagesAcquired + 1;
             }
             return result;
         }
