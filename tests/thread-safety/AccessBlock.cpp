@@ -489,8 +489,23 @@ struct OversubscribedCreation
                     while(pointers[idx] == nullptr)
                     {
                         pointers[idx] = accessBlock->create(acc, chunkSize);
+
+                        // CAUTION: The following lines have cost us more than a working day of debugging!
+                        // If the hardware you're running on has a single program counter for the whole warp, the whole
+                        // warp can't exit the while loop in case of even a single thread requesting another round.
+                        // This implies that if we move the `.destroy()` out of the while loop, all the slots get
+                        // filled up but the owning threads run idle instead of freeing them up again because they are
+                        // waiting for their last companions to give their okay for exiting the loop. This is, of
+                        // course, a hopeless endeavour because all slots are filled (we are vastly oversubscribed in
+                        // this scenario). So, this loop deadlocks and no thread ever exits.
+                        //
+                        // ... at least that's what we believe. If you're reading this comment, we might have been
+                        // wrong about this.
+                        if(pointers[idx] != nullptr)
+                        {
+                            accessBlock->destroy(acc, pointers[idx]);
+                        }
                     }
-                    accessBlock->destroy(acc, pointers[idx]);
                     pointers[idx] = nullptr;
                 }
 
@@ -818,7 +833,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
     SECTION("can handle oversubscription.")
     {
-        SKIP("Somehow this test is flaky. Haven't found out why yet.");
         uint32_t oversubscriptionFactor = 2U;
         auto availableSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
 
