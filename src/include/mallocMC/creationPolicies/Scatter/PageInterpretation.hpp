@@ -119,9 +119,18 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return T_minimalChunkSize;
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanup() -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanupFull() -> void
         {
             PageInterpretation<T_pageSize>(_data, minimalChunkSize()).resetBitField();
+        }
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanupUnused() -> void
+        {
+            auto worstCasePage = PageInterpretation<T_pageSize>(_data, minimalChunkSize());
+            memset(
+                static_cast<void*>(worstCasePage.bitFieldStart()),
+                0U,
+                worstCasePage.bitFieldSize() - bitFieldSize());
         }
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto resetBitField() -> void

@@ -470,7 +470,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                             // Furthermore, chunkSize cannot have changed because we maintain the invariant that the
                             // filling level is always considered first, so no other thread can have passed that
                             // barrier to reset it.
-                            MyPageInterpretation{pages[pageIndex], chunkSize}.cleanup();
+                            MyPageInterpretation{pages[pageIndex], chunkSize}.cleanupUnused();
                             alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
 
                             // It is important to keep this after the clean-up line above: Otherwise another thread
@@ -502,7 +502,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 auto myIndex = pageIndex + i;
                 if constexpr(resetfreedpages)
                 {
-                    MyPageInterpretation{pages[myIndex], T_AlignmentPolicy::Properties::dataAlignment}.cleanup();
+                    MyPageInterpretation{pages[myIndex], T_AlignmentPolicy::Properties::dataAlignment}.cleanupFull();
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
                     alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
                 }

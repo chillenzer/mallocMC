@@ -256,29 +256,54 @@ TEST_CASE("PageInterpretation.destroy")
         {
             // This is larger than any thread would be allowed to write. Threads would only write in the region up to
             // `page.numChunks() * chunkSize` not up until `pageSize`. We still do that to have a better overview over
-            // what was actually deleted. This also implies that we have to be careful how to formulate the `CHECK`s
-            // below if PageInterpretation::cleanup() should ever acquire are more involved implementation that just
-            // memsetting everything.
+            // what was actually deleted.
             memset(std::begin(data.data), std::numeric_limits<char>::max(), pageSize);
-            //
-            uint32_t maxBitFieldSize{};
-            SECTION("without explicit minimal chunk size.")
+
+            uint32_t maxBitFieldSize = 0U;
+            uint32_t uncleanedSize = 0U;
+            SECTION("without explicit minimal chunk size")
             {
                 maxBitFieldSize = page.maxBitFieldSize(); // NOLINT(*static*)
-                page.cleanup();
+
+                SECTION("fully.")
+                {
+                    uncleanedSize = 0U;
+                    page.cleanupFull();
+                }
+
+                SECTION("only unused.")
+                {
+                    uncleanedSize = page.bitFieldSize();
+                    page.cleanupUnused();
+                }
             }
 
-            SECTION("with explicit minimal chunk size.")
+            SECTION("with explicit minimal chunk size")
             {
                 auto* localPage
                     = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page); // NOLINT(*magic-number*)
                 maxBitFieldSize = localPage->maxBitFieldSize(); // NOLINT(*static*)
-                localPage->cleanup();
+
+                SECTION("fully.")
+                {
+                    uncleanedSize = 0U;
+                    localPage->cleanupFull();
+                }
+
+                SECTION("only unused.")
+                {
+                    uncleanedSize = localPage->bitFieldSize();
+                    localPage->cleanupUnused();
+                }
             }
 
             for(uint32_t i = 0; i < pageSize; ++i)
             {
-                CHECK(data.data[i] == (i < pageSize - maxBitFieldSize ? std::numeric_limits<char>::max() : 0));
+                CHECK(
+                    data.data[i]
+                    == ((i < pageSize - maxBitFieldSize) or (i >= pageSize - uncleanedSize)
+                            ? std::numeric_limits<char>::max()
+                            : 0));
             }
         }
     }
