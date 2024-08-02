@@ -328,6 +328,17 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
 
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
             }
+
+            SECTION("fails to create too many smaller chunks.")
+            {
+                REQUIRE(
+                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                        ->create(accSerial, smallerChunkSize)
+                    == nullptr);
+
+                CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
+                CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == nullptr);
+            }
         }
     }
 
