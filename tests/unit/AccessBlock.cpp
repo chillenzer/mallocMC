@@ -161,6 +161,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         {
             uint32_t const arbitraryValue = 42;
             auto* ptr = static_cast<uint32_t*>(accessBlock.create(accSerial, chunkSize));
+            REQUIRE(ptr != nullptr);
             *ptr = arbitraryValue;
             CHECK(*ptr == arbitraryValue);
         }

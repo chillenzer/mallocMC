@@ -402,11 +402,22 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t& chunkSizeCache) -> bool
         {
             bool appropriate = false;
-            if(enterPage(acc, index, numBytes))
+            auto oldFilling = enterPage(acc, index, numBytes);
+
+            // At this point, we're only testing against our desired `numBytes`. Due to the `wastefactor` the actual
+            // `chunkSize` of the page might be larger and, thus, the actual `numChunks` might be smaller than what
+            // we're testing for here. But if this fails already, we save one atomic.
+            if(oldFilling < MyPageInterpretation::numChunks(numBytes))
             {
                 uint32_t oldChunkSize = alpaka::atomicCas(acc, &pageTable._chunkSizes[index], 0U, numBytes);
-                appropriate = (oldChunkSize == 0U || isInAllowedRange(oldChunkSize, numBytes));
-                chunkSizeCache = std::max(oldChunkSize, numBytes);
+                chunkSizeCache = oldChunkSize == 0U ? numBytes : oldChunkSize;
+
+                // Now that we know the real chunk size of the page, we can check again if our previous assessment was
+                // correct.
+                if(oldFilling < MyPageInterpretation::numChunks(chunkSizeCache))
+                {
+                    appropriate = isInAllowedRange(chunkSizeCache, numBytes);
+                }
             }
             if(not appropriate)
             {
@@ -431,12 +442,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto enterPage(
             TAcc const& acc,
             uint32_t const pageIndex,
-            uint32_t const expectedChunkSize) -> bool
+            uint32_t const expectedChunkSize) -> uint32_t
         {
             auto const oldFilling = alpaka::atomicAdd(acc, &pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
             // must be 0, too) or the next check will fail.
-            return oldFilling < MyPageInterpretation::numChunks(expectedChunkSize);
+            return oldFilling;
         }
 
         template<typename TAcc>
