@@ -47,6 +47,17 @@
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
+    /**
+     * @brief Main interface to our heap memory.
+     *
+     * This class stores the heap pointer and the heap size and provides the high-level functionality to interact with
+     * the memory within kernels. It is wrapped in a thin layer of creation policy to be instantiated as base class of
+     * the `DeviceAllocator` for the user.
+     *
+     * @tparam T_HeapConfig Struct containing information about the heap.
+     * @tparam T_HashConfig Struct providing a hash function for scattering and the blockStride property.
+     * @tparam T_AlignmentPolicy The alignment policy used in the current configuration.
+     */
     template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
     struct Heap
     {
@@ -72,16 +83,34 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         MyAccessBlock* accessBlocks{};
         volatile uint32_t block = 0U;
 
+        /**
+         * @brief Number of access blocks in the heap. This is a runtime quantity because it depends on the given heap
+         * size.
+         *
+         * @return Number of access blocks in the heap.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBlocks() const -> uint32_t
         {
             return heapSize / T_HeapConfig::accessblocksize;
         }
 
+        /**
+         * @brief The dummy value to indicate the case of no free blocks found.
+         *
+         * @return An invalid block index for identifying such case.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBlockFound() const -> uint32_t
         {
             return numBlocks();
         }
 
+        /**
+         * @brief Compute a starting index to search the access blocks for a valid piece of memory.
+         *
+         * @param blockValue Current starting index to compute the next one from.
+         * @param hashValue A hash value to provide some entropy for scattering the requests.
+         * @return An index to start search the access blocks from.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto startBlockIndex(
             auto const& /*acc*/,
             uint32_t const blockValue,
@@ -90,6 +119,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return ((hashValue % T_HashConfig::blockStride) + (blockValue * T_HashConfig::blockStride)) % numBlocks();
         }
 
+
+        /**
+         * @brief Create a pointer to memory of (at least) `bytes` number of bytes..
+         *
+         * @param bytes Size of the allocation in number of bytes.
+         * @return Pointer to the memory, nullptr if no usable memory was found.
+         */
         template<typename AlpakaAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
         {
@@ -117,6 +153,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 });
         }
 
+        /**
+         * @brief Counterpart free'ing operation to `create`. Destroys the memory at the pointer location.
+         *
+         * @param pointer A valid pointer created by `create()`.`
+         */
         template<typename AlpakaAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
         {
@@ -126,6 +167,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             accessBlocks[blockIndex].destroy(acc, pointer);
         }
 
+        /**
+         * @brief Queries all access blocks how many chunks of the given chunksize they could allocate. This is
+         * single-threaded and NOT THREAD-SAFE but acquiring such distributed information while other threads operate
+         * on the heap is of limited value anyways.
+         *
+         * @param chunkSize Target would-be-created chunk size in number of bytes.
+         * @return The number of allocations that would still be possible with this chunk size.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsDeviceFunction(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
@@ -138,6 +187,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 [&acc, chunkSize](auto& accessBlock) { return accessBlock.getAvailableSlots(acc, chunkSize); });
         }
 
+        /**
+         * @brief Forwards to `getAvailableSlotsDeviceFunction` for interface compatibility reasons. See there for
+         * details.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableSlotsAccelerator(auto const& acc, uint32_t const chunkSize)
             -> size_t
         {
