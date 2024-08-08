@@ -48,6 +48,7 @@
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
     /**
+     * @class Heap
      * @brief Main interface to our heap memory.
      *
      * This class stores the heap pointer and the heap size and provides the high-level functionality to interact with
@@ -202,8 +203,26 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         Heap() = default;
     };
 
+    /**
+     * @class DefaultScatterHashConfig
+     * @brief An example configuration for the hash scattering.
+     *
+     * A scatter configuration is supposed to provide two pieces of information: A static function called `hash` and
+     * the compile-time constant `blockStride`. These are used by the creation policy to scatter the requests for
+     * memory within the heap.
+     *
+     */
     struct DefaultScatterHashConfig
     {
+    public:
+        static constexpr uint32_t blockStride = 4;
+
+        /**
+         * @brief Hash function to provide entropy for scattering memory requests.
+         *
+         * @param numBytes Number of bytes requested.
+         * @return A hash value.
+         */
         template<uint32_t T_pageSize>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(auto const& /*acc*/, uint32_t const numBytes) -> uint32_t
         {
@@ -213,13 +232,19 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid());
         }
 
+    private:
         static constexpr uint32_t hashingK = 38183;
         static constexpr uint32_t hashingDistMP = 17497;
         static constexpr uint32_t hashingDistWP = 1;
         static constexpr uint32_t hashingDistWPRel = 1;
-        static constexpr uint32_t blockStride = 4;
     };
 
+    /**
+     * @class InitKernel
+     * @brief Kernel to initialise the heap memory.
+     *
+     * Used by the creation policy during initialisation.
+     */
     struct InitKernel
     {
         template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
@@ -239,6 +264,21 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 namespace mallocMC::CreationPolicies
 {
+    /**
+     * @class Scatter
+     * @brief A creation policy scattering memory requests in a flat hierarchy.
+     *
+     * This creation policy is a variation on the original ScatterAlloc algorithm and the one previously implemented in
+     * mallocMC. It provides a multi-level hierarchy of Heap, AccessBlock and DataPage that is traversed using the
+     * metadata held by each level to find a suitable memory location to satisfy the request.
+     *
+     * It uses a externally provided hash function to compute a single hash value for each request given its requested
+     * number of bytes and the accelerator. This is internally used to scatter the requests over the available memory
+     * and thereby improve the success rate for multi-threaded requests because different threads will start searching
+     * in different locations.
+     *
+     * Implemented as a thin wrapper around `Heap` that mainly provides interface compatibility with the calling code.
+     */
     template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
     struct Scatter
     {
@@ -252,11 +292,26 @@ namespace mallocMC::CreationPolicies
 
         constexpr static auto const providesAvailableSlots = true;
 
+        /**
+         * @brief Check if a pointer returned from `create()` signals out-of-memory.
+         *
+         * @param pointer Pointer returned by `create()`.
+         * @return The boolean answer to this question.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isOOM(void* pointer, uint32_t const /*unused size*/) -> bool
         {
             return pointer == nullptr;
         }
 
+        /**
+         * @brief initialise a raw piece of memory for use by the `Heap`.
+         *
+         * @param dev The alpaka device.
+         * @param queue The alpaka queue.
+         * @param heap The pointer to the `Heap` object located on the device.
+         * @param pool The pointer to the provided memory pool to be used by the `Heap` object.
+         * @param memsize The size of the pool memory in bytes.
+         */
         template<typename TAcc>
         static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
         {
@@ -274,6 +329,18 @@ namespace mallocMC::CreationPolicies
             alpaka::wait(queue);
         }
 
+        /**
+         * @brief Count the number of possible allocation for the given slotSize directly from the host.
+         *
+         * This method implements the infrastructure to call `getAvailableSlotsDeviceFunction` on the `Heap` class. See
+         * there for details, particularly concerning the thread-safety of this.
+         *
+         * @param dev The alpaka device.
+         * @param queue The alpaka queue.
+         * @param slotSize The would-be-created memory size in number of bytes.
+         * @param heap Pointer to the `Heap` object that's supposed to handle the request.
+         * @return The number of allocations that would be successful with this slotSize.
+         */
         template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
         static auto getAvailableSlotsHost(
             AlpakaDevice& dev,
