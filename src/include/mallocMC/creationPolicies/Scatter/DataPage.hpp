@@ -26,20 +26,17 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
+    /**
+     * @class DataPage
+     * @brief Raw piece of memory of size T_pageSize
+     */
     template<uint32_t T_pageSize>
     struct DataPage
     {
         char data[T_pageSize]{};
-    };
-
-    struct Chunk
-    {
-        uint32_t index{};
-        void* pointer{};
     };
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
