@@ -623,7 +623,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t& chunkSizeCache) -> bool
         {
             bool suitable = false;
-            auto oldFilling = enterPage(acc, index, numBytes);
+            auto oldFilling = enterPage(acc, index);
 
             // At this point, we're only testing against our desired `numBytes`. Due to the `wastefactor` the actual
             // `chunkSize` of the page might be larger and, thus, the actual `numChunks` might be smaller than what
@@ -690,10 +690,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @return The old filling level for further checks.
          */
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto enterPage(
-            TAcc const& acc,
-            uint32_t const pageIndex,
-            uint32_t const expectedChunkSize) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto enterPage(TAcc const& acc, uint32_t const pageIndex) -> uint32_t
         {
             auto const oldFilling = alpaka::atomicAdd(acc, &pageTable._fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
