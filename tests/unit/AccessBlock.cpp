@@ -340,6 +340,28 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == nullptr);
             }
+
+            SECTION("is not misled by mixing above and below multi-page threshold.")
+            {
+                auto const aboveMultiPageThreshold = pageSize - 2 * sizeof(BitMaskStorageType<>);
+                auto const belowMultiPageThreshold = aboveMultiPageThreshold / (wastefactor - 1U);
+                for(auto const pointer : pointers)
+                {
+                    // free one page we want to operate on
+                    if(wastedAccessBlock.isValid(accSerial, pointer) and wastedAccessBlock.pageIndex(pointer) == 0U)
+                    {
+                        wastedAccessBlock.destroy(accSerial, pointer);
+                    }
+                }
+                REQUIRE(wastedAccessBlock.getAvailableSlots(accSerial, belowMultiPageThreshold) == 2U);
+                REQUIRE(wastedAccessBlock.getAvailableSlots(accSerial, aboveMultiPageThreshold) == 1U);
+
+                // This allocates in multi-page mode.
+                CHECK(wastedAccessBlock.pageIndex(wastedAccessBlock.create(accSerial, aboveMultiPageThreshold)) == 0U);
+                // This tries to allocate in chunked mode but the waste factor would allow to create on the just
+                // allocated page. This is, of course, forbidden.
+                CHECK(wastedAccessBlock.create(accSerial, aboveMultiPageThreshold) == nullptr);
+            }
         }
     }
 

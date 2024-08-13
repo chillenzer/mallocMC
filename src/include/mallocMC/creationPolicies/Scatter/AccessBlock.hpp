@@ -413,8 +413,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 chunkSizeCache = oldChunkSize == 0U ? numBytes : oldChunkSize;
 
                 // Now that we know the real chunk size of the page, we can check again if our previous assessment was
-                // correct.
-                if(oldFilling < MyPageInterpretation::numChunks(chunkSizeCache))
+                // correct. But first we need to make sure that we are actually in chunked mode. This will be redundant
+                // with the second check in most situations because we usually would choose a multi-page threshold that
+                // would not switch to multi-page mode while more than one chunk fits on the page but this is a design
+                // decision that could change in the future.
+                if(oldChunkSize < multiPageThreshold()
+                   and oldFilling < MyPageInterpretation::numChunks(chunkSizeCache))
                 {
                     appropriate = isInAllowedRange(chunkSizeCache, numBytes);
                 }
