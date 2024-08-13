@@ -579,8 +579,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 numPages(),
                 noFreePageFound(),
                 [this, numBytes, &chunkSizeCache](auto const& localAcc, auto const index) {
-                    return this->thisPageIsAppropriate(localAcc, index, numBytes, chunkSizeCache) ? index
-                                                                                                  : noFreePageFound();
+                    return this->thisPageIsSuitable(localAcc, index, numBytes, chunkSizeCache) ? index
+                                                                                               : noFreePageFound();
                 });
         }
 
@@ -616,13 +616,13 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @return true if the page is suitable and false otherwise
          */
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsAppropriate(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto thisPageIsSuitable(
             TAcc const& acc,
             uint32_t const index,
             uint32_t const numBytes,
             uint32_t& chunkSizeCache) -> bool
         {
-            bool appropriate = false;
+            bool suitable = false;
             auto oldFilling = enterPage(acc, index, numBytes);
 
             // At this point, we're only testing against our desired `numBytes`. Due to the `wastefactor` the actual
