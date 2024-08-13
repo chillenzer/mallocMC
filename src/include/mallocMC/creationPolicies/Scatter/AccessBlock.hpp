@@ -41,7 +41,6 @@
 #include <alpaka/mem/view/ViewPlainPtr.hpp>
 #include <alpaka/vec/Vec.hpp>
 #include <alpaka/workdiv/WorkDivMembers.hpp>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iterator>
