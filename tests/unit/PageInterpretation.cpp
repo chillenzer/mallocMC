@@ -196,7 +196,7 @@ TEST_CASE("PageInterpretation.create")
 
         SECTION("updates bit field.")
         {
-            BitMask& mask{page.bitField().get(0)};
+            BitMask& mask{page.bitField().getMask(0)};
             REQUIRE(mask.none());
             auto* pointer = page.create(accSerial);
             auto const index = page.chunkNumberOf(pointer);
@@ -245,7 +245,7 @@ TEST_CASE("PageInterpretation.destroy")
             // We extract the position of the mask before destroying the pointer because technically speaking the whole
             // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
             // free the page.
-            auto mask = page.bitField().get(0);
+            auto mask = page.bitField().getMask(0);
             auto value = mask;
             page.destroy(accSerial, pointer);
             CHECK(mask <= value);

@@ -280,53 +280,125 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
+    /**
+     * @class BitFieldFlat
+     * @brief Represents a (non-owning) bit field consisting of multiple bit masks.
+     *
+     * This class interprets a piece of memory as an array of bit masks and provides convenience functionality to act
+     * on them as a long array of bits. Most importantly, it provides an interface to find a free bit. It is a
+     * non-owning view of the memory!
+     *
+     * Please note, that methods usually (unless stated otherwise) refer to bits counting all bits from the start of
+     * the bit field, so if BitMask size is 32 and index=34=31+3, we're checking for the third bit of the second mask
+     * (if masks was a matrix this would be equivalent to: masks[1][2]).
+     *
+     */
     struct BitFieldFlat
     {
         std::span<BitMask> data;
 
+        /**
+         * @brief Check if the index-th bit in the bit field is set (=1).
+         *
+         * @param index Bit position to check.
+         * @return true if bit is set else false.
+         */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(TAcc const& acc, uint32_t index) const -> bool
         {
             return data[index / BitMaskSize](acc, index % BitMaskSize);
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(uint32_t const index) const -> BitMask&
+        /**
+         * @brief Get the index-th mask NOT bit (counting in number of masks and not bits).
+         *
+         * @param index Position of the mask.
+         * @return Requested mask.
+         */
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getMask(uint32_t const index) const -> BitMask&
         {
             return data[index];
         }
 
+        /**
+         * @brief Set the index-th bit (to 1).
+         *
+         * @param index Position of the bit.
+         * @return
+         */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC void set(TAcc const& acc, uint32_t const index) const
         {
             data[index / BitMaskSize].set(acc, index % BitMaskSize);
         }
 
+        /**
+         * @brief Counterpart to set, unsetting (to 0) to index-th bit.
+         *
+         * @tparam TAcc
+         * @param acc
+         * @param index
+         * @return
+         */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC void unset(TAcc const& acc, uint32_t const index) const
         {
             data[index / BitMaskSize].unset(acc, index % BitMaskSize);
         }
 
+        /**
+         * @return Begin iterator to the start of the array of masks, iterating over masks NOT bits.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto begin() const
         {
             return std::begin(data);
         }
 
+        /**
+         * @return End iterator to the start of the array of masks, iterating over masks NOT bits.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto end() const
         {
             return std::end(data);
         }
 
+        /**
+         * @brief Count the number of masks.
+         *
+         * @return Number of masks.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numMasks() const
         {
             return data.size();
         }
 
+        /**
+         * @brief Count the number of bits in the array of masks.
+         *
+         * This does not take into account if bits are valid or not, so this is always a multiple of the BitMaskSize
+         * currently.
+         *
+         * @return Number of bits.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBits() const
         {
             return numMasks() * BitMaskSize;
         }
 
+        /**
+         * @brief Main algorithm for finding and setting a free bit in the bit field.
+         *
+         * This iterates through the masks wrapping around from the given startIndex. The information of how many bits
+         * are valid is passed through the lower levels which automatically discard out of range results (accounting of
+         * partially filled masks). As always, we can't separate the concerns of retrieving information and acting on
+         * it in a multi-threaded context, so if a free bit is found it is immediately set.
+         *
+         * @param numValidBits Number of valid bits in the bit field (NOT masks, i.e. it's equal to numChunks() on the
+         * page). Should typically be a number from the range [BitMaskSize * (numMasks()-1) + 1, BitMaskSize *
+         * numMasks()) although other numbers shouldn't hurt.
+         * @param startIndex Bit mask (NOT bit) to start the search at.
+         * @return The index of the free bit found (and set) or noFreeBitFound() if none was found.
+         */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBit(
             TAcc const& acc,
@@ -343,23 +415,46 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 { return this->firstFreeBitAt(localAcc, numValidBits, index); });
         }
 
+        /**
+         * @return Special invalid bit index to indicate that no free bit was found.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto noFreeBitFound() const -> uint32_t
         {
             return numBits();
         }
 
     private:
+        /**
+         * @return Position inside of a mask to start the search at.
+         */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto startBitIndex()
         {
             return laneid();
         }
 
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isThisLastMask(uint32_t const numValidBits, uint32_t const index)
+        /**
+         * @brief Helper function checking if we're in the last mask.
+         *
+         * @param numValidBits Number of valid bits in the bit field. The mask containing this bit is the last mask.
+         * @param maskIndex Index of the mask under consideration (NOT bit).
+         * @return true if the mask is the last mask else false.
+         */
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto isThisLastMask(
+            uint32_t const numValidBits,
+            uint32_t const maskIndex)
         {
             // >= in case index == numValidBits - BitMaskSize
-            return (index + 1) * BitMaskSize >= numValidBits;
+            return (maskIndex + 1) * BitMaskSize >= numValidBits;
         }
 
+        /**
+         * @brief Implementation of the main algorithm asking a mask of a free bit and checking if the answer is valid.
+         *
+         * @param numValidBits Number of valid bits in the bit field.
+         * @param maskIdx Index of the maks under consideration.
+         * @return Index of the free bit found IN THE BITFIELD (not only in the mask, so this value can be larger than
+         * BitMaskSize) or noFreeBitFound() if none was found.
+         */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBitAt(
             TAcc const& acc,
@@ -367,7 +462,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const maskIdx) -> uint32_t
         {
             auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
-            auto indexInMask = get(maskIdx).firstFreeBit(
+            auto indexInMask = getMask(maskIdx).firstFreeBit(
                 acc,
                 isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize,
                 startBitIndex());
