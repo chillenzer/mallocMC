@@ -136,7 +136,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         {
             if(chunkSize < multiPageThreshold())
             {
-                return getAvailableChunks(chunkSize);
+                return getAvailableChunks(acc, chunkSize);
             }
             return getAvailableMultiPages(acc, chunkSize);
         }
@@ -290,7 +290,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @param chunkSize Would-be allocation size to test for.
          * @return Number of allocations that would succeed with this size.
          */
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(uint32_t const chunkSize) const -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getAvailableChunks(auto const& acc, uint32_t const chunkSize) const
+            -> uint32_t
         {
             // TODO(lenz): This is not thread-safe!
             return std::transform_reduce(
@@ -299,11 +300,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 std::cbegin(pageTable._fillingLevels),
                 0U,
                 std::plus<uint32_t>{},
-                [this, chunkSize](auto const localChunkSize, auto const fillingLevel)
+                [this, &acc, chunkSize](auto const localChunkSize, auto const fillingLevel)
                 {
                     auto const numChunks
                         = MyPageInterpretation::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
-                    return ((this->isInAllowedRange(localChunkSize, chunkSize) or localChunkSize == 0U)
+                    return ((this->isInAllowedRange(acc, localChunkSize, chunkSize) or localChunkSize == 0U)
                             and fillingLevel < numChunks)
                         ? numChunks - fillingLevel
                         : 0U;
@@ -591,9 +592,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @param numBytes Requested allocation size in number of bytes.
          * @return
          */
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes) const
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(
+            auto const& acc,
+            uint32_t const chunkSize,
+            uint32_t const numBytes) const
         {
-            return T_HeapConfig::isInAllowedRange(chunkSize, numBytes);
+            return T_HeapConfig::isInAllowedRange(acc, chunkSize, numBytes);
         }
 
         /**
@@ -640,7 +644,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
                 if(oldChunkSize < multiPageThreshold()
                    and oldFilling < MyPageInterpretation::numChunks(chunkSizeCache))
                 {
-                    suitable = isInAllowedRange(chunkSizeCache, numBytes);
+                    suitable = isInAllowedRange(acc, chunkSizeCache, numBytes);
                 }
             }
             if(not suitable)

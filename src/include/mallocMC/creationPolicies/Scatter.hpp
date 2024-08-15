@@ -237,6 +237,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @return true if the algorithm shall consider this page for allocation and false otherwise.
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+            auto const& /*acc*/,
             uint32_t const chunkSize,
             uint32_t const numBytes)
         {

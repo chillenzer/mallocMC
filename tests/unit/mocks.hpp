@@ -59,6 +59,7 @@ struct HeapConfig
     constexpr static auto const resetfreedpages = T_resetfreedpages;
 
     ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+        auto const& /*acc*/,
         uint32_t const chunkSize,
         uint32_t const numBytes)
     {

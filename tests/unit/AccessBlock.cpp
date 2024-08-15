@@ -94,6 +94,7 @@ template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor, uint
 struct SelectivelyWastedHeapConfig : HeapConfig<T_blockSize, T_pageSize, T_wasteFactor>
 {
     ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+        auto const& /*acc*/,
         uint32_t const chunkSize,
         uint32_t const numBytes)
     {
