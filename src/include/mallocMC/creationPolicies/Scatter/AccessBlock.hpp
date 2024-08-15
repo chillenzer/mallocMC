@@ -593,7 +593,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto isInAllowedRange(uint32_t const chunkSize, uint32_t const numBytes) const
         {
-            return (chunkSize >= numBytes && chunkSize <= wasteFactor * numBytes);
+            return T_HeapConfig::isInAllowedRange(chunkSize, numBytes);
         }
 
         /**

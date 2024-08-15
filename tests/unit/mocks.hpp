@@ -57,6 +57,13 @@ struct HeapConfig
     constexpr static auto const pagesize = T_pageSize;
     constexpr static auto const wastefactor = T_wasteFactor;
     constexpr static auto const resetfreedpages = T_resetfreedpages;
+
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+        uint32_t const chunkSize,
+        uint32_t const numBytes)
+    {
+        return (chunkSize >= numBytes && chunkSize <= T_wasteFactor * numBytes);
+    }
 };
 
 struct AlignmentPolicy

@@ -204,6 +204,48 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     };
 
     /**
+     * @class DefaultHeapConfig
+     * @brief An example configuration for the heap.
+     *
+     * A heap configuration is supposed to provide the physical dimensions of the objects in the heap (i.e. access
+     * block and page) as well as a function that describes how much space you are willing to waste by allowing to
+     * allocate larger chunks that necessary.
+     *
+     * @tparam T_blockSize The size of one access block in bytes.
+     * @tparam T_pageSize The size of one page in bytes.
+     * @return
+     */
+    template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 2U>
+    struct DefaultHeapConfig
+    {
+        constexpr static uint32_t const accessblocksize = T_blockSize;
+        constexpr static uint32_t const pagesize = T_pageSize;
+        constexpr static uint32_t const wastefactor = T_wasteFactor;
+        constexpr static bool const resetfreedpages = true;
+
+        /**
+         * @brief Determine whether we want to allow an allocation of numBytes on a page with chunk size `chunkSize`.
+         *
+         * This function is given the currently requested allocation size numBytes and the set chunk size of a page. It
+         * answers the question whether we should consider this page for allocating this memory. It must necessarily
+         * return false if chunkSize < numBytes in order to avoid memory corruption. It may return true in cases where
+         * chunkSize > numBytes to trade off a bit of wasted memory for a performance boost while searching available
+         * memory.
+         *
+         * @param chunkSize Currently set chunk size of a page in number of bytes.
+         * @param numBytes Allocation size in number of bytes.
+         * @return true if the algorithm shall consider this page for allocation and false otherwise.
+         */
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+            uint32_t const chunkSize,
+            uint32_t const numBytes)
+        {
+            return (chunkSize >= numBytes && chunkSize <= wastefactor * numBytes);
+        }
+    };
+
+
+    /**
      * @class DefaultScatterHashConfig
      * @brief An example configuration for the hash scattering.
      *

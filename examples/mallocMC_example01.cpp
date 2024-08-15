@@ -33,6 +33,7 @@
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
 #include <cassert>
+#include <cstdint>
 #include <iostream>
 #include <mallocMC/mallocMC.hpp>
 #include <numeric>
@@ -43,14 +44,16 @@ using Idx = std::size_t;
 // Define the device accelerator
 using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 
+constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
+constexpr uint32_t const pagesize = 4U * 1024U;
+constexpr uint32_t const wasteFactor = 1U;
 struct ScatterHeapConfig
+    : mallocMC::CreationPolicies::ScatterAlloc::DefaultHeapConfig<blocksize, pagesize, wasteFactor>
 {
     static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
-    static constexpr size_t accessblocksize = 2U * 1024U * 1024U * 1024U;
     static constexpr auto pagesize = 4096;
     static constexpr auto regionsize = 16;
     static constexpr auto wastefactor = 1;
-    static constexpr auto resetfreedpages = true;
 };
 
 struct XMallocConfig
