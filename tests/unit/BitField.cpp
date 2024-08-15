@@ -127,6 +127,15 @@ TEST_CASE("BitFieldFlat")
         }
         data[index / BitMaskSize].unset(accSerial, index % BitMaskSize);
 
+        // Just to be sure: The masks look as expected.
+        for(uint32_t j = 0; j < numMasks; ++j)
+        {
+            for(uint32_t i = 0; i < BitMaskSize; ++i)
+            {
+                REQUIRE(data[j](accSerial, i) == (j * BitMaskSize + i != index));
+            }
+        }
+
         BitFieldFlat field{data};
 
         CHECK(field.firstFreeBit(accSerial, numChunks) == index);

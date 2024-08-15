@@ -34,10 +34,32 @@
 #include <cstdint>
 #include <limits>
 #include <span>
+#include <sys/types.h>
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::ScatterAlloc
 {
+    namespace detail
+    {
+        template<uint32_t size>
+        struct BitMaskStorageTypes
+        {
+            using type = void;
+        };
+
+        template<>
+        struct BitMaskStorageTypes<32U>
+        {
+            using type = uint32_t;
+        };
+
+        template<>
+        struct BitMaskStorageTypes<64U>
+        {
+            using type = uint64_t;
+        };
+    } // namespace detail
+
     /**
      * @brief Number of bits in a bit mask. Most likely you want a power of two here.
      */
@@ -48,8 +70,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * depending on BitMaskSize. Use it with its default template argument in order to make your code agnostic of the
      * number configured in BitMaskSize. (Up to providing a template implementation, of course.)
      */
-    template<uint32_t size = BitMaskSize, typename = std::enable_if_t<BitMaskSize == 32U>> // NOLINT(*magic-number*)
-    using BitMaskStorageType = uint32_t;
+    template<uint32_t size = BitMaskSize>
+    using BitMaskStorageType = detail::BitMaskStorageTypes<size>::type;
 
     /**
      * @brief Represents a completely filled bit mask, i.e., all bits are one.
@@ -65,7 +87,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      */
     ALPAKA_FN_INLINE ALPAKA_FN_ACC auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
     {
-        return 1U << index;
+        return BitMaskStorageType<>{1U} << index;
     }
 
     /**
@@ -116,7 +138,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto const index) -> bool
         {
-            return (atomicLoad(acc, mask) & singleBit(index)) != 0U;
+            return (atomicLoad(acc, mask) & singleBit(index)) != BitMaskStorageType<>{0U};
         }
 
         /**
@@ -259,7 +281,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const endIndex) -> uint32_t
         {
             auto result = noFreeBitFound();
-            auto oldMask = 0U;
+            BitMaskStorageType<> oldMask = 0U;
 
             // This avoids a modulo that's not a power of two and is faster thereby.
             auto const selectedStartBit = initialGuess >= endIndex ? 0U : initialGuess;

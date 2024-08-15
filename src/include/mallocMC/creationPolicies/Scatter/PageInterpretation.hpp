@@ -78,7 +78,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto numChunks(uint32_t const chunkSize) -> uint32_t
         {
-            constexpr auto b = static_cast<uint32_t>(sizeof(BitMask));
+            constexpr auto b = static_cast<BitMaskStorageType<>>(sizeof(BitMask));
             auto const numFull = T_pageSize / (BitMaskSize * chunkSize + b);
             auto const leftOverSpace = T_pageSize - numFull * (BitMaskSize * chunkSize + b);
             auto const numInRemainder = leftOverSpace > b ? (leftOverSpace - b) / chunkSize : 0U;

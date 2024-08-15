@@ -206,6 +206,6 @@ namespace mallocMC
     template<typename TAcc, typename T>
     ALPAKA_FN_INLINE ALPAKA_FN_ACC auto atomicLoad(TAcc const& acc, T& target)
     {
-        return alpaka::atomicCas(acc, &target, 0U, 0U);
+        return alpaka::atomicCas(acc, &target, static_cast<T>(0U), static_cast<T>(0U));
     }
 } // namespace mallocMC

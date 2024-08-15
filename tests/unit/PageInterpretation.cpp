@@ -55,6 +55,21 @@ using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
 using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
 using std::distance;
 
+template<uint32_t size>
+constexpr std::array<uint32_t, 9> const
+    chunkSizesForReportingTests{1, 2, 4, 5, 10, 11, 31, 32, 512}; // NOLINT(*magic-number*)
+
+template<uint32_t size>
+constexpr std::array<uint32_t, 9> const expectedNumChunksForReportingTests{};
+
+template<>
+constexpr std::array<uint32_t, 9> const
+    expectedNumChunksForReportingTests<32U>{908, 480, 248, 199, 100, 92, 32, 31, 1}; // NOLINT(*magic-number*)
+
+template<>
+constexpr std::array<uint32_t, 9> const
+    expectedNumChunksForReportingTests<64U>{904, 480, 248, 198, 100, 91, 32, 31, 1}; // NOLINT(*magic-number*)
+
 TEST_CASE("PageInterpretation")
 {
     constexpr uint32_t const pageSize = 1024U;
@@ -74,12 +89,11 @@ TEST_CASE("PageInterpretation")
 
     SECTION("computes correct number of chunks.")
     {
-        std::array<uint32_t, 9> chunkSizes{1, 2, 4, 5, 10, 11, 31, 32, 512}; // NOLINT(*magic-number*)
-        std::array<uint32_t, 9> expectedNumChunks{908, 480, 248, 199, 100, 92, 32, 31, 1}; // NOLINT(*magic-number*)
-
-        for(uint32_t i = 0U; i < chunkSizes.size(); ++i)
+        for(uint32_t i = 0U; i < chunkSizesForReportingTests<BitMaskSize>.size(); ++i)
         {
-            CHECK(PageInterpretation<pageSize>::numChunks(chunkSizes[i]) == expectedNumChunks[i]);
+            CHECK(
+                PageInterpretation<pageSize>::numChunks(chunkSizesForReportingTests<BitMaskSize>[i])
+                == expectedNumChunksForReportingTests<BitMaskSize>[i]);
         }
     }
 
@@ -97,12 +111,22 @@ TEST_CASE("PageInterpretation")
 
     SECTION("knows the maximal bit field size.")
     {
-        // 116 allows for 29 bit masks capable of representing 928 1-byte chunks. This would give a total addressable
-        // size of 1044, so in this scenario the last 20 bits of the mask would be invalid.
-        CHECK(page.maxBitFieldSize() == 116U);
-        CHECK(PageInterpretation<pageSize, 32U>::maxBitFieldSize() == 1U * sizeof(BitMask));
-        CHECK(PageInterpretation<pageSize, 16U>::maxBitFieldSize() == 2U * sizeof(BitMask));
-        CHECK(PageInterpretation<pageSize, 17U>::maxBitFieldSize() == 2U * sizeof(BitMask));
+        CHECK(
+            page.maxBitFieldSize()
+            == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(1U), BitMaskSize)
+                * sizeof(BitMask));
+        CHECK(
+            PageInterpretation<pageSize, 32U>::maxBitFieldSize()
+            == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(32U), BitMaskSize)
+                * sizeof(BitMask));
+        CHECK(
+            PageInterpretation<pageSize, 16U>::maxBitFieldSize()
+            == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(16U), BitMaskSize)
+                * sizeof(BitMask));
+        CHECK(
+            PageInterpretation<pageSize, 17U>::maxBitFieldSize()
+            == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(17U), BitMaskSize)
+                * sizeof(BitMask));
     }
 
     SECTION("reports numChunks that fit the page.")
@@ -126,25 +150,17 @@ TEST_CASE("PageInterpretation.create")
 {
     // Such that we can fit up to four levels of hierarchy in there:
     constexpr uint32_t const pageSize
-        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize + static_cast<uint32_t>(BitMaskSize * sizeof(BitMask));
-    // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
-    std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
+        = BitMaskSize * BitMaskSize * BitMaskSize + static_cast<uint32_t>(BitMaskSize * sizeof(BitMask));
+    // This might be a lot of memory up to a  typical stack's size. Let's save us some trouble and create it on the
+    // heap.
+    auto actualData = std::make_unique<DataPage<pageSize>>();
     DataPage<pageSize>& data{*actualData};
 
     SECTION("regardless of hierarchy")
     {
-        uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
-        uint32_t chunkSize{0U};
-        // this is a bit weird because we have to make sure that we are always handling full bit masks (until the
-        // handling of partially filled bit masks is implemented)
-        if(numChunks == BitMaskSize * BitMaskSize)
-        {
-            chunkSize = 1024U; // NOLINT(*magic-number*)
-        }
-        else if(numChunks == BitMaskSize)
-        {
-            chunkSize = 32771U; // NOLINT(*magic-number*)
-        }
+        uint32_t numChunks = GENERATE(BitMaskSize, BitMaskSize * BitMaskSize);
+        // CAUTION: Only works for full bit masks:
+        uint32_t chunkSize = (pageSize - (numChunks / BitMaskSize) * sizeof(BitMask)) / numChunks;
         PageInterpretation<pageSize> page{data, chunkSize};
 
         SECTION("returns a pointer to within the data.")
