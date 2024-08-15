@@ -91,6 +91,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     template<typename T_HeapConfig, typename T_AlignmentPolicy>
     class AccessBlock
     {
+    protected:
         constexpr static uint32_t const blockSize = T_HeapConfig::accessblocksize;
         constexpr static uint32_t const pageSize = T_HeapConfig::pagesize;
         constexpr static uint32_t const wasteFactor = T_HeapConfig::wastefactor;
@@ -98,7 +99,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
         using MyPageInterpretation = PageInterpretation<pageSize, T_AlignmentPolicy::Properties::dataAlignment>;
 
-    protected:
         // This class is supposed to be reinterpeted on a piece of raw memory and not instantiated directly. We set it
         // protected, so we can still test stuff in the future easily.
         AccessBlock() = default;

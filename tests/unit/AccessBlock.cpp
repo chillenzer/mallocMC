@@ -49,15 +49,25 @@
 #include <stdexcept>
 #include <type_traits>
 
-template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool resetfreedpages = true>
-struct AccessBlock
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool T_resetfreedpages = true>
+struct AccessBlockTmp
     : public mallocMC::CreationPolicies::ScatterAlloc::
-          AccessBlock<HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, resetfreedpages>, AlignmentPolicy>
+          AccessBlock<HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, T_resetfreedpages>, AlignmentPolicy>
 {
     // This is already the default but we want to make it explicit: Just for testing purposes we expose the constructor
     // in order to easily get a test instance.
 public:
-    AccessBlock() = default;
+    AccessBlockTmp() = default;
+    using mallocMC::CreationPolicies::ScatterAlloc::
+        AccessBlock<HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, T_resetfreedpages>, AlignmentPolicy>::blockSize;
+    using mallocMC::CreationPolicies::ScatterAlloc::
+        AccessBlock<HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, T_resetfreedpages>, AlignmentPolicy>::pageSize;
+    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<
+        HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, T_resetfreedpages>,
+        AlignmentPolicy>::wasteFactor;
+    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<
+        HeapConfig<T_blockSize, T_pageSize, T_wasteFactor, T_resetfreedpages>,
+        AlignmentPolicy>::resetfreedpages;
 };
 
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskStorageType;
@@ -67,26 +77,14 @@ constexpr uint32_t const pageTableEntrySize = 8U;
 constexpr uint32_t const pageSize1 = 1024U;
 constexpr uint32_t const pageSize2 = 4096U;
 
-using BlockAndPageSizes = std::tuple<
-    // single page:
-    std::tuple<
-        std::integral_constant<uint32_t, 1U * (pageSize1 + pageTableEntrySize)>,
-        std::integral_constant<uint32_t, pageSize1>>,
-    // multiple pages:
-    std::tuple<
-        std::integral_constant<uint32_t, 4U * (pageSize1 + pageTableEntrySize)>,
-        std::integral_constant<uint32_t, pageSize1>>,
-    // multiple pages with some overhead:
-    std::tuple<
-        std::integral_constant<uint32_t, 4U * (pageSize1 + pageTableEntrySize) + 100U>,
-        std::integral_constant<uint32_t, pageSize1>>,
-    // other page size:
-    std::tuple<
-        std::integral_constant<uint32_t, 3U * (pageSize2 + pageTableEntrySize) + 100U>,
-        std::integral_constant<uint32_t, pageSize2>>>;
+using AccessBlocks = std::tuple<
+    AccessBlockTmp<1U * (pageSize1 + pageTableEntrySize), pageSize1>,
+    AccessBlockTmp<4U * (pageSize1 + pageTableEntrySize), pageSize1>,
+    AccessBlockTmp<4U * (pageSize1 + pageTableEntrySize) + 100U, pageSize1>,
+    AccessBlockTmp<3U * (pageSize2 + pageTableEntrySize) + 100U, pageSize2>>;
 
 template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wastefactor = 1U>
-auto fillWith(AccessBlock<T_blockSize, T_pageSize, T_wastefactor>& accessBlock, uint32_t const chunkSize)
+auto fillWith(AccessBlockTmp<T_blockSize, T_pageSize, T_wastefactor>& accessBlock, uint32_t const chunkSize)
     -> std::vector<void*>
 {
     std::vector<void*> pointers(accessBlock.getAvailableSlots(accSerial, chunkSize));
@@ -102,12 +100,13 @@ auto fillWith(AccessBlock<T_blockSize, T_pageSize, T_wastefactor>& accessBlock, 
     return pointers;
 }
 
-TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
+TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
 {
-    constexpr auto const blockSize = std::get<0>(TestType{}).value;
-    constexpr auto const pageSize = std::get<1>(TestType{}).value;
+    using AccessBlock = TestType;
+    constexpr auto const blockSize = AccessBlock::blockSize;
+    constexpr auto const pageSize = AccessBlock::pageSize;
 
-    AccessBlock<blockSize, pageSize> accessBlock{};
+    AccessBlock accessBlock{};
 
     SECTION("knows its number of pages.")
     {
@@ -303,7 +302,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         SECTION("with waste factor")
         {
             constexpr uint32_t const wastefactor = 3U;
-            AccessBlock<blockSize, pageSize, wastefactor> wastedAccessBlock{};
+            AccessBlockTmp<blockSize, pageSize, wastefactor> wastedAccessBlock{};
             auto pointers = fillWith(wastedAccessBlock, chunkSize);
 
             auto smallerChunkSize = chunkSize / (wastefactor - 1U);
@@ -313,7 +312,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             SECTION("knows its available slots.")
             {
                 REQUIRE(
-                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                    reinterpret_cast<AccessBlockTmp<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
                         ->getAvailableSlots(accSerial, smallerChunkSize)
                     == 0U);
 
@@ -323,7 +322,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             SECTION("creates a smaller chunk size.")
             {
                 REQUIRE(
-                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                    reinterpret_cast<AccessBlockTmp<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
                         ->create(accSerial, smallerChunkSize)
                     == nullptr);
 
@@ -333,7 +332,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             SECTION("fails to create too many smaller chunks.")
             {
                 REQUIRE(
-                    reinterpret_cast<AccessBlock<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
+                    reinterpret_cast<AccessBlockTmp<blockSize, pageSize, 1U>*>(&wastedAccessBlock)
                         ->create(accSerial, smallerChunkSize)
                     == nullptr);
 
@@ -447,7 +446,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
         SECTION("and doesn't reset the page.")
         {
             auto& unresettingAccessBlock
-                = *reinterpret_cast<AccessBlock<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(&accessBlock);
+                = *reinterpret_cast<AccessBlockTmp<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(&accessBlock);
             auto const differentChunkSize = GENERATE(17, 2048);
             REQUIRE(differentChunkSize != chunkSize);
             auto const slots = unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize);
@@ -462,7 +461,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", BlockAndPageSizes)
             if(largePointer != nullptr)
             {
                 auto& unresettingAccessBlock
-                    = *reinterpret_cast<AccessBlock<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(
+                    = *reinterpret_cast<AccessBlockTmp<blockSize, pageSize, 1U, /*resetfreedpages=*/false>*>(
                         &accessBlock);
                 auto const differentChunkSize = GENERATE(17, 2048);
                 REQUIRE(differentChunkSize != chunkSize);
