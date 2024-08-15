@@ -39,7 +39,10 @@
 using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlatImpl;
 using mallocMC::CreationPolicies::ScatterAlloc::BitMaskImpl;
 
-using BitMaskSizes = std::tuple<std::integral_constant<uint32_t, 32U>, std::integral_constant<uint32_t, 64U>>;
+using BitMaskSizes = std::tuple<
+    std::integral_constant<uint32_t, 16U>, // NOLINT(*magic-number*)
+    std::integral_constant<uint32_t, 32U>, // NOLINT(*magic-number*)
+    std::integral_constant<uint32_t, 64U>>; // NOLINT(*magic-number*)
 
 
 TEMPLATE_LIST_TEST_CASE("BitMask", "", BitMaskSizes)

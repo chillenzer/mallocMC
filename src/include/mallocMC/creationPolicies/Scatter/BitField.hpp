@@ -48,6 +48,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         };
 
         template<>
+        struct BitMaskStorageTypes<16U>
+        {
+            using type = uint16_t;
+        };
+
+        template<>
         struct BitMaskStorageTypes<32U>
         {
             using type = uint32_t;
@@ -152,7 +158,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc) -> BitMaskStorageType<MyBitMaskSize>
         {
-            return alpaka::atomicOr(acc, &mask, +allOnes<MyBitMaskSize>);
+            return alpaka::atomicOr(
+                acc,
+                &mask,
+                static_cast<BitMaskStorageType<MyBitMaskSize>>(+allOnes<MyBitMaskSize>));
         }
 
         /**
@@ -176,7 +185,11 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto unset(TAcc const& acc, auto const index)
         {
-            return alpaka::atomicAnd(acc, &mask, allOnes<MyBitMaskSize> ^ singleBit<MyBitMaskSize>(index));
+            return alpaka::atomicAnd(
+                acc,
+                &mask,
+                static_cast<BitMaskStorageType<MyBitMaskSize>>(
+                    allOnes<MyBitMaskSize> ^ singleBit<MyBitMaskSize>(index)));
         }
 
         /**
@@ -187,7 +200,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc)
         {
-            return alpaka::atomicXor(acc, &mask, +allOnes<MyBitMaskSize>);
+            return alpaka::atomicXor(
+                acc,
+                &mask,
+                static_cast<BitMaskStorageType<MyBitMaskSize>>(+allOnes<MyBitMaskSize>));
         }
 
         /**
@@ -199,7 +215,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc, auto const index)
         {
-            return alpaka::atomicXor(acc, &mask, singleBit<MyBitMaskSize>(index));
+            return alpaka::atomicXor(
+                acc,
+                &mask,
+                static_cast<BitMaskStorageType<MyBitMaskSize>>(singleBit<MyBitMaskSize>(index)));
         }
 
         /**
