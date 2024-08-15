@@ -30,17 +30,22 @@
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
 #include <mallocMC/creationPolicies/Scatter/BitField.hpp>
 
-using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlat;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
+using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlatImpl;
+using mallocMC::CreationPolicies::ScatterAlloc::BitMaskImpl;
 
-TEST_CASE("BitMask")
+using BitMaskSizes = std::tuple<std::integral_constant<uint32_t, 32U>, std::integral_constant<uint32_t, 64U>>;
+
+
+TEMPLATE_LIST_TEST_CASE("BitMask", "", BitMaskSizes)
 {
+    constexpr uint32_t const BitMaskSize = TestType::value;
+    using BitMask = BitMaskImpl<BitMaskSize>;
     BitMask mask{};
 
     SECTION("is initialised to 0.")
@@ -111,10 +116,14 @@ TEST_CASE("BitMask")
     }
 }
 
-TEST_CASE("BitFieldFlat")
+TEMPLATE_LIST_TEST_CASE("BitFieldFlat", "", BitMaskSizes)
 {
+    constexpr uint32_t const BitMaskSize = TestType::value;
+    using BitMask = BitMaskImpl<BitMaskSize>;
+    using BitFieldFlat = BitFieldFlatImpl<BitMaskSize>;
+
     // This is potentially larger than we actually need but that's okay:
-    constexpr uint32_t const numChunks = 128U;
+    constexpr uint32_t const numChunks = 256U;
     constexpr uint32_t const numMasks = mallocMC::ceilingDivision(numChunks, BitMaskSize);
     BitMask data[numMasks];
 

@@ -76,7 +76,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     /**
      * @brief Represents a completely filled bit mask, i.e., all bits are one.
      */
-    static constexpr const BitMaskStorageType<> allOnes = std::numeric_limits<BitMaskStorageType<>>::max();
+    template<uint32_t size = BitMaskSize>
+    static constexpr const BitMaskStorageType<size> allOnes = std::numeric_limits<BitMaskStorageType<size>>::max();
 
     /**
      * @brief Return the bit mask's underlying type with a single bit set (=1) at position index and all others unset
@@ -85,9 +86,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * @param index Position of the single bit set.
      * @return Bit mask's underlying type with one bit set.
      */
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto singleBit(BitMaskStorageType<> const index) -> BitMaskStorageType<>
+    template<uint32_t size = BitMaskSize>
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto singleBit(uint32_t const index) -> BitMaskStorageType<size>
     {
-        return BitMaskStorageType<>{1U} << index;
+        return BitMaskStorageType<size>{1U} << index;
     }
 
     /**
@@ -97,14 +99,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * @param index Number of set bits.
      * @return Bit mask's underlying type with index bits set.
      */
-    template<typename TAcc>
-    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto allOnesUpTo(BitMaskStorageType<> const index) -> BitMaskStorageType<>
+    template<typename TAcc, uint32_t size = BitMaskSize>
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC auto allOnesUpTo(uint32_t const index) -> BitMaskStorageType<size>
     {
-        return index == 0 ? 0 : (allOnes >> (BitMaskSize - index));
+        return index == 0 ? 0 : (allOnes<size> >> (size - index));
     }
 
     /**
-     * @class BitMask
+     * @class BitMaskImpl
      * @brief Represents a bit mask basically wrapping the BitMaskStorageType<>.
      *
      * This class basically provides a convenience interface to the (typically integer) type BitMaskStorageType<> for
@@ -117,16 +119,17 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * never investigated because all architectures we're interested in have the same endianess and it works on them.
      *
      */
-    struct BitMask
+    template<uint32_t MyBitMaskSize = BitMaskSize>
+    struct BitMaskImpl
     {
-        BitMaskStorageType<> mask{};
+        BitMaskStorageType<MyBitMaskSize> mask{};
 
         /**
          * @return An invalid bit index indicating the failure of a search in the bit mask.
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto noFreeBitFound() -> uint32_t
         {
-            return BitMaskSize;
+            return MyBitMaskSize;
         }
 
         /**
@@ -138,7 +141,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto const index) -> bool
         {
-            return (atomicLoad(acc, mask) & singleBit(index)) != BitMaskStorageType<>{0U};
+            return (atomicLoad(acc, mask) & singleBit<MyBitMaskSize>(index)) != BitMaskStorageType<MyBitMaskSize>{0U};
         }
 
         /**
@@ -147,9 +150,9 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @return Previous mask.
          */
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc) -> BitMaskStorageType<>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc) -> BitMaskStorageType<MyBitMaskSize>
         {
-            return alpaka::atomicOr(acc, &mask, +allOnes);
+            return alpaka::atomicOr(acc, &mask, +allOnes<MyBitMaskSize>);
         }
 
         /**
@@ -161,7 +164,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto set(TAcc const& acc, auto const index)
         {
-            return alpaka::atomicOr(acc, &mask, singleBit(index));
+            return alpaka::atomicOr(acc, &mask, singleBit<MyBitMaskSize>(index));
         }
 
         /**
@@ -173,7 +176,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto unset(TAcc const& acc, auto const index)
         {
-            return alpaka::atomicAnd(acc, &mask, allOnes ^ singleBit(index));
+            return alpaka::atomicAnd(acc, &mask, allOnes<MyBitMaskSize> ^ singleBit<MyBitMaskSize>(index));
         }
 
         /**
@@ -184,7 +187,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc)
         {
-            return alpaka::atomicXor(acc, &mask, +allOnes);
+            return alpaka::atomicXor(acc, &mask, +allOnes<MyBitMaskSize>);
         }
 
         /**
@@ -196,7 +199,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto flip(TAcc const& acc, auto const index)
         {
-            return alpaka::atomicXor(acc, &mask, singleBit(index));
+            return alpaka::atomicXor(acc, &mask, singleBit<MyBitMaskSize>(index));
         }
 
         /**
@@ -210,7 +213,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @param other Mask to compare with.
          * @return true if all bits are identical else false.
          */
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator==(BitMaskStorageType<> const other) const -> bool
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator==(BitMaskStorageType<MyBitMaskSize> const other) const -> bool
         {
             return (mask == other);
         }
@@ -224,7 +227,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          */
         // My version of clang cannot yet handle the spaceship operator apparently:
         // clang-format off
-         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator<=> (BitMask const other) const
+         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto operator<=> (BitMaskImpl const other) const
         // clang-format on
         {
             return (mask - other.mask);
@@ -259,10 +262,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBit(
             TAcc const& acc,
-            uint32_t const numValidBits = BitMaskSize,
+            uint32_t const numValidBits = MyBitMaskSize,
             uint32_t const initialGuess = 0) -> uint32_t
         {
-            return firstFreeBitInBetween(acc, initialGuess % BitMaskSize, numValidBits);
+            return firstFreeBitInBetween(acc, initialGuess % MyBitMaskSize, numValidBits);
         }
 
     private:
@@ -270,7 +273,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @brief Implementation of the main search algorithm. See the public firstFreeBit method for general details.
          * This version assumes a valid range of the input values.
          *
-         * @param initialGuess Initial guess for the first look up must be in the range [0;BitMaskSize).
+         * @param initialGuess Initial guess for the first look up must be in the range [0;MyBitMaskSize).
          * @param endIndex Maximal position to consider. Bits further out will be ignored.
          * @return Bit position of a free bit or noFreeBitFound() in the case of none found.
          */
@@ -281,26 +284,28 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const endIndex) -> uint32_t
         {
             auto result = noFreeBitFound();
-            BitMaskStorageType<> oldMask = 0U;
+            BitMaskStorageType<MyBitMaskSize> oldMask = 0U;
 
             // This avoids a modulo that's not a power of two and is faster thereby.
             auto const selectedStartBit = initialGuess >= endIndex ? 0U : initialGuess;
             for(uint32_t i = selectedStartBit; i < endIndex and result == noFreeBitFound();)
             {
-                oldMask = alpaka::atomicOr(acc, &mask, singleBit(i));
-                if((oldMask & singleBit(i)) == 0U)
+                oldMask = alpaka::atomicOr(acc, &mask, singleBit<MyBitMaskSize>(i));
+                if((oldMask & singleBit<MyBitMaskSize>(i)) == 0U)
                 {
                     result = i;
                 }
 
                 // In case of no free bit found, this will return -1. Storing it in a uint32_t will underflow and
                 // result in 0xffffffff but that's okay because it also ends the loop as intended.
-                i = alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<>>>(~oldMask)) - 1;
+                i = alpaka::ffs(acc, static_cast<std::make_signed_t<BitMaskStorageType<MyBitMaskSize>>>(~oldMask)) - 1;
             }
 
             return result;
         }
     };
+
+    using BitMask = BitMaskImpl<BitMaskSize>;
 
     /**
      * @class BitFieldFlat
@@ -315,9 +320,10 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * (if masks was a matrix this would be equivalent to: masks[1][2]).
      *
      */
-    struct BitFieldFlat
+    template<uint32_t MyBitMaskSize = BitMaskSize>
+    struct BitFieldFlatImpl
     {
-        std::span<BitMask> data;
+        std::span<BitMaskImpl<MyBitMaskSize>> data;
 
         /**
          * @brief Check if the index-th bit in the bit field is set (=1).
@@ -328,7 +334,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto get(TAcc const& acc, uint32_t index) const -> bool
         {
-            return data[index / BitMaskSize](acc, index % BitMaskSize);
+            return data[index / MyBitMaskSize](acc, index % MyBitMaskSize);
         }
 
         /**
@@ -337,7 +343,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @param index Position of the mask.
          * @return Requested mask.
          */
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getMask(uint32_t const index) const -> BitMask&
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto getMask(uint32_t const index) const -> BitMaskImpl<MyBitMaskSize>&
         {
             return data[index];
         }
@@ -351,7 +357,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC void set(TAcc const& acc, uint32_t const index) const
         {
-            data[index / BitMaskSize].set(acc, index % BitMaskSize);
+            data[index / MyBitMaskSize].set(acc, index % MyBitMaskSize);
         }
 
         /**
@@ -365,7 +371,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC void unset(TAcc const& acc, uint32_t const index) const
         {
-            data[index / BitMaskSize].unset(acc, index % BitMaskSize);
+            data[index / MyBitMaskSize].unset(acc, index % MyBitMaskSize);
         }
 
         /**
@@ -397,14 +403,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         /**
          * @brief Count the number of bits in the array of masks.
          *
-         * This does not take into account if bits are valid or not, so this is always a multiple of the BitMaskSize
+         * This does not take into account if bits are valid or not, so this is always a multiple of the MyBitMaskSize
          * currently.
          *
          * @return Number of bits.
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numBits() const
         {
-            return numMasks() * BitMaskSize;
+            return numMasks() * MyBitMaskSize;
         }
 
         /**
@@ -416,7 +422,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * it in a multi-threaded context, so if a free bit is found it is immediately set.
          *
          * @param numValidBits Number of valid bits in the bit field (NOT masks, i.e. it's equal to numChunks() on the
-         * page). Should typically be a number from the range [BitMaskSize * (numMasks()-1) + 1, BitMaskSize *
+         * page). Should typically be a number from the range [MyBitMaskSize * (numMasks()-1) + 1, MyBitMaskSize *
          * numMasks()) although other numbers shouldn't hurt.
          * @param startIndex Bit mask (NOT bit) to start the search at.
          * @return The index of the free bit found (and set) or noFreeBitFound() if none was found.
@@ -427,14 +433,16 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t numValidBits,
             uint32_t const startIndex = 0U) -> uint32_t
         {
-            numValidBits = numValidBits == 0 ? numBits() : numValidBits;
             return wrappingLoop(
                 acc,
                 startIndex % numMasks(),
                 numMasks(),
                 noFreeBitFound(),
                 [this, numValidBits](TAcc const& localAcc, auto const index)
-                { return this->firstFreeBitAt(localAcc, numValidBits, index); });
+                {
+                    auto tmp = this->firstFreeBitAt(localAcc, numValidBits, index);
+                    return tmp;
+                });
         }
 
         /**
@@ -465,8 +473,8 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const numValidBits,
             uint32_t const maskIndex)
         {
-            // >= in case index == numValidBits - BitMaskSize
-            return (maskIndex + 1) * BitMaskSize >= numValidBits;
+            // >= in case index == numValidBits - MyBitMaskSize
+            return (maskIndex + 1) * MyBitMaskSize >= numValidBits;
         }
 
         /**
@@ -475,7 +483,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
          * @param numValidBits Number of valid bits in the bit field.
          * @param maskIdx Index of the maks under consideration.
          * @return Index of the free bit found IN THE BITFIELD (not only in the mask, so this value can be larger than
-         * BitMaskSize) or noFreeBitFound() if none was found.
+         * MyBitMaskSize) or noFreeBitFound() if none was found.
          */
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBitAt(
@@ -483,14 +491,14 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             uint32_t const numValidBits,
             uint32_t const maskIdx) -> uint32_t
         {
-            auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % BitMaskSize + 1U) : 0U);
+            auto numValidBitsInLastMask = (numValidBits ? ((numValidBits - 1U) % MyBitMaskSize + 1U) : 0U);
             auto indexInMask = getMask(maskIdx).firstFreeBit(
                 acc,
-                isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : BitMaskSize,
+                isThisLastMask(numValidBits, maskIdx) ? numValidBitsInLastMask : MyBitMaskSize,
                 startBitIndex());
-            if(indexInMask < BitMask::noFreeBitFound())
+            if(indexInMask < BitMaskImpl<MyBitMaskSize>::noFreeBitFound())
             {
-                uint32_t freeBitIndex = indexInMask + BitMaskSize * maskIdx;
+                uint32_t freeBitIndex = indexInMask + MyBitMaskSize * maskIdx;
                 if(freeBitIndex < numValidBits)
                 {
                     return freeBitIndex;
@@ -499,4 +507,6 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
             return noFreeBitFound();
         }
     };
+
+    using BitFieldFlat = BitFieldFlatImpl<BitMaskSize>;
 } // namespace mallocMC::CreationPolicies::ScatterAlloc
