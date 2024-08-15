@@ -47,6 +47,7 @@ using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
 constexpr uint32_t const pagesize = 4U * 1024U;
 constexpr uint32_t const wasteFactor = 1U;
+
 struct ScatterHeapConfig
     : mallocMC::CreationPolicies::ScatterAlloc::DefaultHeapConfig<blocksize, pagesize, wasteFactor>
 {
