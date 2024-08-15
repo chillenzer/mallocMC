@@ -28,6 +28,7 @@
 
 #include "mallocMC/creationPolicies/Scatter/BitField.hpp"
 #include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/mallocMC_utils.hpp"
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
@@ -88,6 +89,18 @@ auto fillWith(TestableAccessBlock<T_HeapConfig, T_AlignmentPolicy>& accessBlock,
         });
     return pointers;
 }
+
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor, uint32_t T_allowedToWasteNumBytes>
+struct SelectivelyWastedHeapConfig : HeapConfig<T_blockSize, T_pageSize, T_wasteFactor>
+{
+    ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
+        uint32_t const chunkSize,
+        uint32_t const numBytes)
+    {
+        auto currentWasteFactor = (numBytes == T_allowedToWasteNumBytes) ? T_wasteFactor : 1U;
+        return (chunkSize >= numBytes && chunkSize <= currentWasteFactor * numBytes);
+    }
+};
 
 TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
 {
@@ -298,30 +311,27 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
             REQUIRE(smallerChunkSize < chunkSize);
 
             wastedAccessBlock.destroy(accSerial, pointers[0]);
+
+            // Some consistency checks: Interpreting as an access block without waste factor, we'll surely have no
+            // available memory for this chunk size.
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->getAvailableSlots(accSerial, smallerChunkSize)
+                == 0U);
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->create(accSerial, smallerChunkSize) == nullptr);
+
             SECTION("knows its available slots.")
             {
-                REQUIRE(
-                    reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->getAvailableSlots(accSerial, smallerChunkSize)
-                    == 0U);
-
                 CHECK(wastedAccessBlock.getAvailableSlots(accSerial, smallerChunkSize) == 1U);
             }
 
             SECTION("creates a smaller chunk size.")
             {
-                REQUIRE(
-                    reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->create(accSerial, smallerChunkSize)
-                    == nullptr);
-
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
             }
 
             SECTION("fails to create too many smaller chunks.")
             {
-                REQUIRE(
-                    reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->create(accSerial, smallerChunkSize)
-                    == nullptr);
-
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == pointers[0]);
                 CHECK(wastedAccessBlock.create(accSerial, smallerChunkSize) == nullptr);
             }
@@ -346,6 +356,61 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
                 // This tries to allocate in chunked mode but the waste factor would allow to create on the just
                 // allocated page. This is, of course, forbidden.
                 CHECK(wastedAccessBlock.create(accSerial, aboveMultiPageThreshold) == nullptr);
+            }
+        }
+
+        SECTION("with waste function")
+        {
+            constexpr uint32_t const wastefactor = 3U;
+            constexpr uint32_t const selectedNumBytes = mallocMC::ceilingDivision(chunkSize, wastefactor);
+            TestableAccessBlock<
+                SelectivelyWastedHeapConfig<blockSize, pageSize, wastefactor, selectedNumBytes>,
+                AlignmentPolicy>
+                wastedAccessBlock{};
+            auto pointers = fillWith(wastedAccessBlock, chunkSize);
+
+            auto notSelectedNumBytes = chunkSize / (wastefactor - 1U);
+
+            // Okay, so we want a scenario where both selectedNumBytes and notSelectedNumBytes are within the range of
+            // the waste factor but only for selectedNumBytes we'll actually get a waste-factor-like behaviour.
+            REQUIRE(selectedNumBytes < chunkSize);
+            REQUIRE(selectedNumBytes * wastefactor >= chunkSize);
+            REQUIRE(selectedNumBytes < notSelectedNumBytes);
+            REQUIRE(notSelectedNumBytes < chunkSize);
+
+            wastedAccessBlock.destroy(accSerial, pointers[0]);
+
+            // Some consistency checks: Interpreting as an access block without waste factor, we'll surely have no
+            // available memory for these chunk sizes.
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->getAvailableSlots(accSerial, notSelectedNumBytes)
+                == 0U);
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->getAvailableSlots(accSerial, selectedNumBytes)
+                == 0U);
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->create(accSerial, selectedNumBytes) == nullptr);
+            REQUIRE(
+                reinterpret_cast<AccessBlock*>(&wastedAccessBlock)->create(accSerial, notSelectedNumBytes) == nullptr);
+
+            SECTION("knows its available slots.")
+            {
+                CHECK(wastedAccessBlock.getAvailableSlots(accSerial, selectedNumBytes) == 1U);
+                CHECK(wastedAccessBlock.getAvailableSlots(accSerial, notSelectedNumBytes) == 0U);
+            }
+
+            SECTION("creates a smaller chunk size.")
+            {
+                CHECK(wastedAccessBlock.create(accSerial, notSelectedNumBytes) == nullptr);
+                CHECK(wastedAccessBlock.create(accSerial, selectedNumBytes) == pointers[0]);
+            }
+
+            SECTION("fails to create too many smaller chunks.")
+            {
+                CHECK(wastedAccessBlock.create(accSerial, notSelectedNumBytes) == nullptr);
+                CHECK(wastedAccessBlock.create(accSerial, notSelectedNumBytes) == nullptr);
+                CHECK(wastedAccessBlock.create(accSerial, selectedNumBytes) == pointers[0]);
+                CHECK(wastedAccessBlock.create(accSerial, selectedNumBytes) == nullptr);
             }
         }
     }
