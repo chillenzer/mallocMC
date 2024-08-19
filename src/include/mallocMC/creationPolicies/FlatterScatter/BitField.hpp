@@ -284,7 +284,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             uint32_t const numValidBits = MyBitMaskSize,
             uint32_t const initialGuess = 0) -> uint32_t
         {
-            return firstFreeBitInBetween(acc, initialGuess % MyBitMaskSize, numValidBits);
+            return firstFreeBitWithInitialGuess(acc, initialGuess % MyBitMaskSize, numValidBits);
         }
 
     private:
@@ -297,7 +297,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          * @return Bit position of a free bit or noFreeBitFound() in the case of none found.
          */
         template<typename TAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBitInBetween(
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto firstFreeBitWithInitialGuess(
             TAcc const& acc,
             uint32_t const initialGuess,
             uint32_t const endIndex) -> uint32_t
