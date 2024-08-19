@@ -133,6 +133,19 @@ namespace mallocMC
 #endif
     }
 
+    ALPAKA_FN_ACC inline auto lanemask_lt()
+    {
+#if defined(__CUDA_ARCH__)
+        std::uint32_t lanemask;
+        asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
+        return lanemask;
+#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
+        return __lanemask_lt();
+#else
+        return 0u;
+#endif
+    }
+
     ALPAKA_FN_ACC inline auto ballot(int pred)
     {
 #if defined(__CUDA_ARCH__)
@@ -140,6 +153,19 @@ namespace mallocMC
 #elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
         // return value is 64bit for HIP-clang
         return __ballot(pred);
+#else
+        return 1u;
+#endif
+    }
+
+
+    ALPAKA_FN_ACC inline auto activemask()
+    {
+#if defined(__CUDA_ARCH__)
+        return __activemask();
+#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
+        // return value is 64bit for HIP-clang
+        return ballot(1);
 #else
         return 1u;
 #endif

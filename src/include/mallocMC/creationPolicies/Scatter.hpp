@@ -813,7 +813,7 @@ namespace mallocMC
                 uint32 endpage,
                 uint32 bytes) -> void*
             {
-                const uint32 pagestoalloc = divup(bytes, pagesize);
+                const uint32 pagestoalloc = ceilingDivision(bytes, pagesize);
                 uint32 freecount = 0;
                 bool left_free = false;
                 for(uint32 search_page = startpage + 1; search_page > endpage;)
@@ -908,7 +908,7 @@ namespace mallocMC
             template<typename AlpakaAcc>
             ALPAKA_FN_ACC void deallocPageBased(const AlpakaAcc& acc, void* mem, uint32 page, uint32 bytes)
             {
-                const uint32 pages = divup(bytes, pagesize);
+                const uint32 pages = ceilingDivision(bytes, pagesize);
                 for(uint32 p = page; p < page + pages; ++p)
                     _page[p].init();
 
@@ -1235,7 +1235,7 @@ namespace mallocMC
                 { // 1 slot needs multiple pages
                     if(gid > 0)
                         return 0; // do this serially
-                    const uint32 pagestoalloc = divup((uint32) slotSize, pagesize);
+                    const uint32 pagestoalloc = ceilingDivision((uint32) slotSize, pagesize);
                     uint32 freecount = 0;
                     for(uint32 currentpage = _numpages; currentpage > 0;)
                     { // this already includes all superblocks

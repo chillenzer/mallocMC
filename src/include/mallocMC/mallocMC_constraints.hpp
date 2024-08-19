@@ -28,7 +28,7 @@
 
 #pragma once
 
-#include "creationPolicies/FlatterScatter.hpp"
+#include "creationPolicies/Scatter.hpp"
 #include "distributionPolicies/XMallocSIMD.hpp"
 
 namespace mallocMC
