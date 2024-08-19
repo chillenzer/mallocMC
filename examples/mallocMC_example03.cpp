@@ -44,8 +44,8 @@ constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
 constexpr uint32_t const pagesize = 4U * 1024U;
 constexpr uint32_t const wasteFactor = 1U;
 
-struct ScatterHeapConfig
-    : mallocMC::CreationPolicies::ScatterAlloc::DefaultHeapConfig<blocksize, pagesize, wasteFactor>
+struct FlatterScatterHeapConfig
+    : mallocMC::CreationPolicies::FlatterScatterAlloc::DefaultHeapConfig<blocksize, pagesize, wasteFactor>
 {
     static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
     static constexpr auto pagesize = 4096;
@@ -121,7 +121,7 @@ auto example03() -> int
 
 auto main(int /*argc*/, char* /*argv*/[]) -> int
 {
-    example03<mallocMC::CreationPolicies::Scatter<ScatterHeapConfig>>();
+    example03<mallocMC::CreationPolicies::FlatterScatter<FlatterScatterHeapConfig>>();
     example03<mallocMC::CreationPolicies::OldMalloc>();
     return 0;
 }

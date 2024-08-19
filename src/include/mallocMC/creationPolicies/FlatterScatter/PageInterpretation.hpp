@@ -26,8 +26,8 @@
 
 #pragma once
 
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
-#include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/DataPage.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <cstdint>
@@ -35,7 +35,7 @@
 #include <type_traits>
 #include <unistd.h>
 
-namespace mallocMC::CreationPolicies::ScatterAlloc
+namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
     /**
      * @class PageInterpretation
@@ -340,4 +340,4 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         auto operator=(PageInterpretation&&) -> PageInterpretation& = delete;
         ~PageInterpretation() = default;
     };
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
+} // namespace mallocMC::CreationPolicies::FlatterScatterAlloc

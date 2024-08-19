@@ -26,9 +26,9 @@
 
 #pragma once
 
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
-#include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
-#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/DataPage.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <algorithm>
@@ -48,7 +48,7 @@
 #include <sys/types.h>
 #include <vector>
 
-namespace mallocMC::CreationPolicies::ScatterAlloc
+namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
 
     /**
@@ -797,4 +797,4 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
+} // namespace mallocMC::CreationPolicies::FlatterScatterAlloc

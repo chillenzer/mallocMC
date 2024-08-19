@@ -24,10 +24,10 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
-#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 #include "mocks.hpp"
 
@@ -50,18 +50,20 @@
 #include <stdexcept>
 
 template<typename T_HeapConfig, typename T_AlignmentPolicy>
-struct TestableAccessBlock : mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>
+struct TestableAccessBlock
+    : mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>
 {
 public:
     TestableAccessBlock() = default;
-    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::blockSize;
-    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::pageSize;
-    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::wasteFactor;
-    using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::resetfreedpages;
+    using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::blockSize;
+    using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::pageSize;
+    using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::wasteFactor;
+    using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock<T_HeapConfig, T_AlignmentPolicy>::
+        resetfreedpages;
 };
 
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskStorageType;
-using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskStorageType;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::PageInterpretation;
 
 constexpr uint32_t const pageTableEntrySize = 8U;
 constexpr uint32_t const pageSize1 = 1024U;

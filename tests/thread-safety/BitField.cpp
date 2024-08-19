@@ -32,12 +32,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
-#include <mallocMC/creationPolicies/Scatter/BitField.hpp>
+#include <mallocMC/creationPolicies/FlatterScatter/BitField.hpp>
 #include <stop_token>
 #include <thread>
 
-using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMask;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskSize;
 using namespace std::chrono_literals;
 
 // The following test is a particular regression test which (in its current form) requires to be able to stop a

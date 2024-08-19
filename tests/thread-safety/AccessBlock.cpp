@@ -25,7 +25,7 @@
 */
 
 
-#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include "../unit/mocks.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
@@ -63,8 +63,8 @@
 #include <tuple>
 #include <type_traits>
 
-using mallocMC::CreationPolicies::ScatterAlloc::AccessBlock;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskSize;
 
 using Dim = alpaka::DimInt<1>;
 using Idx = std::uint32_t;

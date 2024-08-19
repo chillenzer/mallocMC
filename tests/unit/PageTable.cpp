@@ -24,11 +24,11 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
-using mallocMC::CreationPolicies::ScatterAlloc::PageTable;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::PageTable;
 
 constexpr const uint32_t numPages = 3;
 

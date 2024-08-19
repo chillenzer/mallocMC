@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "mallocMC/creationPolicies/Scatter/wrappingLoop.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/wrappingLoop.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
 #include <alpaka/core/Common.hpp>
@@ -37,7 +37,7 @@
 #include <sys/types.h>
 #include <type_traits>
 
-namespace mallocMC::CreationPolicies::ScatterAlloc
+namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
     namespace detail
     {
@@ -528,4 +528,4 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     };
 
     using BitFieldFlat = BitFieldFlatImpl<BitMaskSize>;
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
+} // namespace mallocMC::CreationPolicies::FlatterScatterAlloc

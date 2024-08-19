@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "mallocMC/creationPolicies/Scatter/AccessBlock.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include <alpaka/core/Common.hpp>
 #include <alpaka/core/Positioning.hpp>
@@ -45,7 +45,7 @@
 #include <sys/types.h>
 #include <type_traits>
 
-namespace mallocMC::CreationPolicies::ScatterAlloc
+namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
     /**
      * @class Heap
@@ -247,7 +247,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
 
 
     /**
-     * @class DefaultScatterHashConfig
+     * @class DefaultFlatterScatterHashConfig
      * @brief An example configuration for the hash scattering.
      *
      * A scatter configuration is supposed to provide two pieces of information: A static function called `hash` and
@@ -255,7 +255,7 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
      * memory within the heap.
      *
      */
-    struct DefaultScatterHashConfig
+    struct DefaultFlatterScatterHashConfig
     {
     public:
         static constexpr uint32_t blockStride = 4;
@@ -303,12 +303,12 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
         }
     };
 
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
+} // namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 
 namespace mallocMC::CreationPolicies
 {
     /**
-     * @class Scatter
+     * @class FlatterScatter
      * @brief A creation policy scattering memory requests in a flat hierarchy.
      *
      * This creation policy is a variation on the original ScatterAlloc algorithm and the one previously implemented in
@@ -322,15 +322,15 @@ namespace mallocMC::CreationPolicies
      *
      * Implemented as a thin wrapper around `Heap` that mainly provides interface compatibility with the calling code.
      */
-    template<typename T_HeapConfig, typename T_HashConfig = ScatterAlloc::DefaultScatterHashConfig>
-    struct Scatter
+    template<typename T_HeapConfig, typename T_HashConfig = FlatterScatterAlloc::DefaultFlatterScatterHashConfig>
+    struct FlatterScatter
     {
         template<typename T_AlignmentPolicy>
-        using AlignmentAwarePolicy = ScatterAlloc::Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>;
+        using AlignmentAwarePolicy = FlatterScatterAlloc::Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>;
 
         static auto classname() -> std::string
         {
-            return "Scatter";
+            return "FlatterScatter";
         }
 
         constexpr static auto const providesAvailableSlots = true;
@@ -368,7 +368,7 @@ namespace mallocMC::CreationPolicies
 
             auto workDivSingleThread
                 = alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()};
-            alpaka::exec<TAcc>(queue, workDivSingleThread, ScatterAlloc::InitKernel{}, heap, pool, memsize);
+            alpaka::exec<TAcc>(queue, workDivSingleThread, FlatterScatterAlloc::InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
 

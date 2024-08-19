@@ -24,10 +24,10 @@
   THE SOFTWARE.
 */
 
-#include "mallocMC/creationPolicies/Scatter/PageInterpretation.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 
-#include "mallocMC/creationPolicies/Scatter/BitField.hpp"
-#include "mallocMC/creationPolicies/Scatter/DataPage.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/DataPage.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 #include "mocks.hpp"
 
@@ -49,10 +49,10 @@
 #include <iterator>
 #include <limits>
 
-using mallocMC::CreationPolicies::ScatterAlloc::BitMask;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskSize;
-using mallocMC::CreationPolicies::ScatterAlloc::DataPage;
-using mallocMC::CreationPolicies::ScatterAlloc::PageInterpretation;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMask;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskSize;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::DataPage;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::PageInterpretation;
 using std::distance;
 
 template<uint32_t size>

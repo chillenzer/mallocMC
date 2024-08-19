@@ -34,10 +34,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
-#include <mallocMC/creationPolicies/Scatter/BitField.hpp>
+#include <mallocMC/creationPolicies/FlatterScatter/BitField.hpp>
 
-using mallocMC::CreationPolicies::ScatterAlloc::BitFieldFlatImpl;
-using mallocMC::CreationPolicies::ScatterAlloc::BitMaskImpl;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitFieldFlatImpl;
+using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskImpl;
 
 using BitMaskSizes = std::tuple<
     std::integral_constant<uint32_t, 16U>, // NOLINT(*magic-number*)

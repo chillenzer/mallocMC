@@ -28,7 +28,7 @@
 
 #include <cstdint>
 
-namespace mallocMC::CreationPolicies::ScatterAlloc
+namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
     /**
      * @class DataPage
@@ -39,4 +39,4 @@ namespace mallocMC::CreationPolicies::ScatterAlloc
     {
         char data[T_pageSize]{};
     };
-} // namespace mallocMC::CreationPolicies::ScatterAlloc
+} // namespace mallocMC::CreationPolicies::FlatterScatterAlloc
