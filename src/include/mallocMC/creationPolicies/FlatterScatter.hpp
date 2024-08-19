@@ -395,8 +395,8 @@ namespace mallocMC::CreationPolicies
             using Idx = typename alpaka::trait::IdxType<AlpakaAcc>::type;
             using VecType = alpaka::Vec<Dim, Idx>;
 
-            auto d_slots = alpaka::allocBuf<size_t, Idx>(dev, Idx{1});
-            alpaka::memset(queue, d_slots, 0, Idx{1});
+            auto d_slots = alpaka::allocBuf<size_t, uint32_t>(dev, uint32_t{1});
+            alpaka::memset(queue, d_slots, 0, uint32_t{1});
             auto d_slotsPtr = alpaka::getPtrNative(d_slots);
 
             auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(const AlpakaAcc& acc) -> void
