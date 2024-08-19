@@ -219,6 +219,7 @@ auto example01() -> int
 auto main(int /*argc*/, char* /*argv*/[]) -> int
 {
     example01<mallocMC::CreationPolicies::FlatterScatter<FlatterScatterHeapConfig>>();
+    example01<mallocMC::CreationPolicies::Scatter<FlatterScatterHeapConfig>>();
     example01<mallocMC::CreationPolicies::OldMalloc>();
     return 0;
 }

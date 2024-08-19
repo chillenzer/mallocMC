@@ -322,11 +322,11 @@ namespace mallocMC::CreationPolicies
      *
      * Implemented as a thin wrapper around `Heap` that mainly provides interface compatibility with the calling code.
      */
-    template<typename T_HeapConfig, typename T_HashConfig = FlatterScatterAlloc::DefaultFlatterScatterHashConfig>
-    struct FlatterScatter
+    template<typename T_HeapConfig, typename T_HashConfig, typename T_AlignmentPolicy>
+    struct FlatterScatterImpl
     {
-        template<typename T_AlignmentPolicy>
-        using AlignmentAwarePolicy = FlatterScatterAlloc::Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>;
+        template<typename T>
+        using AlignmentAwarePolicy = FlatterScatterAlloc::Heap<T_HeapConfig, T_HashConfig, T>;
 
         static auto classname() -> std::string
         {
@@ -419,4 +419,16 @@ namespace mallocMC::CreationPolicies
             return *alpaka::getPtrNative(h_slots);
         }
     };
+
+    template<
+        typename T_HeapConfig,
+        typename T_HashConfig = FlatterScatterAlloc::DefaultFlatterScatterHashConfig,
+        typename T_AlignmentPolicy = void>
+    struct FlatterScatter
+    {
+        template<typename T>
+        using AlignmentAwarePolicy = FlatterScatterImpl<T_HeapConfig, T_HashConfig, T>;
+    };
+
+
 } // namespace mallocMC::CreationPolicies

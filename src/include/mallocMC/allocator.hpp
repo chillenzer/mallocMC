@@ -111,11 +111,11 @@ namespace mallocMC
         using uint32 = std::uint32_t;
 
     public:
-        using CreationPolicy = T_CreationPolicy;
         using DistributionPolicy = T_DistributionPolicy;
         using OOMPolicy = T_OOMPolicy;
         using ReservePoolPolicy = T_ReservePoolPolicy;
         using AlignmentPolicy = T_AlignmentPolicy;
+        using CreationPolicy = T_CreationPolicy::template AlignmentAwarePolicy<AlignmentPolicy>;
         using HeapInfoVector = std::vector<HeapInfo>;
         using DevAllocator = DeviceAllocator<CreationPolicy, DistributionPolicy, OOMPolicy, AlignmentPolicy>;
         using AllocatorHandle = AllocatorHandleImpl<Allocator>;
