@@ -127,16 +127,16 @@ struct FillWith
     }
 };
 
-// struct ContentGenerator
-//{
-//    uint32_t counter{0U};
-//
-//    ALPAKA_FN_ACC auto operator()() -> uint32_t
-//    {
-//        return counter++;
-//    }
-//};
-//
+struct ContentGenerator
+{
+    uint32_t counter{0U};
+
+    ALPAKA_FN_ACC auto operator()() -> uint32_t
+    {
+        return counter++;
+    }
+};
+
 ALPAKA_FN_ACC auto forAll(auto const& acc, auto size, auto functor)
 {
     auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
@@ -194,27 +194,6 @@ struct Destroy
     }
 };
 
-// struct IsValid
-//{
-//     template<typename TAcc>
-//     ALPAKA_FN_ACC auto operator()(
-//         TAcc const& acc,
-//         auto* accessBlock,
-//         void** pointers,
-//         bool* results,
-//         uint32_t const size) const
-//     {
-//         std::span<void*> tmpPointers(pointers, size);
-//         std::span<bool> tmpResults(results, size);
-//         std::transform(
-//             std::begin(tmpPointers),
-//             std::end(tmpPointers),
-//             std::begin(tmpResults),
-//             [&acc, accessBlock](auto pointer) { return accessBlock->isValid(acc, pointer); });
-//     }
-// };
-//
-//
 using Host = alpaka::AccCpuSerial<Dim, Idx>;
 
 template<typename TElem, typename TDevHost, typename TDevAcc>
@@ -344,57 +323,56 @@ auto freeAllButOneOnFirstPage(auto& queue, auto* accessBlock, auto& pointers)
     alpaka::wait(queue);
     return pointer1;
 }
-// struct CheckContent
-//{
-//     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* content, span<void*> pointers, auto* results, auto
-//     chunkSize)
-//         const
-//     {
-//         auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-//         auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-//         for(uint32_t i = 0; i < numElements; ++i)
-//         {
-//             auto idx = idx0 + i;
-//             if(idx < pointers.size())
-//             {
-//                 auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
-//                 auto* end = begin + chunkSize / sizeof(uint32_t);
-//                 results[idx] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx]; });
-//             }
-//         }
-//     }
-// };
-//
-// template<typename TAcc>
-// auto checkContent(
-//     auto& devHost,
-//     auto& devAcc,
-//     auto& queue,
-//     auto& pointers,
-//     auto& content,
-//     auto& workDiv,
-//     auto const chunkSize)
-//{
-//     auto results = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
-//     alpaka::exec<TAcc>(
-//         queue,
-//         workDiv,
-//         CheckContent{},
-//         alpaka::getPtrNative(content.m_onDevice),
-//         span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
-//         alpaka::getPtrNative(results.m_onDevice),
-//         chunkSize);
-//     alpaka::wait(queue);
-//     alpaka::memcpy(queue, results.m_onHost, results.m_onDevice);
-//     alpaka::wait(queue);
-//
-//
-//     std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
-//     auto writtenCorrectly = std::reduce(std::cbegin(tmpResults), std::cend(tmpResults), true,
-//     std::multiplies<bool>{});
-//
-//     return writtenCorrectly;
-// }
+
+struct CheckContent
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* content, span<void*> pointers, auto* results, auto chunkSize)
+        const
+    {
+        auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+        auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
+        for(uint32_t i = 0; i < numElements; ++i)
+        {
+            auto idx = idx0 + i;
+            if(idx < pointers.size())
+            {
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                results[idx] = std::all_of(begin, end, [idx, content](auto val) { return val == content[idx]; });
+            }
+        }
+    }
+};
+
+template<typename TAcc>
+auto checkContent(
+    auto& devHost,
+    auto& devAcc,
+    auto& queue,
+    auto& pointers,
+    auto& content,
+    auto& workDiv,
+    auto const chunkSize)
+{
+    auto results = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
+    alpaka::exec<TAcc>(
+        queue,
+        workDiv,
+        CheckContent{},
+        alpaka::getPtrNative(content.m_onDevice),
+        span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
+        alpaka::getPtrNative(results.m_onDevice),
+        chunkSize);
+    alpaka::wait(queue);
+    alpaka::memcpy(queue, results.m_onHost, results.m_onDevice);
+    alpaka::wait(queue);
+
+
+    std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
+    auto writtenCorrectly = std::reduce(std::cbegin(tmpResults), std::cend(tmpResults), true, std::multiplies<bool>{});
+
+    return writtenCorrectly;
+}
 
 struct GetAvailableSlots
 {
@@ -434,138 +412,135 @@ auto pageIndex(auto accessBlock, auto* pointer)
     return mallocMC::indexOf(pointer, alpaka::getPtrNative(accessBlock), pageSize);
 }
 
-// struct FillAllUpAndWriteToThem
-//{
-//     ALPAKA_FN_ACC auto operator()(
-//         auto const& acc,
-//         auto* accessBlock,
-//         auto* content,
-//         span<void*> pointers,
-//         auto chunkSize) const
-//     {
-//         auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-//         auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
-//         for(uint32_t i = 0; i < numElements; ++i)
-//         {
-//             auto idx = idx0 + i;
-//             if(idx < pointers.size())
-//             {
-//                 pointers[idx] = accessBlock->create(acc, chunkSize);
-//                 auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
-//                 auto* end = begin + chunkSize / sizeof(uint32_t);
-//                 std::fill(begin, end, content[idx]);
-//             }
-//         }
-//     }
-// };
-// struct CreateAndDestroMultipleTimes
-//{
-//     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
-//     {
-//         forAll(
-//             acc,
-//             pointers.size(),
-//             [&](auto idx)
-//             {
-//                 pointers[idx] = nullptr;
-//                 for(uint32_t j = 0; j < idx; ++j)
-//                 {
-//                     // `.isValid()` is not thread-safe, so we use this direct assessment:
-//                     while(pointers[idx] == nullptr)
-//                     {
-//                         pointers[idx] = accessBlock->create(acc, chunkSize);
-//                     }
-//                     accessBlock->destroy(acc, pointers[idx]);
-//                     pointers[idx] = nullptr;
-//                 }
-//                 while(pointers[idx] == nullptr)
-//                 {
-//                     pointers[idx] = accessBlock->create(acc, chunkSize);
-//                 }
-//             });
-//     }
-// };
-//
-// struct OversubscribedCreation
-//{
-//     uint32_t oversubscriptionFactor{};
-//     uint32_t availableSlots{};
-//
-//     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
-//     {
-//         forAll(
-//             acc,
-//             pointers.size(),
-//             [&](auto idx)
-//             {
-//                 pointers[idx] = nullptr;
-//                 for(uint32_t j = 0; j < idx + 1; ++j)
-//                 {
-//                     // `.isValid()` is not thread-safe, so we use this direct assessment:
-//                     while(pointers[idx] == nullptr)
-//                     {
-//                         pointers[idx] = accessBlock->create(acc, chunkSize);
-//
-//                         // CAUTION: The following lines have cost us more than a working day of debugging!
-//                         // If the hardware you're running on has a single program counter for the whole warp, the
-//                         whole
-//                         // warp can't exit the while loop in case of even a single thread requesting another round.
-//                         // This implies that if we move the `.destroy()` out of the while loop, all the slots get
-//                         // filled up but the owning threads run idle instead of freeing them up again because they
-//                         are
-//                         // waiting for their last companions to give their okay for exiting the loop. This is, of
-//                         // course, a hopeless endeavour because all slots are filled (we are vastly oversubscribed
-//                         in
-//                         // this scenario). So, this loop deadlocks and no thread ever exits.
-//                         //
-//                         // ... at least that's what we believe. If you're reading this comment, we might have been
-//                         // wrong about this.
-//                         if(pointers[idx] != nullptr)
-//                         {
-//                             accessBlock->destroy(acc, pointers[idx]);
-//                         }
-//                     }
-//                     pointers[idx] = nullptr;
-//                 }
-//
-//                 // We only keep some of the memory. In particular, we keep one chunk less than is available,
-//                 // such that threads looking for memory after we've finished can still find some.
-//                 while(pointers[idx] == nullptr and idx > (oversubscriptionFactor - 1) * availableSlots + 1)
-//                 {
-//                     pointers[idx] = accessBlock->create(acc, chunkSize);
-//                 }
-//             });
-//     }
-// };
-//
-// struct CreateAllChunkSizes
-//{
-//     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, span<uint32_t>
-//     chunkSizes)
-//         const
-//     {
-//         forAll(
-//             acc,
-//             pointers.size(),
-//             [&](auto idx)
-//             {
-//                 pointers[idx] = accessBlock->create(acc, 1U);
-//
-//                 for(auto chunkSize : chunkSizes)
-//                 {
-//                     accessBlock->destroy(acc, pointers[idx]);
-//                     pointers[idx] = nullptr;
-//
-//                     // `.isValid()` is not thread-safe, so we use this direct assessment:
-//                     while(pointers[idx] == nullptr)
-//                     {
-//                         pointers[idx] = accessBlock->create(acc, chunkSize);
-//                     }
-//                 }
-//             });
-//     }
-// };
-//
+struct FillAllUpAndWriteToThem
+{
+    ALPAKA_FN_ACC auto operator()(
+        auto const& acc,
+        auto* accessBlock,
+        auto* content,
+        span<void*> pointers,
+        auto chunkSize) const
+    {
+        auto const idx0 = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+        auto const numElements = alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0];
+        for(uint32_t i = 0; i < numElements; ++i)
+        {
+            auto idx = idx0 + i;
+            if(idx < pointers.size())
+            {
+                pointers[idx] = accessBlock->create(acc, chunkSize);
+                auto* begin = reinterpret_cast<uint32_t*>(pointers[idx]);
+                auto* end = begin + chunkSize / sizeof(uint32_t);
+                std::fill(begin, end, content[idx]);
+            }
+        }
+    }
+};
+
+struct CreateAndDestroMultipleTimes
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    {
+        forAll(
+            acc,
+            pointers.size(),
+            [&](auto idx)
+            {
+                pointers[idx] = nullptr;
+                for(uint32_t j = 0; j < idx; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
+                    }
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
+                }
+                while(pointers[idx] == nullptr)
+                {
+                    pointers[idx] = accessBlock->create(acc, chunkSize);
+                }
+            });
+    }
+};
+
+struct OversubscribedCreation
+{
+    uint32_t oversubscriptionFactor{};
+    uint32_t availableSlots{};
+
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const
+    {
+        forAll(
+            acc,
+            pointers.size(),
+            [&](auto idx)
+            {
+                pointers[idx] = nullptr;
+                for(uint32_t j = 0; j < idx + 1; ++j)
+                {
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
+
+                        // CAUTION: The following lines have cost us more than a working day of debugging!
+                        // If the hardware you're running on has a single program counter for the whole warp, the whole
+                        // warp can't exit the while loop in case of even a single thread requesting another round.
+                        // This implies that if we move the `.destroy()` out of the while loop, all the slots get
+                        // filled up but the owning threads run idle instead of freeing them up again because they are
+                        // waiting for their last companions to give their okay for exiting the loop. This is, of
+                        // course, a hopeless endeavour because all slots are filled (we are vastly oversubscribed in
+                        // this scenario). So, this loop deadlocks and no thread ever exits.
+                        //
+                        // ... at least that's what we believe. If you're reading this comment, we might have been
+                        // wrong about this.
+                        if(pointers[idx] != nullptr)
+                        {
+                            accessBlock->destroy(acc, pointers[idx]);
+                        }
+                    }
+                    pointers[idx] = nullptr;
+                }
+
+                // We only keep some of the memory. In particular, we keep one chunk less than is available,
+                // such that threads looking for memory after we've finished can still find some.
+                while(pointers[idx] == nullptr and idx > (oversubscriptionFactor - 1) * availableSlots + 1)
+                {
+                    pointers[idx] = accessBlock->create(acc, chunkSize);
+                }
+            });
+    }
+};
+
+struct CreateAllChunkSizes
+{
+    ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, span<uint32_t> chunkSizes)
+        const
+    {
+        forAll(
+            acc,
+            pointers.size(),
+            [&](auto idx)
+            {
+                pointers[idx] = accessBlock->create(acc, 1U);
+
+                for(auto chunkSize : chunkSizes)
+                {
+                    accessBlock->destroy(acc, pointers[idx]);
+                    pointers[idx] = nullptr;
+
+                    // `.isValid()` is not thread-safe, so we use this direct assessment:
+                    while(pointers[idx] == nullptr)
+                    {
+                        pointers[idx] = accessBlock->create(acc, chunkSize);
+                    }
+                }
+            });
+    }
+};
+
 
 TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 {
@@ -686,219 +661,175 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
         CHECK(pageIndex(dataBuf, pointers.m_onHost[0]) == freePage);
     }
 
-    //    SECTION("destroys two pointers of different size.")
-    //    {
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Create{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
-    //            alpaka::getPtrNative(chunkSizes.m_onDevice));
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Destroy{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
-    //        alpaka::wait(queue);
-    //
-    //        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
-    //        auto const workDivSingleThread = createWorkDiv<Acc>(devAcc, 1U);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDivSingleThread,
-    //            IsValid{},
-    //            accessBlock,
-    //            alpaka::getPtrNative(pointers.m_onDevice),
-    //            alpaka::getPtrNative(result.m_onDevice),
-    //            result.m_extents[0]);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        CHECK(not result.m_onHost[0]);
-    //        CHECK(not result.m_onHost[1]);
-    //    }
-    //
-    //    SECTION("destroys two pointers of same size.")
-    //    {
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Create{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
-    //            chunkSizes.m_onHost[0]);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Destroy{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
-    //        alpaka::wait(queue);
-    //
-    //        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
-    //        result.m_onHost[0] = true;
-    //        result.m_onHost[1] = true;
-    //        alpaka::memcpy(queue, result.m_onDevice, result.m_onHost);
-    //        alpaka::wait(queue);
-    //        auto const workDivSingleThread = createWorkDiv<Acc>(devAcc, 1U);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDivSingleThread,
-    //            IsValid{},
-    //            accessBlock,
-    //            alpaka::getPtrNative(pointers.m_onDevice),
-    //            alpaka::getPtrNative(result.m_onDevice),
-    //            result.m_extents[0]);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        CHECK(not result.m_onHost[0]);
-    //        CHECK(not result.m_onHost[1]);
-    //    }
-    //
-    //    SECTION("fills up all chunks in parallel and writes to them.")
-    //    {
-    //        auto content = makeBuffer<uint32_t>(
-    //            devHost,
-    //            devAcc,
-    //            getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
-    //        std::span<uint32_t> tmp(alpaka::getPtrNative(content.m_onHost), content.m_extents[0]);
-    //        std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
-    //        alpaka::memcpy(queue, content.m_onDevice, content.m_onHost);
-    //        alpaka::wait(queue);
-    //
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-    //
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            FillAllUpAndWriteToThem{},
-    //            accessBlock,
-    //            alpaka::getPtrNative(content.m_onDevice),
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
-    //            chunkSizes.m_onHost[0]);
-    //
-    //        alpaka::wait(queue);
-    //
-    //        auto writtenCorrectly
-    //            = checkContent<Acc>(devHost, devAcc, queue, pointers, content, workDiv, chunkSizes.m_onHost[0]);
-    //        CHECK(writtenCorrectly);
-    //    }
-    //
-    //    SECTION("destroys all pointers simultaneously.")
-    //    {
-    //        auto const allSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc,
-    //        chunkSizes.m_onHost[0]); auto const allSlotsOfDifferentSize
-    //            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
-    //        fillWith<Acc>(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
-    //
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Destroy{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]));
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        auto result = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
-    //        auto const workDivSingleThread = createWorkDiv<Acc>(devAcc, 1U);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDivSingleThread,
-    //            IsValid{},
-    //            accessBlock,
-    //            alpaka::getPtrNative(pointers.m_onDevice),
-    //            alpaka::getPtrNative(result.m_onDevice),
-    //            result.m_extents[0]);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        std::span<bool> tmpResults(alpaka::getPtrNative(result.m_onHost), result.m_extents[0]);
-    //        CHECK(std::none_of(std::cbegin(tmpResults), std::cend(tmpResults), [](auto const val) { return val; }));
-    //
-    //        CHECK(getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]) == allSlots);
-    //        CHECK(
-    //            getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1])
-    //            == allSlotsOfDifferentSize);
-    //    }
-    //
-    //    SECTION("creates and destroys multiple times.")
-    //    {
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-    //
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            CreateAndDestroMultipleTimes{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
-    //            chunkSizes.m_onHost[0]);
-    //        alpaka::wait(queue);
-    //        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
-    //        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
-    //        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
-    //    }
-    //
-    //    SECTION("can handle oversubscription.")
-    //    {
-    //        uint32_t oversubscriptionFactor = 2U;
-    //        auto availableSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc,
-    //        chunkSizes.m_onHost[0]);
-    //
-    //        // This is oversubscribed but we will only hold keep less than 1/oversubscriptionFactor of the memory in
-    //        the
-    //        // end.
-    //        auto manyPointers = makeBuffer<void*>(devHost, devAcc, oversubscriptionFactor * availableSlots);
-    //        auto workDiv = createWorkDiv<Acc>(devAcc, manyPointers.m_extents[0]);
-    //
-    //        alpaka::wait(queue);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            OversubscribedCreation{oversubscriptionFactor, availableSlots},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(manyPointers.m_onDevice), manyPointers.m_extents[0]),
-    //            chunkSizes.m_onHost[0]);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, manyPointers.m_onHost, manyPointers.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
-    //        // nullptr.
-    //        std::span<void*> tmpManyPointers(alpaka::getPtrNative(manyPointers.m_onHost), manyPointers.m_extents[0]);
-    //        auto beginNonNull = std::begin(tmpManyPointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
-    //
-    //        CHECK(std::all_of(
-    //            std::begin(tmpManyPointers),
-    //            beginNonNull,
-    //            [](auto const pointer) { return pointer == nullptr; }));
-    //
-    //        std::sort(beginNonNull, std::end(tmpManyPointers));
-    //        CHECK(std::unique(beginNonNull, std::end(tmpManyPointers)) == std::end(tmpManyPointers));
-    //    }
-    //
+    SECTION("destroys two pointers of different size.")
+    {
+        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
+            alpaka::getPtrNative(chunkSizes.m_onDevice));
+        alpaka::wait(queue);
+
+        auto const beforeDestroy0
+            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        auto const beforeDestroy1
+            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Destroy{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
+        alpaka::wait(queue);
+
+        auto const afterDestroy0 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        auto const afterDestroy1 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
+
+        CHECK(beforeDestroy0 < afterDestroy0);
+        CHECK(beforeDestroy1 < afterDestroy1);
+    }
+
+    SECTION("destroys two pointers of same size.")
+    {
+        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+
+        auto const beforeDestroy = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Destroy{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
+        alpaka::wait(queue);
+
+        auto const afterDestroy = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        CHECK(beforeDestroy == afterDestroy - 2U);
+    }
+
+    SECTION("fills up all chunks in parallel and writes to them.")
+    {
+        auto content = makeBuffer<uint32_t>(
+            devHost,
+            devAcc,
+            getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
+        std::span<uint32_t> tmp(alpaka::getPtrNative(content.m_onHost), content.m_extents[0]);
+        std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
+        alpaka::memcpy(queue, content.m_onDevice, content.m_onHost);
+        alpaka::wait(queue);
+
+        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            FillAllUpAndWriteToThem{},
+            accessBlock,
+            alpaka::getPtrNative(content.m_onDevice),
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
+            chunkSizes.m_onHost[0]);
+
+        alpaka::wait(queue);
+
+        auto writtenCorrectly
+            = checkContent<Acc>(devHost, devAcc, queue, pointers, content, workDiv, chunkSizes.m_onHost[0]);
+        CHECK(writtenCorrectly);
+    }
+
+    SECTION("destroys all pointers simultaneously.")
+    {
+        auto const allSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        auto const allSlotsOfDifferentSize
+            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
+        fillWith<Acc>(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
+
+        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Destroy{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]));
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]) == allSlots);
+        CHECK(
+            getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1])
+            == allSlotsOfDifferentSize);
+    }
+
+    SECTION("creates and destroys multiple times.")
+    {
+        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
+
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            CreateAndDestroMultipleTimes{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
+        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
+    }
+
+    SECTION("can handle oversubscription.")
+    {
+        uint32_t oversubscriptionFactor = 2U;
+        auto availableSlots = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+
+        // This is oversubscribed but we will only hold keep less than 1/oversubscriptionFactor of the memory in the
+        // end.
+        auto manyPointers = makeBuffer<void*>(devHost, devAcc, oversubscriptionFactor * availableSlots);
+        auto workDiv = createWorkDiv<Acc>(devAcc, manyPointers.m_extents[0]);
+
+        alpaka::wait(queue);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            OversubscribedCreation{oversubscriptionFactor, availableSlots},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(manyPointers.m_onDevice), manyPointers.m_extents[0]),
+            chunkSizes.m_onHost[0]);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, manyPointers.m_onHost, manyPointers.m_onDevice);
+        alpaka::wait(queue);
+
+        // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
+        // nullptr.
+        std::span<void*> tmpManyPointers(alpaka::getPtrNative(manyPointers.m_onHost), manyPointers.m_extents[0]);
+        auto beginNonNull = std::begin(tmpManyPointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
+
+        CHECK(std::all_of(
+            std::begin(tmpManyPointers),
+            beginNonNull,
+            [](auto const pointer) { return pointer == nullptr; }));
+
+        std::sort(beginNonNull, std::end(tmpManyPointers));
+        CHECK(std::unique(beginNonNull, std::end(tmpManyPointers)) == std::end(tmpManyPointers));
+    }
+
     //    SECTION("can handle many different chunk sizes.")
     //    {
     //        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize);
@@ -907,14 +838,14 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
     //        alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
     //        alpaka::wait(queue);
     //
-    //        auto workDiv = createWorkDiv<Acc>(devAcc, MyAccessBlock::numPages());
+    //        auto workDiv = createWorkDiv<Acc>(devAcc, numPages);
     //
     //        alpaka::exec<Acc>(
     //            queue,
     //            workDiv,
     //            CreateAllChunkSizes{},
     //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), MyAccessBlock::numPages()),
+    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), numPages),
     //            std::span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
     //
     //        alpaka::wait(queue);
@@ -922,29 +853,29 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
     //        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
     //        alpaka::wait(queue);
     //
-    //        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), MyAccessBlock::numPages());
+    //        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), numPages);
     //        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
     //        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     //    }
-    //
-    //    SECTION("creates second memory somewhere in multi-page mode.")
-    //    {
-    //        uint32_t const size = 2U;
-    //        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
-    //        alpaka::exec<Acc>(
-    //            queue,
-    //            workDiv,
-    //            Create{},
-    //            accessBlock,
-    //            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
-    //            pageSize);
-    //        alpaka::wait(queue);
-    //
-    //        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-    //        alpaka::wait(queue);
-    //
-    //        CHECK(pointers.m_onHost[0] != pointers.m_onHost[1]);
-    //    }
+
+    SECTION("creates second memory somewhere in multi-page mode.")
+    {
+        uint32_t const size = 2U;
+        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
+        alpaka::exec<Acc>(
+            queue,
+            workDiv,
+            Create{},
+            accessBlock,
+            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
+            pageSize);
+        alpaka::wait(queue);
+
+        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
+        alpaka::wait(queue);
+
+        CHECK(pointers.m_onHost[0] != pointers.m_onHost[1]);
+    }
 
     alpaka::wait(queue);
 }
