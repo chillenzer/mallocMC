@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
+#include <alpaka/mem/fence/Traits.hpp>
 #include <atomic>
 #include <cassert>
 #include <cstdint> /* uint32_t */
@@ -1388,7 +1389,7 @@ namespace mallocMC
                     alpaka::atomicOp<alpaka::AtomicAdd>(acc, &warpResults[wId], temp);
 
                 alpaka::syncBlockThreads(acc);
-                threadfenceBlock(acc);
+                alpaka::mem_fence(acc, alpaka::memory_scope::Block{});
 
                 return warpResults[wId];
             }
