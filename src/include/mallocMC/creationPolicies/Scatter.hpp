@@ -599,6 +599,21 @@ namespace mallocMC
                                     (uint32*) &_ptes[page_in_region].chunksize,
                                     0u,
                                     minAllocation);
+                                auto beforeFilling = alpaka::atomicOp<alpaka::AtomicCas>(
+                                    acc,
+                                    (uint32*) &_ptes[page_in_region].count,
+                                    0u,
+                                    0U);
+                                while(beforeFilling >= pagesize)
+                                {
+                                    beforeFilling = alpaka::atomicOp<alpaka::AtomicCas>(
+                                        acc,
+                                        (uint32*) &_ptes[page_in_region].count,
+                                        0u,
+                                        0U);
+                                }
+
+
                                 // Check if the chunk size can be used even if the size is not an exact match.
                                 auto const isChunkSizeInRange = [&](uint32_t currentChunkSize) {
                                     return currentChunkSize >= bytes && currentChunkSize <= maxchunksize;
