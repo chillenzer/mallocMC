@@ -13,7 +13,8 @@ There is one header file that will include *all* necessary files:
 Step 2a: choose policies
 -----------------------
 
-Each instance of a policy based allocator is composed through 5 **policies**. Each policy is expressed as a **policy class**.
+Each instance of a policy based allocator is composed through 5 **policies**.
+Each policy is expressed as a **policy class**.
 
 Currently, there are the following policy classes available:
 
@@ -51,6 +52,7 @@ struct ShrinkConfig : mallocMC::AlignmentPolicies::Shrink<>::Properties {
 
 Step 2c: combine policies
 -------------------------
+
 After configuring the chosen policies, they can be used as template
 parameters to create the desired allocator type:
 
@@ -86,7 +88,6 @@ Notice, how the policy classes `Scatter` and `XMallocSIMD` are instantiated with
 template arguments to use the default configuration. `Shrink` however uses the
 configuration struct defined above.
 
-
 Step 3: instantiate allocator
 -----------------------------
 
@@ -102,7 +103,6 @@ The allocator object offers the following methods
 |---------------------- |-------------------------|
 | getAvailableSlots(size_t)   | Determines number of allocatable slots of a certain size. This only works, if the chosen CreationPolicy supports it (can be found through `mallocMC::Traits<ScatterAllocator>::providesAvailableSlots`) |
 
-
 Step 4: use dynamic memory allocation in a kernel
 -------------------------------------------------
 
@@ -117,6 +117,7 @@ The handle offers the following methods:
 | getAvailableSlots()   | Determines number of allocatable slots of a certain size. This only works, if the chosen CreationPolicy supports it (can be found through `mallocMC::Traits<ScatterAllocator>::providesAvailableSlots`) |
 
 A simplistic example would look like this:
+
 ```c++
 #include <mallocMC/mallocMC.hpp>
 
