@@ -7,13 +7,11 @@ This project provides a framework for **fast memory managers** on **many core
 accelerators**. It is based on [alpaka](https://github.com/alpaka-group/alpaka)
 to run on many different accelerators and implements the *ScatterAlloc* algorithm.
 
-
 Usage
 -------
 
 Follow the step-by-step instructions in [Usage.md](Usage.md) to replace your
 `new`/`malloc` calls with a *blacingly fast* mallocMC heap! :rocket:
-
 
 Install
 -------
@@ -21,11 +19,10 @@ Install
 mallocMC is header-only, but requires a few other C++ libraries to be
 available. Our installation notes can be found in [INSTALL.md](INSTALL.md).
 
-
 Contributing
 ------------
 
-Rules for contributions are found in [CONTRIBUTING.md](CONTRIBUTING.md).
+Rules for contributions are found in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 On the ScatterAlloc Algorithm
 -----------------------------
@@ -37,7 +34,8 @@ from the **ScatterAlloc** project, developed by the
 group at [Institute for Computer Graphics and Vision](http://www.icg.tugraz.at),
 TU Graz (kudos!).
 
-From http://www.icg.tugraz.at/project/mvp/downloads :
+From <http://www.icg.tugraz.at/project/mvp/downloads> :
+
 ```quote
 ScatterAlloc is a dynamic memory allocator for the GPU. It is
 designed concerning the requirements of massively parallel
@@ -51,10 +49,9 @@ execution time is almost independent of the thread count.
 ScatterAlloc is open source and easy to use in your CUDA projects.
 ```
 
-Original Homepage: http://www.icg.tugraz.at/project/mvp
+Original Homepage: <http://www.icg.tugraz.at/project/mvp>
 
-Our Homepage: https://www.hzdr.de/crp
-
+Our Homepage: <https://www.hzdr.de/crp>
 
 Branches
 --------
@@ -64,8 +61,6 @@ Branches
 | **master**  | [![Build Status Master](https://travis-ci.org/alpaka-group/mallocMC.png?branch=master)](https://travis-ci.org/alpaka-group/mallocMC "master") | our latest stable release |
 | **dev**     | [![Build Status Development](https://travis-ci.org/alpaka-group/mallocMC.png?branch=dev)](https://travis-ci.org/alpaka-group/mallocMC "dev") | our development branch - start and merge new branches here |
 | **tugraz**  | n/a | *ScatterAlloc* "upstream" branch: not backwards compatible mirror for algorithmic changes |
-
-
 
 Literature
 ----------
@@ -80,7 +75,6 @@ Just an incomplete link collection for now:
 
 - Junior Thesis [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.34461.svg)](http://dx.doi.org/10.5281/zenodo.34461) by
   Carlchristian Eckert (2014)
-
 
 License
 -------
