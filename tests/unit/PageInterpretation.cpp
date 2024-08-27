@@ -156,68 +156,57 @@ TEST_CASE("PageInterpretation.create")
     auto actualData = std::make_unique<DataPage<pageSize>>();
     DataPage<pageSize>& data{*actualData};
 
-    SECTION("regardless of hierarchy")
+    uint32_t numChunks = GENERATE(BitMaskSize, BitMaskSize * BitMaskSize);
+    // CAUTION: Only works for full bit masks:
+    uint32_t chunkSize = (pageSize - (numChunks / BitMaskSize) * sizeof(BitMask)) / numChunks;
+    PageInterpretation<pageSize> page{data, chunkSize};
+
+    SECTION("returns a pointer to within the data.")
     {
-        uint32_t numChunks = GENERATE(BitMaskSize, BitMaskSize * BitMaskSize);
-        // CAUTION: Only works for full bit masks:
-        uint32_t chunkSize = (pageSize - (numChunks / BitMaskSize) * sizeof(BitMask)) / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-
-        SECTION("returns a pointer to within the data.")
-        {
-            auto* pointer = page.create(accSerial);
-            CHECK(
-                std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer))
-                < std::distance(
-                    reinterpret_cast<char*>(page.chunkPointer(0)),
-                    reinterpret_cast<char*>(page.bitFieldStart())));
-        }
-
-        SECTION("returns a pointer to the start of a chunk.")
-        {
-            auto* pointer = page.create(accSerial);
-            CHECK(
-                std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer))
-                    % chunkSize
-                == 0U);
-        }
-
-        SECTION("returns nullptr if everything is full.")
-        {
-            for(auto& mask : page.bitField())
-            {
-                mask.set(accSerial);
-            }
-            auto* pointer = page.create(accSerial);
-            CHECK(pointer == nullptr);
-        }
-
-        SECTION("can provide numChunks pieces of memory and returns nullptr afterwards.")
-        {
-            for(uint32_t i = 0; i < page.numChunks(); ++i)
-            {
-                auto* pointer = page.create(accSerial);
-                CHECK(pointer != nullptr);
-            }
-            auto* pointer = page.create(accSerial);
-            CHECK(pointer == nullptr);
-        }
+        auto* pointer = page.create(accSerial);
+        CHECK(
+            std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer))
+            < std::distance(
+                reinterpret_cast<char*>(page.chunkPointer(0)),
+                reinterpret_cast<char*>(page.bitFieldStart())));
     }
 
-    SECTION("without hierarchy")
+    SECTION("returns a pointer to the start of a chunk.")
     {
-        uint32_t const numChunks = BitMaskSize;
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
+        auto* pointer = page.create(accSerial);
+        CHECK(
+            std::distance(reinterpret_cast<char*>(page.chunkPointer(0)), reinterpret_cast<char*>(pointer)) % chunkSize
+            == 0U);
+    }
 
-        SECTION("updates bit field.")
+    SECTION("returns nullptr if everything is full.")
+    {
+        for(auto& mask : page.bitField())
         {
-            BitMask& mask{page.bitField().getMask(0)};
-            REQUIRE(mask.none());
-            auto* pointer = page.create(accSerial);
-            auto const index = page.chunkNumberOf(pointer);
-            CHECK(mask(accSerial, index));
+            mask.set(accSerial);
         }
+        auto* pointer = page.create(accSerial);
+        CHECK(pointer == nullptr);
+    }
+
+    SECTION("can provide numChunks pieces of memory and returns nullptr afterwards.")
+    {
+        for(uint32_t i = 0; i < page.numChunks(); ++i)
+        {
+            auto* pointer = page.create(accSerial);
+            CHECK(pointer != nullptr);
+        }
+        auto* pointer = page.create(accSerial);
+        CHECK(pointer == nullptr);
+    }
+
+    SECTION("updates bit field.")
+    {
+        BitMask& mask{page.bitField().getMask(0)};
+        REQUIRE(mask.none());
+        auto* pointer = page.create(accSerial);
+        auto const index = page.chunkNumberOf(pointer);
+        CHECK(mask(accSerial, index));
     }
 }
 
@@ -230,97 +219,93 @@ TEST_CASE("PageInterpretation.destroy")
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
 
-    SECTION("regardless of hierarchy")
-    {
-        uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
-        uint32_t chunkSize = pageSize / numChunks;
-        PageInterpretation<pageSize> page{data, chunkSize};
-        auto* pointer = page.create(accSerial);
+    uint32_t numChunks = GENERATE(BitMaskSize * BitMaskSize, BitMaskSize);
+    uint32_t chunkSize = pageSize / numChunks;
+    PageInterpretation<pageSize> page{data, chunkSize};
+    auto* pointer = page.create(accSerial);
 
 #ifndef NDEBUG
-        SECTION("throws if given an invalid pointer.")
-        {
-            pointer = nullptr;
-            CHECK_THROWS(
-                page.destroy(accSerial, pointer),
-                throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
-                                         "to a valid chunk or it is not marked as allocated."});
-        }
+    SECTION("throws if given an invalid pointer.")
+    {
+        pointer = nullptr;
+        CHECK_THROWS(
+            page.destroy(accSerial, pointer),
+            throw std::runtime_error{"Attempted to destroy an invalid pointer! Either the pointer does not point "
+                                     "to a valid chunk or it is not marked as allocated."});
+    }
 
-        SECTION("allows pointers to anywhere in the chunk.")
-        {
-            // This test documents the state as is. We haven't defined this outcome as a requirement but if we change
-            // it, we might still want to be aware of this because users might want to be informed.
-            pointer = reinterpret_cast<void*>(reinterpret_cast<char*>(pointer) + chunkSize / 2);
-            CHECK_NOTHROW(page.destroy(accSerial, pointer));
-        }
+    SECTION("allows pointers to anywhere in the chunk.")
+    {
+        // This test documents the state as is. We haven't defined this outcome as a requirement but if we change
+        // it, we might still want to be aware of this because users might want to be informed.
+        pointer = reinterpret_cast<void*>(reinterpret_cast<char*>(pointer) + chunkSize / 2);
+        CHECK_NOTHROW(page.destroy(accSerial, pointer));
+    }
 #endif // NDEBUG
 
-        SECTION("only ever unsets (and never sets) bits in top-level bit mask.")
+    SECTION("only ever unsets (and never sets) bits in top-level bit mask.")
+    {
+        // We extract the position of the mask before destroying the pointer because technically speaking the whole
+        // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
+        // free the page.
+        auto mask = page.bitField().getMask(0);
+        auto value = mask;
+        page.destroy(accSerial, pointer);
+        CHECK(mask <= value);
+    }
+
+
+    SECTION("cleans up in bit field region of page")
+    {
+        // This is larger than any thread would be allowed to write. Threads would only write in the region up to
+        // `page.numChunks() * chunkSize` not up until `pageSize`. We still do that to have a better overview over
+        // what was actually deleted.
+        memset(std::begin(data.data), std::numeric_limits<char>::max(), pageSize);
+
+        uint32_t maxBitFieldSize = 0U;
+        uint32_t uncleanedSize = 0U;
+        SECTION("without explicit minimal chunk size")
         {
-            // We extract the position of the mask before destroying the pointer because technically speaking the whole
-            // concept of a mask doesn't apply anymore after that pointer was destroyed because that will automatically
-            // free the page.
-            auto mask = page.bitField().getMask(0);
-            auto value = mask;
-            page.destroy(accSerial, pointer);
-            CHECK(mask <= value);
+            maxBitFieldSize = page.maxBitFieldSize(); // NOLINT(*static*)
+
+            SECTION("fully.")
+            {
+                uncleanedSize = 0U;
+                page.cleanupFull();
+            }
+
+            SECTION("only unused.")
+            {
+                uncleanedSize = page.bitFieldSize();
+                page.cleanupUnused();
+            }
         }
 
-
-        SECTION("cleans up in bit field region of page")
+        SECTION("with explicit minimal chunk size")
         {
-            // This is larger than any thread would be allowed to write. Threads would only write in the region up to
-            // `page.numChunks() * chunkSize` not up until `pageSize`. We still do that to have a better overview over
-            // what was actually deleted.
-            memset(std::begin(data.data), std::numeric_limits<char>::max(), pageSize);
+            auto* localPage = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page); // NOLINT(*magic-number*)
+            maxBitFieldSize = localPage->maxBitFieldSize(); // NOLINT(*static*)
 
-            uint32_t maxBitFieldSize = 0U;
-            uint32_t uncleanedSize = 0U;
-            SECTION("without explicit minimal chunk size")
+            SECTION("fully.")
             {
-                maxBitFieldSize = page.maxBitFieldSize(); // NOLINT(*static*)
-
-                SECTION("fully.")
-                {
-                    uncleanedSize = 0U;
-                    page.cleanupFull();
-                }
-
-                SECTION("only unused.")
-                {
-                    uncleanedSize = page.bitFieldSize();
-                    page.cleanupUnused();
-                }
+                uncleanedSize = 0U;
+                localPage->cleanupFull();
             }
 
-            SECTION("with explicit minimal chunk size")
+            SECTION("only unused.")
             {
-                auto* localPage
-                    = reinterpret_cast<PageInterpretation<pageSize, 32U>*>(&page); // NOLINT(*magic-number*)
-                maxBitFieldSize = localPage->maxBitFieldSize(); // NOLINT(*static*)
-
-                SECTION("fully.")
-                {
-                    uncleanedSize = 0U;
-                    localPage->cleanupFull();
-                }
-
-                SECTION("only unused.")
-                {
-                    uncleanedSize = localPage->bitFieldSize();
-                    localPage->cleanupUnused();
-                }
+                uncleanedSize = localPage->bitFieldSize();
+                localPage->cleanupUnused();
             }
+        }
 
-            for(uint32_t i = 0; i < pageSize; ++i)
-            {
-                CHECK(
-                    data.data[i]
-                    == ((i < pageSize - maxBitFieldSize) or (i >= pageSize - uncleanedSize)
-                            ? std::numeric_limits<char>::max()
-                            : 0));
-            }
+        for(uint32_t i = 0; i < pageSize; ++i)
+        {
+            CHECK(
+                data.data[i]
+                == ((i < pageSize - maxBitFieldSize) or (i >= pageSize - uncleanedSize)
+                        ? std::numeric_limits<char>::max()
+                        : 0));
         }
     }
 }
