@@ -47,6 +47,7 @@
 #include "alignmentPolicies/Shrink.hpp"
 #include "creationPolicies/FlatterScatter.hpp"
 #include "creationPolicies/OldMalloc.hpp"
+#include "creationPolicies/Scatter.hpp"
 #include "distributionPolicies/Noop.hpp"
 #include "distributionPolicies/XMallocSIMD.hpp"
 #include "oOMPolicies/BadAllocException.hpp"
