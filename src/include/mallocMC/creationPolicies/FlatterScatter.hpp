@@ -84,6 +84,15 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         MyAccessBlock* accessBlocks{};
         volatile uint32_t block = 0U;
 
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto init() -> void
+        {
+            for(uint32_t i = 0; i < numBlocks(); ++i)
+            {
+                accessBlocks[i].init();
+            }
+        }
+
+
         /**
          * @brief Number of access blocks in the heap. This is a runtime quantity because it depends on the given heap
          * size.
@@ -300,6 +309,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             m_heap->accessBlocks
                 = static_cast<Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>::MyAccessBlock*>(m_heapmem);
             m_heap->heapSize = m_memsize;
+            m_heap->init();
         }
     };
 

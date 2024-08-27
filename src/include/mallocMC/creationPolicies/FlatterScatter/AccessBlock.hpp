@@ -60,6 +60,12 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     {
         uint32_t _chunkSizes[T_numPages]{};
         uint32_t _fillingLevels[T_numPages]{};
+
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanup() -> void
+        {
+            std::fill(std::begin(_chunkSizes), std::end(_chunkSizes), 0U);
+            std::fill(std::begin(_fillingLevels), std::end(_fillingLevels), 0U);
+        }
     };
 
     /**
@@ -101,9 +107,21 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 
         // This class is supposed to be reinterpeted on a piece of raw memory and not instantiated directly. We set it
         // protected, so we can still test stuff in the future easily.
-        AccessBlock() = default;
+        AccessBlock()
+        {
+            init();
+        }
 
     public:
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto init() -> void
+        {
+            pageTable.cleanup();
+            constexpr uint32_t dummyChunkSize = 1U;
+            for(auto& page : pages)
+            {
+                MyPageInterpretation(page, dummyChunkSize).cleanupFull();
+            }
+        }
         /**
          * @brief Compute the number of pages in the access block taking into account the space needed for metadata.
          *
