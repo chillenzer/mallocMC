@@ -804,7 +804,11 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             for(uint32_t i = 0; i < numPagesNeeded; ++i)
             {
                 auto myIndex = pageIndex + i;
-                if constexpr(resetfreedpages)
+                // Everything inside the following scope is done to reset the free'd pages. As opposed to the chunked
+                // case, we decided to always perform a reset in multi-page mode regardless of the value of
+                // `resetfreedpages`. If you want to reinstate the old behaviour or add a second parameter
+                // specifically for multi-page mode, e.g., resetreedpages_multipage, just put an `if constexpr` around
+                // here again.
                 {
                     MyPageInterpretation{pages[myIndex], T_AlignmentPolicy::Properties::dataAlignment}.cleanupFull();
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});

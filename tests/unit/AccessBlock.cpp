@@ -510,17 +510,17 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
             CHECK(unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize) == slots);
         }
 
-        SECTION("and doesn't reset the page for larger than page size.")
+        SECTION("and always resets the page for larger than page size.")
         {
+            auto& unresettingAccessBlock = *reinterpret_cast<
+                TestableAccessBlock<HeapConfig<blockSize, pageSize, 1U, /*resetfreedpages=*/false>, AlignmentPolicy>*>(
+                &accessBlock);
+            auto const differentChunkSize = GENERATE(17, 2048);
+            auto const slots = unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize);
             auto* largePointer = accessBlock.create(accSerial, pageSize);
             if(largePointer != nullptr)
             {
-                auto& unresettingAccessBlock = *reinterpret_cast<TestableAccessBlock<
-                    HeapConfig<blockSize, pageSize, 1U, /*resetfreedpages=*/false>,
-                    AlignmentPolicy>*>(&accessBlock);
-                auto const differentChunkSize = GENERATE(17, 2048);
                 REQUIRE(differentChunkSize != chunkSize);
-                auto const slots = unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize);
 
                 unresettingAccessBlock.destroy(accSerial, largePointer);
                 CHECK(unresettingAccessBlock.getAvailableSlots(accSerial, differentChunkSize) == slots);
