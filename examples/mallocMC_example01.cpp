@@ -38,6 +38,10 @@
 #include <mallocMC/mallocMC.hpp>
 #include <numeric>
 
+using mallocMC::CreationPolicies::FlatterScatter;
+using mallocMC::CreationPolicies::OldMalloc;
+using mallocMC::CreationPolicies::Scatter;
+
 using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
 
@@ -48,11 +52,13 @@ constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
 constexpr uint32_t const pagesize = 4U * 1024U;
 constexpr uint32_t const wasteFactor = 1U;
 
-struct FlatterScatterHeapConfig
-    : mallocMC::CreationPolicies::FlatterScatterAlloc::DefaultHeapConfig<blocksize, pagesize, wasteFactor>
+// This happens to also work for the original Scatter algorithm, so we only define one.
+struct FlatterScatterHeapConfig : FlatterScatter<>::Properties::HeapConfig
 {
+    static constexpr auto accessblocksize = blocksize;
+    static constexpr auto pagesize = ::pagesize;
     static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
-    static constexpr auto pagesize = 4096;
+    // Only used by original Scatter (but it doesn't hurt FlatterScatter to keep):
     static constexpr auto regionsize = 16;
     static constexpr auto wastefactor = 1;
 };
@@ -218,8 +224,8 @@ auto example01() -> int
 
 auto main(int /*argc*/, char* /*argv*/[]) -> int
 {
-    example01<mallocMC::CreationPolicies::FlatterScatter<FlatterScatterHeapConfig>>();
-    example01<mallocMC::CreationPolicies::Scatter<FlatterScatterHeapConfig>>();
-    example01<mallocMC::CreationPolicies::OldMalloc>();
+    example01<FlatterScatter<FlatterScatterHeapConfig>>();
+    example01<Scatter<FlatterScatterHeapConfig>>();
+    example01<OldMalloc>();
     return 0;
 }

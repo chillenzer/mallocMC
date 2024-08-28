@@ -211,7 +211,8 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         // This class is supposed to be instantiated as a parent for the `DeviceAllocator`.
         Heap() = default;
     };
-
+    constexpr uint32_t defaultBlockSize = 128U * 1024U * 1024U;
+    constexpr uint32_t defaultPageSize = 128U * 1024U;
     /**
      * @class DefaultHeapConfig
      * @brief An example configuration for the heap.
@@ -224,7 +225,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
      * @tparam T_pageSize The size of one page in bytes.
      * @return
      */
-    template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 2U>
+    template<
+        uint32_t T_blockSize = defaultBlockSize,
+        uint32_t T_pageSize = defaultPageSize,
+        uint32_t T_wasteFactor = 2U>
     struct DefaultHeapConfig
     {
         constexpr static uint32_t const accessblocksize = T_blockSize;
@@ -431,13 +435,19 @@ namespace mallocMC::CreationPolicies
     };
 
     template<
-        typename T_HeapConfig,
+        typename T_HeapConfig = FlatterScatterAlloc::DefaultHeapConfig<>,
         typename T_HashConfig = FlatterScatterAlloc::DefaultFlatterScatterHashConfig,
         typename T_AlignmentPolicy = void>
     struct FlatterScatter
     {
         template<typename T>
         using AlignmentAwarePolicy = FlatterScatterImpl<T_HeapConfig, T_HashConfig, T>;
+
+        struct Properties
+        {
+            using HeapConfig = T_HeapConfig;
+            using HashConfig = T_HashConfig;
+        };
     };
 
 
