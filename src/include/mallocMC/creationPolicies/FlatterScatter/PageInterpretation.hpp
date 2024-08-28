@@ -53,13 +53,13 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     struct PageInterpretation
     {
     private:
-        DataPage<T_pageSize>& _data;
-        uint32_t const _chunkSize;
+        DataPage<T_pageSize>& data;
+        uint32_t const chunkSize;
 
     public:
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC PageInterpretation(DataPage<T_pageSize>& data, uint32_t chunkSize)
-            : _data(data)
-            , _chunkSize(chunkSize)
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC PageInterpretation(DataPage<T_pageSize>& givenData, uint32_t givenChunkSize)
+            : data(givenData)
+            , chunkSize(givenChunkSize)
         {
         }
 
@@ -93,7 +93,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto numChunks() const -> uint32_t
         {
-            return numChunks(_chunkSize);
+            return numChunks(chunkSize);
         }
 
         /**
@@ -104,7 +104,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkPointer(uint32_t index) const -> void*
         {
-            return reinterpret_cast<void*>(&_data.data[index * _chunkSize]);
+            return reinterpret_cast<void*>(&data.data[index * chunkSize]);
         }
 
 
@@ -149,7 +149,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(TAcc const& acc, void* pointer) -> void
         {
-            if(_chunkSize == 0)
+            if(chunkSize == 0)
             {
 #if(!defined(NDEBUG) && !BOOST_LANG_CUDA && !BOOST_LANG_HIP)
                 throw std::runtime_error{
@@ -189,7 +189,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanupFull() -> void
         {
-            PageInterpretation<T_pageSize>(_data, minimalChunkSize()).resetBitField();
+            PageInterpretation<T_pageSize>(data, minimalChunkSize()).resetBitField();
         }
 
         /**
@@ -203,7 +203,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanupUnused() -> void
         {
-            auto worstCasePage = PageInterpretation<T_pageSize>(_data, minimalChunkSize());
+            auto worstCasePage = PageInterpretation<T_pageSize>(data, minimalChunkSize());
             memset(
                 static_cast<void*>(worstCasePage.bitFieldStart()),
                 0U,
@@ -279,7 +279,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto bitFieldStart() const -> BitMask*
         {
-            return reinterpret_cast<BitMask*>(&_data.data[T_pageSize - bitFieldSize()]);
+            return reinterpret_cast<BitMask*>(&data.data[T_pageSize - bitFieldSize()]);
         }
 
         /**
@@ -290,7 +290,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto bitFieldSize() const -> uint32_t
         {
-            return bitFieldSize(_chunkSize);
+            return bitFieldSize(chunkSize);
         }
 
         /**
@@ -330,7 +330,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          */
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto chunkNumberOf(void* pointer) const -> int32_t
         {
-            return indexOf(pointer, &_data, _chunkSize);
+            return indexOf(pointer, &data, chunkSize);
         }
 
         // these are supposed to be temporary objects, don't start messing around with them:

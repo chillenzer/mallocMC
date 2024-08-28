@@ -38,7 +38,7 @@ TEST_CASE("PageTable")
 
     SECTION("initialises chunk sizes to 0.")
     {
-        for(auto const& chunkSize : pageTable._chunkSizes)
+        for(auto const& chunkSize : pageTable.chunkSizes)
         {
             CHECK(chunkSize == 0U);
         }
@@ -46,7 +46,7 @@ TEST_CASE("PageTable")
 
     SECTION("initialises filling levels to 0.")
     {
-        for(auto const& fillingLevel : pageTable._fillingLevels)
+        for(auto const& fillingLevel : pageTable.fillingLevels)
         {
             CHECK(fillingLevel == 0U);
         }

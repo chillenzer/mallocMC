@@ -58,13 +58,13 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     template<uint32_t T_numPages>
     struct PageTable
     {
-        uint32_t _chunkSizes[T_numPages]{};
-        uint32_t _fillingLevels[T_numPages]{};
+        uint32_t chunkSizes[T_numPages]{};
+        uint32_t fillingLevels[T_numPages]{};
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto cleanup() -> void
         {
-            std::fill(std::begin(_chunkSizes), std::end(_chunkSizes), 0U);
-            std::fill(std::begin(_fillingLevels), std::end(_fillingLevels), 0U);
+            std::fill(std::begin(chunkSizes), std::end(chunkSizes), 0U);
+            std::fill(std::begin(fillingLevels), std::end(fillingLevels), 0U);
         }
     };
 
@@ -191,12 +191,12 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 return false;
             }
             auto const index = pageIndex(pointer);
-            auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
+            auto chunkSize = atomicLoad(acc, pageTable.chunkSizes[index]);
             if(chunkSize >= pageSize)
             {
                 return true;
             }
-            return chunkSize == 0U or atomicLoad(acc, pageTable._fillingLevels[index]) == 0U
+            return chunkSize == 0U or atomicLoad(acc, pageTable.fillingLevels[index]) == 0U
                 ? false
                 : interpret(index, chunkSize).isValid(acc, pointer);
         }
@@ -257,7 +257,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 #endif // NDEBUG
                 return;
             }
-            auto const chunkSize = atomicLoad(acc, pageTable._chunkSizes[index]);
+            auto const chunkSize = atomicLoad(acc, pageTable.chunkSizes[index]);
             if(chunkSize >= multiPageThreshold())
             {
                 destroyOverMultiplePages(acc, index, chunkSize);
@@ -313,9 +313,9 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         {
             // TODO(lenz): This is not thread-safe!
             return std::transform_reduce(
-                std::cbegin(pageTable._chunkSizes),
-                std::cend(pageTable._chunkSizes),
-                std::cbegin(pageTable._fillingLevels),
+                std::cbegin(pageTable.chunkSizes),
+                std::cend(pageTable.chunkSizes),
+                std::cbegin(pageTable.fillingLevels),
                 0U,
                 std::plus<uint32_t>{},
                 [this, &acc, chunkSize](auto const localChunkSize, auto const fillingLevel)
@@ -348,8 +348,8 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             for(uint32_t i = 0; i < numPages() - numPagesNeeded + 1;)
             {
                 if(std::all_of(
-                       pageTable._chunkSizes + i,
-                       pageTable._chunkSizes + i + numPagesNeeded,
+                       pageTable.chunkSizes + i,
+                       pageTable.chunkSizes + i + numPagesNeeded,
                        [](auto const& val) { return val == 0U; }))
                 {
                     sum += 1;
@@ -434,7 +434,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             uint32_t oldFilling = 0U;
             for(index = 0U; index < numPagesNeeded; ++index)
             {
-                oldFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[firstIndex + index], 0U, +pageSize);
+                oldFilling = alpaka::atomicCas(acc, &pageTable.fillingLevels[firstIndex + index], 0U, +pageSize);
                 if(oldFilling != 0U)
                 {
                     break;
@@ -459,7 +459,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         {
             for(uint32_t index = 0U; index < numPagesAcquired; ++index)
             {
-                alpaka::atomicSub(acc, &pageTable._fillingLevels[firstIndex + index], +pageSize);
+                alpaka::atomicSub(acc, &pageTable.fillingLevels[firstIndex + index], +pageSize);
             }
         }
 
@@ -488,7 +488,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 // was properly cleaned up. That is okay for us because we're handing out uninitialised memory anyways.
                 // But it is very important to record the correct chunk size here, so the destroy method later on knows
                 // how to handle this memory.
-                alpaka::atomicExch(acc, &pageTable._chunkSizes[firstIndex + numPagesAcquired], numBytes);
+                alpaka::atomicExch(acc, &pageTable.chunkSizes[firstIndex + numPagesAcquired], numBytes);
             }
         }
 
@@ -651,7 +651,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             // we're testing for here. But if this fails already, we save one atomic.
             if(oldFilling < MyPageInterpretation::numChunks(numBytes))
             {
-                uint32_t oldChunkSize = alpaka::atomicCas(acc, &pageTable._chunkSizes[index], 0U, numBytes);
+                uint32_t oldChunkSize = alpaka::atomicCas(acc, &pageTable.chunkSizes[index], 0U, numBytes);
                 chunkSizeCache = oldChunkSize == 0U ? numBytes : oldChunkSize;
 
                 // Now that we know the real chunk size of the page, we can check again if our previous assessment was
@@ -713,7 +713,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         template<typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto enterPage(TAcc const& acc, uint32_t const pageIndex) -> uint32_t
         {
-            auto const oldFilling = alpaka::atomicAdd(acc, &pageTable._fillingLevels[pageIndex], 1U);
+            auto const oldFilling = alpaka::atomicAdd(acc, &pageTable.fillingLevels[pageIndex], 1U);
             // We assume that this page has the correct chunk size. If not, the chunk size is either 0 (and oldFilling
             // must be 0, too) or the next check will fail.
             return oldFilling;
@@ -740,7 +740,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             // clean-up. Using 0U -> 1U in the atomicCAS and comparison further down would have the same effect (if the
             // else branch contained the simple subtraction). It's a matter of which case shall have one operation
             // less.
-            auto originalFilling = alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], 1U);
+            auto originalFilling = alpaka::atomicSub(acc, &pageTable.fillingLevels[pageIndex], 1U);
 
             if constexpr(resetfreedpages)
             {
@@ -754,10 +754,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                     // be related to this section.
 
                     auto lock = pageSize;
-                    auto latestFilling = alpaka::atomicCas(acc, &pageTable._fillingLevels[pageIndex], 0U, lock);
+                    auto latestFilling = alpaka::atomicCas(acc, &pageTable.fillingLevels[pageIndex], 0U, lock);
                     if(latestFilling == 0U)
                     {
-                        auto chunkSize = atomicLoad(acc, pageTable._chunkSizes[pageIndex]);
+                        auto chunkSize = atomicLoad(acc, pageTable.chunkSizes[pageIndex]);
                         if(chunkSize != 0)
                         {
                             // At this point it's guaranteed that the fiilling level is numChunks and thereby locked.
@@ -770,7 +770,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                             // It is important to keep this after the clean-up line above: Otherwise another thread
                             // with a smaller chunk size might circumvent our lock and already start allocating before
                             // we're done cleaning up.
-                            alpaka::atomicCas(acc, &pageTable._chunkSizes[pageIndex], chunkSize, 0U);
+                            alpaka::atomicCas(acc, &pageTable.chunkSizes[pageIndex], chunkSize, 0U);
                         }
 
                         // TODO(lenz): Original version had a thread fence at this point in order to invalidate
@@ -779,7 +779,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                         // At this point, there might already be another thread (with another chunkSize) on this page
                         // but that's fine. It won't see the full capacity but we can just subtract what we've added
                         // before:
-                        alpaka::atomicSub(acc, &pageTable._fillingLevels[pageIndex], lock);
+                        alpaka::atomicSub(acc, &pageTable.fillingLevels[pageIndex], lock);
                     }
                 }
             }
@@ -808,9 +808,9 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 {
                     MyPageInterpretation{pages[myIndex], T_AlignmentPolicy::Properties::dataAlignment}.cleanupFull();
                     alpaka::mem_fence(acc, alpaka::memory_scope::Device{});
-                    alpaka::atomicCas(acc, &pageTable._chunkSizes[myIndex], chunkSize, 0U);
+                    alpaka::atomicCas(acc, &pageTable.chunkSizes[myIndex], chunkSize, 0U);
                 }
-                alpaka::atomicSub(acc, &pageTable._fillingLevels[myIndex], +pageSize);
+                alpaka::atomicSub(acc, &pageTable.fillingLevels[myIndex], +pageSize);
             }
         }
     };
