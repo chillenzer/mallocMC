@@ -1041,23 +1041,6 @@ namespace mallocMC
                 uint32 numpages = numregions * regionsize;
                 // pointer is copied (copy is called page)
                 Page* page = (Page*) memory;
-                // sec check for alignment
-                // copy is checked
-                // PointerEquivalent alignmentstatus = ((PointerEquivalent)page)
-                // & (16 -1); if(alignmentstatus != 0)
-                //{
-                //  if(linid == 0){
-                //    printf("c Before:\n");
-                //    printf("c dataAlignment:   %d\n",16);
-                //    printf("c Alignmentstatus: %d\n",alignmentstatus);
-                //    printf("c size_t memsize   %llu byte\n", memsize);
-                //    printf("c void *memory     %p\n", page);
-                //  }
-                //  //copy is adjusted, potentially pointer to higher address
-                //  now. page =(Page*)(((PointerEquivalent)page) + 16 -
-                //  alignmentstatus); if(linid == 0) printf("c Heap Warning:
-                //  memory to use not 16 byte aligned...\n");
-                //}
 
                 // We have to calculate these values here, before using them for other things.
                 // First calculate how many blocks of the given size fit our memory pages in principle.
@@ -1088,16 +1071,6 @@ namespace mallocMC
                 // Recalculate since numpages could have changed
                 ptes = (PTE*) (page + numpages);
                 regions = (uint32*) (ptes + numpages);
-
-                // if(linid == 0) printf("Heap info: wasting %d
-                // bytes\n",(((POINTEREQUIVALENT)memory) + memsize) -
-                // (POINTEREQUIVALENT)(regions + numregions));
-
-                // if(linid == 0 && alignmentstatus != 0){
-                //  printf("c Was shrinked automatically to:\n");
-                //  printf("c size_t memsize   %llu byte\n", memsize);
-                //  printf("c void *memory     %p\n", page);
-                //}
 
                 for(uint32 i = linid; i < numpages; i += totalThreads)
                 {

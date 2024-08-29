@@ -55,19 +55,6 @@
 
 namespace mallocMC
 {
-    template<int PSIZE>
-    class __PointerEquivalent
-    {
-    public:
-        using type = unsigned int;
-    };
-    template<>
-    class __PointerEquivalent<8>
-    {
-    public:
-        using type = unsigned long long;
-    };
-
 #if defined(__CUDA_ARCH__)
     constexpr auto warpSize = 32; // TODO
 #elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
@@ -84,8 +71,6 @@ namespace mallocMC
 #else
     constexpr auto warpSize = 1;
 #endif
-
-    using PointerEquivalent = mallocMC::__PointerEquivalent<sizeof(char*)>::type;
 
     ALPAKA_FN_ACC inline auto laneid()
     {
