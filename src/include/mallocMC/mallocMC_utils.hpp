@@ -115,7 +115,9 @@ namespace mallocMC
 
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
     template<typename TDim, typename TIdx>
-    ALPAKA_FN_ACC inline auto warpid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
+    // ALPAKA_FN_ACC resolves to `__host__ __device__` if we're not in CUDA_ONLY_MODE. But the assembly instruction is
+    // specific to the device and cannot be compiled on the host. So, we need an explicit `__device__` here.`
+    __device__ inline auto warpid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
     {
         std::uint32_t mywarpid = 0;
         asm("mov.u32 %0, %%warpid;" : "=r"(mywarpid));
@@ -202,36 +204,6 @@ namespace mallocMC
             alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc))[0];
         return localId / warpSize;
     }
-
-    template<typename TAcc, typename T>
-    ALPAKA_FN_ACC inline auto popc(TAcc const& /*acc*/, T mask) -> std::uint32_t
-    {
-        // cf.
-        // https://graphics.stanford.edu/~seander/bithacks.html
-        std::uint32_t count = 0;
-        while(mask)
-        {
-            count++;
-            mask &= mask - 1;
-        }
-        return count;
-    }
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-    template<typename TDim, typename TIdx, typename T>
-    ALPAKA_FN_ACC inline auto popc(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, T mask) -> std::uint32_t
-    {
-        return ::__popc(mask);
-    }
-#endif
-
-#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
-    template<typename TDim, typename TIdx, typename T>
-    ALPAKA_FN_ACC inline auto popc(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, T mask) -> std::uint32_t
-    {
-        // return value is 64bit for HIP-clang
-        return ::__popcll(static_cast<unsigned long long int>(mask));
-    }
-#endif
 
     template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
     ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr auto ceilingDivision(T const numerator, U const denominator) -> T
