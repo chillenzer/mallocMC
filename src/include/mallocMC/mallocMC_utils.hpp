@@ -181,29 +181,6 @@ namespace mallocMC
 #endif
 
 
-    template<typename TAcc>
-    ALPAKA_FN_ACC inline auto activemask(TAcc const& /*acc*/)
-    {
-        return 1U;
-    }
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-    template<typename TDim, typename TIdx>
-    ALPAKA_FN_ACC inline auto activemask(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/)
-    {
-        return __activemask();
-    }
-#endif
-
-#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
-    template<typename TDim, typename TIdx>
-    ALPAKA_FN_ACC inline auto activemask(alpaka::AccGpuHipRt<TDim, TIdx> const& acc)
-    {
-        // return value is 64bit for HIP-clang
-        return ballot(acc, 1);
-    }
-#endif
-
-
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
      *
      * https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capabilities
