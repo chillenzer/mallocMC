@@ -182,30 +182,6 @@ namespace mallocMC
 
 
     template<typename TAcc>
-    ALPAKA_FN_ACC inline auto ballot(TAcc const& /*acc*/, int pred)
-    {
-        return 1U;
-    }
-
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-    template<typename TDim, typename TIdx>
-    ALPAKA_FN_ACC inline auto ballot(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, int pred)
-    {
-        return __ballot_sync(__activemask(), pred);
-    }
-#endif
-
-#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
-    template<typename TDim, typename TIdx>
-    ALPAKA_FN_ACC inline auto ballot(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, int pred)
-    {
-        // return value is 64bit for HIP-clang
-        return __ballot(pred);
-    }
-#endif
-
-
-    template<typename TAcc>
     ALPAKA_FN_ACC inline auto activemask(TAcc const& /*acc*/)
     {
         return 1U;
