@@ -96,7 +96,7 @@ namespace mallocMC
 #elif defined(__HIP_DEVICE_COMPILE__) && defined(__HIP__)
         return __lane_id();
 #else
-        return 0u;
+        return 0U;
 #endif
     }
 
@@ -187,7 +187,7 @@ namespace mallocMC
      *
      * https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capabilities
      */
-    constexpr uint32_t maxThreadsPerBlock = 1024;
+    constexpr uint32_t maxThreadsPerBlock = 1024U;
 
     /** warp id within a cuda block
      *
