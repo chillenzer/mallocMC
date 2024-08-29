@@ -279,10 +279,11 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          * @param numBytes Number of bytes requested.
          * @return A hash value.
          */
-        template<uint32_t T_pageSize>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(auto const& acc, uint32_t const numBytes) -> uint32_t
+        // TAcc is to be deduced, so we put it last.
+        template<uint32_t T_pageSize, typename TAcc>
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(TAcc const& acc, uint32_t const numBytes) -> uint32_t
         {
-            const uint32_t relative_offset = warpSize * numBytes / T_pageSize;
+            const uint32_t relative_offset = warpSize<TAcc> * numBytes / T_pageSize;
             return (
                 numBytes * hashingK + hashingDistMP * smid(acc)
                 + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid(acc));

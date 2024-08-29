@@ -125,7 +125,8 @@ namespace mallocMC
 
                 // init with initial counter
                 auto& warp_sizecounter
-                    = alpaka::declareSharedVar<std::uint32_t[maxThreadsPerBlock / warpSize], __COUNTER__>(acc);
+                    = alpaka::declareSharedVar<std::uint32_t[maxThreadsPerBlock / warpSize<AlpakaAcc>()], __COUNTER__>(
+                        acc);
                 warp_sizecounter[warpid] = 16;
 
                 // second half: make sure that all coalesced allocations can fit
@@ -153,7 +154,8 @@ namespace mallocMC
             template<typename AlpakaAcc>
             ALPAKA_FN_ACC auto distribute(const AlpakaAcc& acc, void* allocatedMem) -> void*
             {
-                auto& warp_res = alpaka::declareSharedVar<char * [maxThreadsPerBlock / warpSize], __COUNTER__>(acc);
+                auto& warp_res
+                    = alpaka::declareSharedVar<char * [maxThreadsPerBlock / warpSize<AlpakaAcc>()], __COUNTER__>(acc);
 
                 char* myalloc = (char*) allocatedMem;
                 if(req_size && can_use_coalescing)

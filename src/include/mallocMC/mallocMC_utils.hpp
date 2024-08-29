@@ -55,21 +55,23 @@
 
 namespace mallocMC
 {
-#if defined(__CUDA_ARCH__)
-    constexpr auto warpSize = 32; // TODO
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-// defined:
-// https://github.com/llvm/llvm-project/blob/62ec4ac90738a5f2d209ed28c822223e58aaaeb7/clang/lib/Basic/Targets/AMDGPU.cpp#L400
-// overview wave front size:
-// https://github.com/llvm/llvm-project/blob/efc063b621ea0c4d1e452bcade62f7fc7e1cc937/clang/test/Driver/amdgpu-macros.cl#L70-L115
-// gfx10XX has 32 threads per wavefront else 64
+
+    template<typename TAcc>
+    constexpr uint32_t warpSize = 1U;
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    constexpr uint32_t warpSize<alpaka::AccGpuCudaRt<TDim, TIdx>> = 32U;
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
 #    if(HIP_VERSION_MAJOR >= 4)
-    constexpr auto warpSize = __AMDGCN_WAVEFRONT_SIZE;
+    template<typename TDim, typename TIdx>
+    constexpr uint32_t warpSize<alpaka::AccGpuHipRt<TDim, TIdx>> = __AMDGCN_WAVEFRONT_SIZE;
 #    else
-    constexpr auto warpSize = 64;
+    template<typename TDim, typename TIdx>
+    constexpr uint32_t warpSize<alpaka::AccGpuHipRt<TDim, TIdx>> = 64;
 #    endif
-#else
-    constexpr auto warpSize = 1;
 #endif
 
     ALPAKA_FN_ACC inline auto laneid()
@@ -187,7 +189,7 @@ namespace mallocMC
         const auto localId = alpaka::mapIdx<1>(
             alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc),
             alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc))[0];
-        return localId / warpSize;
+        return localId / warpSize<AlpakaAcc>;
     }
 
     template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>

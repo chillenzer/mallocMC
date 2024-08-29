@@ -555,7 +555,7 @@ namespace mallocMC
                 const uint32 minAllocation = alpaka::math::max(acc, bytes, paddedMinChunkSize);
                 const uint32 numpages = _numpages;
                 const uint32 pagesperblock = numpages / _accessblocks;
-                const uint32 reloff = warpSize * minAllocation / pagesize;
+                const uint32 reloff = warpSize<AlpakaAcc> * minAllocation / pagesize;
                 const uint32 start_page_in_block = (minAllocation * hashingK + hashingDistMP * smid(acc)
                                                     + (hashingDistWP + hashingDistWPRel * reloff) * warpid(acc))
                     % pagesperblock;
@@ -1364,12 +1364,13 @@ namespace mallocMC
 
                 const uint32 activeThreads = alpaka::popcount(acc, alpaka::warp::activemask(acc));
 
+                constexpr auto warpsize = warpSize<AlpakaAcc>;
                 auto& activePerWarp = alpaka::declareSharedVar<
-                    std::uint32_t[maxThreadsPerBlock / warpSize],
+                    std::uint32_t[maxThreadsPerBlock / warpsize],
                     __COUNTER__>(acc); // maximum number of warps in a block
 
                 auto& warpResults
-                    = alpaka::declareSharedVar<unsigned[maxThreadsPerBlock / warpSize], __COUNTER__>(acc);
+                    = alpaka::declareSharedVar<unsigned[maxThreadsPerBlock / warpSize<AlpakaAcc>], __COUNTER__>(acc);
 
                 warpResults[wId] = 0;
                 activePerWarp[wId] = 0;
