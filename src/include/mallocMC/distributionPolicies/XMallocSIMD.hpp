@@ -132,7 +132,7 @@ namespace mallocMC
                 const bool coalescible = bytes > 0 && bytes < (pagesize / 32);
 
 #if(MALLOCMC_DEVICE_COMPILE)
-                threadcount = popc(ballot(coalescible));
+                threadcount = alpaka::popcount(ballot(acc, coalescible));
 #else
                 threadcount = 1; // TODO
 #endif

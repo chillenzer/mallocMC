@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
+#include <alpaka/intrinsic/Traits.hpp>
 #include <alpaka/mem/fence/Traits.hpp>
 #include <atomic>
 #include <cassert>
@@ -349,7 +350,7 @@ namespace mallocMC
                     // note: popc(old) == spots should be sufficient,
                     // but if someone corrupts the memory we end up in an
                     // endless loop in here...
-                    if(popc(old) >= spots)
+                    if(alpaka::popcount(acc, old) >= spots)
                         return -1;
                     spot = nextspot(acc, old, spot, spots);
                 }
@@ -416,7 +417,7 @@ namespace mallocMC
                 const uint32 mask = _ptes[page].bitmask;
                 if((mask & (1u << spot)) != 0)
                     spot = nextspot(acc, mask, spot, segments);
-                const uint32 tries = segments - popc(mask);
+                const uint32 tries = segments - alpaka::popcount(acc, mask);
                 uint32* onpagemasks = onPageMasksPosition(page, segments);
                 for(uint32 i = 0; i < tries; ++i)
                 {
@@ -556,8 +557,8 @@ namespace mallocMC
                 const uint32 numpages = _numpages;
                 const uint32 pagesperblock = numpages / _accessblocks;
                 const uint32 reloff = warpSize * minAllocation / pagesize;
-                const uint32 start_page_in_block = (minAllocation * hashingK + hashingDistMP * smid()
-                                                    + (hashingDistWP + hashingDistWPRel * reloff) * warpid())
+                const uint32 start_page_in_block = (minAllocation * hashingK + hashingDistMP * smid(acc)
+                                                    + (hashingDistWP + hashingDistWPRel * reloff) * warpid(acc))
                     % pagesperblock;
                 const uint32 maxchunksize = alpaka::math::min(
                     acc,
@@ -802,7 +803,7 @@ namespace mallocMC
                     alpaka::atomicOp<alpaka::AtomicExch>(acc, (uint32*) (_regions + region), 0u);
                     const uint32 pagesperblock = _numpages / _accessblocks;
                     const uint32 block = page / pagesperblock;
-                    if(warpid() + laneid() == 0)
+                    if(warpid(acc) + laneid() == 0)
                         alpaka::atomicOp<alpaka::AtomicMin>(acc, (uint32*) &_firstfreeblock, block);
                 }
             }
@@ -926,11 +927,11 @@ namespace mallocMC
                 // only one thread per warp can acquire the mutex
                 void* res = 0;
                 // based on the alpaka backend the lanemask type can be 64bit
-                const auto mask = activemask();
-                const uint32_t num = popc(mask);
+                const auto mask = alpaka::warp::activemask(acc);
+                const uint32_t num = alpaka::popcount(acc, mask);
                 // based on the alpaka backend the lanemask type can be 64bit
-                const auto lanemask = lanemask_lt();
-                const uint32_t local_id = popc(lanemask & mask);
+                const auto lanemask = lanemask_lt(acc);
+                const uint32_t local_id = alpaka::popcount(acc, lanemask & mask);
                 for(unsigned int active = 0; active < num; ++active)
                     if(active == local_id)
                         res = allocPageBasedSingle(acc, bytes);
@@ -1389,7 +1390,7 @@ namespace mallocMC
                                                          // this value is not guaranteed to
                                                          // be stable across warp lifetime
 
-                const uint32 activeThreads = popc(activemask());
+                const uint32 activeThreads = alpaka::popcount(acc, alpaka::warp::activemask(acc));
 
                 auto& activePerWarp = alpaka::declareSharedVar<
                     std::uint32_t[maxThreadsPerBlock / warpSize],

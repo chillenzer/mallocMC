@@ -35,6 +35,8 @@
 #pragma once
 
 #include <alpaka/alpaka.hpp>
+#include <alpaka/core/Common.hpp>
+#include <sys/types.h>
 
 #ifdef _MSC_VER
 #    include <intrin.h>
@@ -105,71 +107,126 @@ namespace mallocMC
      *
      * @return current index of the warp
      */
-    ALPAKA_FN_ACC inline auto warpid()
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto warpid(TAcc const& /*acc*/) -> uint32_t
     {
-#if defined(__CUDA_ARCH__)
-        std::uint32_t mywarpid;
+        return 0U;
+    }
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto warpid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
+    {
+        std::uint32_t mywarpid = 0;
         asm("mov.u32 %0, %%warpid;" : "=r"(mywarpid));
         return mywarpid;
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
+    }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto warpid(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/) -> uint32_t
+    {
         // get wave id
         // https://github.com/ROCm-Developer-Tools/HIP/blob/f72a669487dd352e45321c4b3038f8fe2365c236/include/hip/hcc_detail/device_functions.h#L974-L1024
         return __builtin_amdgcn_s_getreg(GETREG_IMMED(3, 0, 4));
-#else
-        return 0u;
+    }
 #endif
+
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto smid(TAcc const& /*acc*/) -> uint32_t
+    {
+        return 0U;
     }
 
-    ALPAKA_FN_ACC inline auto smid()
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto smid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
     {
-#if defined(__CUDA_ARCH__)
-        std::uint32_t mysmid;
+        std::uint32_t mysmid = 0;
         asm("mov.u32 %0, %%smid;" : "=r"(mysmid));
         return mysmid;
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        return __smid();
-#else
-        return 0u;
-#endif
     }
+#endif
 
-    ALPAKA_FN_ACC inline auto lanemask_lt()
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto smid(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/) -> uint32_t
     {
-#if defined(__CUDA_ARCH__)
+        return __smid();
+    }
+#endif
+
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto lanemask_lt(TAcc const& /*acc*/)
+    {
+        return 0U;
+    }
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto lanemask_lt(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/)
+    {
         std::uint32_t lanemask;
         asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
         return lanemask;
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        return __lanemask_lt();
-#else
-        return 0u;
+    }
 #endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto lanemask_lt(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/)
+    {
+        return __lanemask_lt();
+    }
+#endif
+
+
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto ballot(TAcc const& /*acc*/, int pred)
+    {
+        return 1U;
     }
 
-    ALPAKA_FN_ACC inline auto ballot(int pred)
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto ballot(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, int pred)
     {
-#if defined(__CUDA_ARCH__)
         return __ballot_sync(__activemask(), pred);
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
+    }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto ballot(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, int pred)
+    {
         // return value is 64bit for HIP-clang
         return __ballot(pred);
-#else
-        return 1u;
-#endif
     }
+#endif
 
 
-    ALPAKA_FN_ACC inline auto activemask()
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto activemask(TAcc const& /*acc*/)
     {
-#if defined(__CUDA_ARCH__)
-        return __activemask();
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        // return value is 64bit for HIP-clang
-        return ballot(1);
-#else
-        return 1u;
-#endif
+        return 1U;
     }
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto activemask(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/)
+    {
+        return __activemask();
+    }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto activemask(alpaka::AccGpuHipRt<TDim, TIdx> const& acc)
+    {
+        // return value is 64bit for HIP-clang
+        return ballot(acc, 1);
+    }
+#endif
+
 
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
      *
@@ -193,17 +250,11 @@ namespace mallocMC
         return localId / warpSize;
     }
 
-    template<typename T>
-    ALPAKA_FN_ACC inline auto popc(T mask) -> std::uint32_t
+    template<typename TAcc, typename T>
+    ALPAKA_FN_ACC inline auto popc(TAcc const& /*acc*/, T mask) -> std::uint32_t
     {
-#if defined(__CUDA_ARCH__)
-        return ::__popc(mask);
-#elif(MALLOCMC_DEVICE_COMPILE && BOOST_COMP_HIP)
-        // return value is 64bit for HIP-clang
-        return ::__popcll(static_cast<unsigned long long int>(mask));
-#else
         // cf.
-        // https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetKernighan
+        // https://graphics.stanford.edu/~seander/bithacks.html
         std::uint32_t count = 0;
         while(mask)
         {
@@ -211,8 +262,23 @@ namespace mallocMC
             mask &= mask - 1;
         }
         return count;
-#endif
     }
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx, typename T>
+    ALPAKA_FN_ACC inline auto popc(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, T mask) -> std::uint32_t
+    {
+        return ::__popc(mask);
+    }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx, typename T>
+    ALPAKA_FN_ACC inline auto popc(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, T mask) -> std::uint32_t
+    {
+        // return value is 64bit for HIP-clang
+        return ::__popcll(static_cast<unsigned long long int>(mask));
+    }
+#endif
 
     template<typename T, typename U, typename = std::enable_if_t<std::is_integral_v<T> && std::is_integral_v<U>>>
     ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr auto ceilingDivision(T const numerator, U const denominator) -> T

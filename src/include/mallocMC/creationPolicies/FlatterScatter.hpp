@@ -280,12 +280,12 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          * @return A hash value.
          */
         template<uint32_t T_pageSize>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(auto const& /*acc*/, uint32_t const numBytes) -> uint32_t
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(auto const& acc, uint32_t const numBytes) -> uint32_t
         {
             const uint32_t relative_offset = warpSize * numBytes / T_pageSize;
             return (
-                numBytes * hashingK + hashingDistMP * smid()
-                + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid());
+                numBytes * hashingK + hashingDistMP * smid(acc)
+                + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid(acc));
         }
 
     private:
