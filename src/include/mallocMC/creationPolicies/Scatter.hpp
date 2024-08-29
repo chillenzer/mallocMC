@@ -34,7 +34,6 @@
 #pragma once
 
 #include "../mallocMC_utils.hpp"
-#include "Scatter.hpp"
 
 #include <algorithm>
 #include <alpaka/alpaka.hpp>
@@ -350,7 +349,7 @@ namespace mallocMC
                     // note: popc(old) == spots should be sufficient,
                     // but if someone corrupts the memory we end up in an
                     // endless loop in here...
-                    if(alpaka::popcount(acc, old) >= spots)
+                    if(alpaka::popcount(acc, old) >= static_cast<int32_t>(spots))
                         return -1;
                     spot = nextspot(acc, old, spot, spots);
                 }

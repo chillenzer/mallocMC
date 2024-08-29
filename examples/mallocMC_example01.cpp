@@ -60,7 +60,7 @@ struct FlatterScatterHeapConfig : FlatterScatter<>::Properties::HeapConfig
     static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
     // Only used by original Scatter (but it doesn't hurt FlatterScatter to keep):
     static constexpr auto regionsize = 16;
-    static constexpr auto wastefactor = 1;
+    static constexpr auto wastefactor = wasteFactor;
 };
 
 struct XMallocConfig
