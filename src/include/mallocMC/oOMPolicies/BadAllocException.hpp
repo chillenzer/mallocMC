@@ -53,9 +53,9 @@ namespace mallocMC
             static auto handleOOM(void* mem) -> void*
             {
 #if BOOST_LANG_CUDA || BOOST_COMP_HIP
-//#if __CUDA_ARCH__ < 350
+// #if __CUDA_ARCH__ < 350
 #    define PM_EXCEPTIONS_NOT_SUPPORTED_HERE
-//#endif
+// #endif
 #endif
 
 #ifdef PM_EXCEPTIONS_NOT_SUPPORTED_HERE
