@@ -1,7 +1,7 @@
 Install
 -------
 ### Dependencies
- - C++14 compiler (clang, gcc, hipcc, icc, nvcc)
+ - C++20 compiler (clang, gcc, hipcc, icc, nvcc)
   - *Debian/Ubuntu:* `sudo apt-get install gcc build-essential`
   - *Arch Linux:* `sudo pacman -S base-devel`
  - `alpaka` 1.1.0
