@@ -1,11 +1,16 @@
-name: Continuous Integration
-on: [push, pull_request]
+name: Pre-commit
+on:
+  pull_request:
+  push:
+    branches: [main, test-me-*]
 jobs:
-  clang-format:
+  main:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: DoozyX/clang-format-lint-action@v0.18.2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          exclude: "./thirdParty ./alpaka"
-          clangFormatVersion: 18
+          python-version: 3.x
+      - uses: pre-commit/action@v3.0.0
+      - uses: pre-commit-ci/lite-action@v1.0.1
+        if: always()
