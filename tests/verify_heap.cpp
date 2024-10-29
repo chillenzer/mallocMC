@@ -97,7 +97,7 @@ auto main(int argc, char** argv) -> int
     {
         if(correct)
         {
-            std::cout << "\033[0;32mverification successful ✔\033[0m\n";
+            std::cout << "\033[0;32mverification successful \033[0m\n";
             return 0;
         }
         else
