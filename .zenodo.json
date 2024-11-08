@@ -1,6 +1,6 @@
 {
   "title": "mallocMC - Memory Allocator for Many Core Architectures",
-  "description": "This project provides a framework for fast memory managers on many core accelerators. It is based on alpaka to run on many different accelerators and implements the ScatterAlloc algorithm.",
+  "description": "This project provides a framework for fast memory managers on many core accelerators. It is based on alpaka to run on many different accelerators and implements multiple algorithms.",
   "keywords": [
     "mallocMC",
     "CUDA",
@@ -15,14 +15,32 @@
   },
   "creators": [
     {
-      "name": "Eckert, Carlchristian",
-      "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf, TU Dresden",
-      "orcid": "0000-0002-6459-0842"
-    },
-    {
       "name": "Widera, René",
       "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf",
       "orcid": "0000-0003-1642-0459"
+    },
+    {
+      "name": "Lenz, Julian",
+      "affiliation": "CASUS, Helmholtz-Zentrum Dresden-Rossendorf",
+      "orcid": "0000-0001-5250-0005"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Eckert, Carlchristian",
+      "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf, TU Dresden",
+      "orcid": "0000-0002-6459-0842",
+      "type": "Other"
+    },
+    {
+      "name": "Worpitz, Benjamin",
+      "type": "Other"
+    },
+    {
+      "name": "Grund, Alexander",
+      "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf",
+      "orcid": "0000-0002-7196-8452",
+      "type": "Other"
     },
     {
       "name": "Huebl, Axel",
@@ -38,14 +56,6 @@
       "name": "Bastrakov, Sergei",
       "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf",
       "orcid": "0000-0003-3396-6154"
-    },
-    {
-      "name": "Worpitz, Benjamin"
-    },
-    {
-      "name": "Grund, Alexander",
-      "affiliation": "Helmholtz-Zentrum Dresden-Rossendorf",
-      "orcid": "0000-0002-7196-8452"
     }
   ]
 }
