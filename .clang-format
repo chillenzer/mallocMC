@@ -1,9 +1,7 @@
----
 # General options
 Language: Cpp
 Standard: c++20
 DisableFormat: false
-
 AccessModifierOffset: -4
 AlignAfterOpenBracket: AlwaysBreak
 AlignConsecutiveAssignments: false
@@ -35,7 +33,7 @@ BreakConstructorInitializers: BeforeComma
 BreakInheritanceList: BeforeComma
 BreakStringLiterals: true
 ColumnLimit: 119
-CommentPragmas:  '^ COMMENT pragma:'
+CommentPragmas: "^ COMMENT pragma:"
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 4
@@ -46,8 +44,8 @@ DerivePointerAlignment: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
 IncludeBlocks: Regroup
-IncludeIsMainRegex: '(Test)?$'
-IncludeIsMainSourceRegex: ''
+IncludeIsMainRegex: "(Test)?$"
+IncludeIsMainSourceRegex: ""
 IndentCaseBlocks: true
 IndentCaseLabels: false
 IndentExternBlock: AfterExternBlock
@@ -56,8 +54,8 @@ IndentPPDirectives: AfterHash
 IndentWidth: 4
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
-MacroBlockBegin: ''
-MacroBlockEnd:   ''
+MacroBlockBegin: ""
+MacroBlockEnd: ""
 MaxEmptyLinesToKeep: 2
 NamespaceIndentation: All
 PenaltyBreakAssignment: 2
@@ -84,7 +82,7 @@ SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyBlock: false
 SpaceInEmptyParentheses: false
 SpacesBeforeTrailingComments: 1
-SpacesInAngles:  false
+SpacesInAngles: false
 SpacesInConditionalStatement: false
 SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: false
@@ -94,7 +92,6 @@ SpaceBeforeSquareBrackets: false
 TabWidth: 4
 UseCRLF: false
 UseTab: Never
-
 # Project specific options -- uncomment and modify as needed
 #IncludeCategories:
 #  - Regex:           '^"(llvm|llvm-c|clang|clang-c)/'
@@ -110,5 +107,3 @@ UseTab: Never
 # Future options - not supported in clang-format 11
 # BitFieldColonSpacing: Both
 # OperandAlignmentStyle: Align
-
-...
