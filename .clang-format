@@ -1,6 +1,6 @@
 # General options
 Language: Cpp
-Standard: c++17
+Standard: c++20
 DisableFormat: false
 AccessModifierOffset: -4
 AlignAfterOpenBracket: AlwaysBreak
@@ -92,9 +92,8 @@ SpaceBeforeSquareBrackets: false
 TabWidth: 4
 UseCRLF: false
 UseTab: Never
-
 # Project specific options -- uncomment and modify as needed
-# IncludeCategories:
+#IncludeCategories:
 #  - Regex:           '^"(llvm|llvm-c|clang|clang-c)/'
 #    Priority:        2
 #    SortPriority:    0
@@ -108,6 +107,3 @@ UseTab: Never
 # Future options - not supported in clang-format 11
 # BitFieldColonSpacing: Both
 # OperandAlignmentStyle: Align
----
-Language: Json
-BasedOnStyle: llvm
