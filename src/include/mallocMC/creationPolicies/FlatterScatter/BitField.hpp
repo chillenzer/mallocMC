@@ -31,10 +31,12 @@
 
 #include <alpaka/core/Common.hpp>
 #include <alpaka/intrinsic/Traits.hpp>
+
+#include <sys/types.h>
+
 #include <cstdint>
 #include <limits>
 #include <span>
-#include <sys/types.h>
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
@@ -69,7 +71,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     /**
      * @brief Number of bits in a bit mask. Most likely you want a power of two here.
      */
-    constexpr const uint32_t BitMaskSize = 32U;
+    constexpr uint32_t const BitMaskSize = 32U;
 
     /**
      * @brief Type to store the bit masks in. It's implemented as a template in order to facilitate changing the type
@@ -83,7 +85,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
      * @brief Represents a completely filled bit mask, i.e., all bits are one.
      */
     template<uint32_t size = BitMaskSize>
-    static constexpr const BitMaskStorageType<size> allOnes = std::numeric_limits<BitMaskStorageType<size>>::max();
+    static constexpr BitMaskStorageType<size> const allOnes = std::numeric_limits<BitMaskStorageType<size>>::max();
 
     /**
      * @brief Return the bit mask's underlying type with a single bit set (=1) at position index and all others unset

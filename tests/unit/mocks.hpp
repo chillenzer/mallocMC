@@ -47,16 +47,16 @@ inline auto constructAcc()
 }
 
 //
-inline static auto const accPointer = constructAcc();
-inline static auto const& accSerial = *accPointer;
+static inline auto const accPointer = constructAcc();
+static inline auto const& accSerial = *accPointer;
 
 template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 1U, bool T_resetfreedpages = true>
 struct HeapConfig
 {
-    constexpr static auto const accessblocksize = T_blockSize;
-    constexpr static auto const pagesize = T_pageSize;
-    constexpr static auto const wastefactor = T_wasteFactor;
-    constexpr static auto const resetfreedpages = T_resetfreedpages;
+    static constexpr auto const accessblocksize = T_blockSize;
+    static constexpr auto const pagesize = T_pageSize;
+    static constexpr auto const wastefactor = T_wasteFactor;
+    static constexpr auto const resetfreedpages = T_resetfreedpages;
 
     ALPAKA_FN_INLINE ALPAKA_FN_ACC constexpr static auto isInAllowedRange(
         auto const& /*acc*/,
@@ -71,6 +71,6 @@ struct AlignmentPolicy
 {
     struct Properties
     {
-        constexpr static uint32_t const dataAlignment = 1U;
+        static constexpr uint32_t const dataAlignment = 1U;
     };
 };

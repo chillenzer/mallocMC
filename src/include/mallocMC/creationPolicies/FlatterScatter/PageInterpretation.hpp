@@ -30,10 +30,11 @@
 #include "mallocMC/creationPolicies/FlatterScatter/DataPage.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
+#include <unistd.h>
+
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
-#include <unistd.h>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 {
@@ -106,7 +107,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         {
             return reinterpret_cast<void*>(&data.data[index * chunkSize]);
         }
-
 
         /**
          * @brief Lightweight mangling of the hash into a start point for searching in the bit field.

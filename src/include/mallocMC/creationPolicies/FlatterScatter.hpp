@@ -37,12 +37,14 @@
 #include <alpaka/mem/view/ViewPlainPtr.hpp>
 #include <alpaka/vec/Vec.hpp>
 #include <alpaka/workdiv/WorkDivMembers.hpp>
+
+#include <sys/types.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <numeric>
-#include <sys/types.h>
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
@@ -82,7 +84,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 
         size_t heapSize{};
         MyAccessBlock* accessBlocks{};
-        volatile uint32_t block = 0U;
+        uint32_t volatile block = 0U;
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto init() -> void
         {
@@ -91,7 +93,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 accessBlocks[i].init();
             }
         }
-
 
         /**
          * @brief Number of access blocks in the heap. This is a runtime quantity because it depends on the given heap
@@ -129,7 +130,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             return ((hashValue % T_HashConfig::blockStride) + (blockValue * T_HashConfig::blockStride)) % numBlocks();
         }
 
-
         /**
          * @brief Create a pointer to memory of (at least) `bytes` number of bytes..
          *
@@ -137,7 +137,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          * @return Pointer to the memory, nullptr if no usable memory was found.
          */
         template<typename AlpakaAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32_t const bytes) -> void*
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32_t const bytes) -> void*
         {
             auto blockValue = block;
             auto hashValue = T_HashConfig::template hash<T_HeapConfig::pagesize>(acc, bytes);
@@ -169,7 +169,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
          * @param pointer A valid pointer created by `create()`.`
          */
         template<typename AlpakaAcc>
-        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(const AlpakaAcc& acc, void* pointer) -> void
+        ALPAKA_FN_INLINE ALPAKA_FN_ACC auto destroy(AlpakaAcc const& acc, void* pointer) -> void
         {
             // indexOf requires the access block size instead of blockSize in case the reinterpreted AccessBlock
             // object is smaller than blockSize.
@@ -211,8 +211,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         // This class is supposed to be instantiated as a parent for the `DeviceAllocator`.
         Heap() = default;
     };
+
     constexpr uint32_t defaultBlockSize = 128U * 1024U * 1024U;
     constexpr uint32_t defaultPageSize = 128U * 1024U;
+
     /**
      * @class DefaultHeapConfig
      * @brief An example configuration for the heap.
@@ -231,10 +233,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         uint32_t T_wasteFactor = 2U>
     struct DefaultHeapConfig
     {
-        constexpr static uint32_t const accessblocksize = T_blockSize;
-        constexpr static uint32_t const pagesize = T_pageSize;
-        constexpr static uint32_t const wastefactor = T_wasteFactor;
-        constexpr static bool const resetfreedpages = true;
+        static constexpr uint32_t const accessblocksize = T_blockSize;
+        static constexpr uint32_t const pagesize = T_pageSize;
+        static constexpr uint32_t const wastefactor = T_wasteFactor;
+        static constexpr bool const resetfreedpages = true;
 
         /**
          * @brief Determine whether we want to allow an allocation of numBytes on a page with chunk size `chunkSize`.
@@ -257,7 +259,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             return (chunkSize >= numBytes && chunkSize <= wastefactor * numBytes);
         }
     };
-
 
     /**
      * @class DefaultFlatterScatterHashConfig
@@ -283,7 +284,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         template<uint32_t T_pageSize, typename TAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto hash(TAcc const& acc, uint32_t const numBytes) -> uint32_t
         {
-            const uint32_t relative_offset = warpSize<TAcc> * numBytes / T_pageSize;
+            uint32_t const relative_offset = warpSize<TAcc> * numBytes / T_pageSize;
             return (
                 numBytes * hashingK + hashingDistMP * smid(acc)
                 + (hashingDistWP + hashingDistWPRel * relative_offset) * warpid(acc));
@@ -348,7 +349,7 @@ namespace mallocMC::CreationPolicies
             return "FlatterScatter";
         }
 
-        constexpr static auto const providesAvailableSlots = true;
+        static constexpr auto const providesAvailableSlots = true;
 
         /**
          * @brief Check if a pointer returned from `create()` signals out-of-memory.
@@ -414,7 +415,7 @@ namespace mallocMC::CreationPolicies
             alpaka::memset(queue, d_slots, 0, uint32_t{1});
             auto d_slotsPtr = alpaka::getPtrNative(d_slots);
 
-            auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(const AlpakaAcc& acc) -> void
+            auto getAvailableSlotsKernel = [heap, slotSize, d_slotsPtr] ALPAKA_FN_ACC(AlpakaAcc const& acc) -> void
             { *d_slotsPtr = heap->getAvailableSlotsDeviceFunction(acc, slotSize); };
 
             alpaka::wait(queue);
@@ -425,7 +426,7 @@ namespace mallocMC::CreationPolicies
             alpaka::wait(queue);
 
             auto const platform = alpaka::Platform<alpaka::DevCpu>{};
-            const auto hostDev = alpaka::getDevByIdx(platform, 0);
+            auto const hostDev = alpaka::getDevByIdx(platform, 0);
 
             auto h_slots = alpaka::allocBuf<size_t, Idx>(hostDev, Idx{1});
             alpaka::memcpy(queue, h_slots, d_slots);

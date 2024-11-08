@@ -30,6 +30,7 @@
 #include "OldMalloc.hpp"
 
 #include <alpaka/core/Common.hpp>
+
 #include <cstdint>
 
 namespace mallocMC
@@ -54,13 +55,13 @@ namespace mallocMC
             static constexpr auto providesAvailableSlots = false;
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32 bytes) const -> void*
+            ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32 bytes) const -> void*
             {
                 return ::malloc(static_cast<size_t>(bytes));
             }
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC void destroy(const AlpakaAcc& /*acc*/, void* mem) const
+            ALPAKA_FN_ACC void destroy(AlpakaAcc const& /*acc*/, void* mem) const
             {
                 ::free(mem);
             }

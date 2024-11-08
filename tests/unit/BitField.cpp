@@ -30,11 +30,13 @@
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
-#include <cstdint>
 #include <mallocMC/creationPolicies/FlatterScatter/BitField.hpp>
+
+#include <cstdint>
 
 using mallocMC::CreationPolicies::FlatterScatterAlloc::BitFieldFlatImpl;
 using mallocMC::CreationPolicies::FlatterScatterAlloc::BitMaskImpl;
@@ -43,7 +45,6 @@ using BitMaskSizes = std::tuple<
     std::integral_constant<uint32_t, 16U>, // NOLINT(*magic-number*)
     std::integral_constant<uint32_t, 32U>, // NOLINT(*magic-number*)
     std::integral_constant<uint32_t, 64U>>; // NOLINT(*magic-number*)
-
 
 TEMPLATE_LIST_TEST_CASE("BitMask", "", BitMaskSizes)
 {

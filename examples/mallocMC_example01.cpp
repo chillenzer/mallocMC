@@ -29,13 +29,15 @@
 #include "mallocMC/creationPolicies/FlatterScatter.hpp"
 #include "mallocMC/creationPolicies/OldMalloc.hpp"
 
-#include <algorithm>
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
+
+#include <mallocMC/mallocMC.hpp>
+
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
-#include <mallocMC/mallocMC.hpp>
 #include <numeric>
 
 using mallocMC::CreationPolicies::FlatterScatter;
@@ -91,7 +93,7 @@ auto example01() -> int
     constexpr auto length = 100;
 
     auto const platform = alpaka::Platform<Acc>{};
-    const auto dev = alpaka::getDevByIdx(platform, 0);
+    auto const dev = alpaka::getDevByIdx(platform, 0);
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
 
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
@@ -111,13 +113,13 @@ auto example01() -> int
     // create arrays of arrays on the device
     {
         auto createArrayPointers
-            = [] ALPAKA_FN_ACC(const Acc& acc, int x, int y, Allocator::AllocatorHandle allocHandle)
+            = [] ALPAKA_FN_ACC(Acc const& acc, int x, int y, Allocator::AllocatorHandle allocHandle)
         {
             arA<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
             arB<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
             arC<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
         };
-        const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
+        auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
             queue,
             alpaka::createTaskKernel<Acc>(
@@ -130,9 +132,9 @@ auto example01() -> int
 
     // fill 2 of them all with ascending values
     {
-        auto fillArrays = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, Allocator::AllocatorHandle allocHandle)
+        auto fillArrays = [] ALPAKA_FN_ACC(Acc const& acc, int localLength, Allocator::AllocatorHandle allocHandle)
         {
-            const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+            auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             arA<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
             arB<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
@@ -144,7 +146,7 @@ auto example01() -> int
                 arB<Acc>[id][i] = static_cast<int>(id * localLength + i);
             }
         };
-        const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
+        auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
         alpaka::enqueue(
             queue,
             alpaka::createTaskKernel<Acc>(workDiv, fillArrays, length, scatterAlloc.getAllocatorHandle()));
@@ -155,9 +157,9 @@ auto example01() -> int
     {
         auto sumsBufferAcc = alpaka::allocBuf<int, Idx>(dev, Idx{block * grid});
 
-        auto addArrays = [] ALPAKA_FN_ACC(const Acc& acc, int localLength, int* sums)
+        auto addArrays = [] ALPAKA_FN_ACC(Acc const& acc, int localLength, int* sums)
         {
-            const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+            auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             sums[id] = 0;
             for(int i = 0; i < localLength; ++i)
@@ -166,25 +168,25 @@ auto example01() -> int
                 sums[id] += arC<Acc>[id][i];
             }
         };
-        const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
+        auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
         alpaka::enqueue(
             queue,
             alpaka::createTaskKernel<Acc>(workDiv, addArrays, length, alpaka::getPtrNative(sumsBufferAcc)));
 
         auto const platformCPU = alpaka::Platform<alpaka::DevCpu>{};
-        const auto hostDev = alpaka::getDevByIdx(platformCPU, 0);
+        auto const hostDev = alpaka::getDevByIdx(platformCPU, 0);
 
         auto sumsBufferHost = alpaka::allocBuf<int, Idx>(hostDev, Idx{block * grid});
         alpaka::memcpy(queue, sumsBufferHost, sumsBufferAcc, Idx{block * grid});
         alpaka::wait(queue);
 
-        const auto* sumsPtr = alpaka::getPtrNative(sumsBufferHost);
-        const auto sum = std::accumulate(sumsPtr, sumsPtr + block * grid, size_t{0});
+        auto const* sumsPtr = alpaka::getPtrNative(sumsBufferHost);
+        auto const sum = std::accumulate(sumsPtr, sumsPtr + block * grid, size_t{0});
         std::cout << "The sum of the arrays on GPU is " << sum << '\n';
     }
 
-    const auto n = static_cast<size_t>(block * grid * length);
-    const auto gaussian = n * (n - 1);
+    auto const n = static_cast<size_t>(block * grid * length);
+    auto const gaussian = n * (n - 1);
     std::cout << "The gaussian sum as comparison: " << gaussian << '\n';
 
     /*constexpr*/ if(mallocMC::Traits<Allocator>::providesAvailableSlots)
@@ -195,25 +197,25 @@ auto example01() -> int
     }
 
     {
-        auto freeArrays = [] ALPAKA_FN_ACC(const Acc& acc, Allocator::AllocatorHandle allocHandle)
+        auto freeArrays = [] ALPAKA_FN_ACC(Acc const& acc, Allocator::AllocatorHandle allocHandle)
         {
-            const auto id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+            auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
             allocHandle.free(acc, arA<Acc>[id]);
             allocHandle.free(acc, arB<Acc>[id]);
             allocHandle.free(acc, arC<Acc>[id]);
         };
-        const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
+        auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
         alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, freeArrays, scatterAlloc.getAllocatorHandle()));
     }
 
     {
-        auto freeArrayPointers = [] ALPAKA_FN_ACC(const Acc& acc, Allocator::AllocatorHandle allocHandle)
+        auto freeArrayPointers = [] ALPAKA_FN_ACC(Acc const& acc, Allocator::AllocatorHandle allocHandle)
         {
             allocHandle.free(acc, arA<Acc>);
             allocHandle.free(acc, arB<Acc>);
             allocHandle.free(acc, arC<Acc>);
         };
-        const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
+        auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
             queue,
             alpaka::createTaskKernel<Acc>(workDiv, freeArrayPointers, scatterAlloc.getAllocatorHandle()));

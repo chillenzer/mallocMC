@@ -41,9 +41,11 @@
 #include <alpaka/platform/Traits.hpp>
 #include <alpaka/queue/Properties.hpp>
 #include <alpaka/queue/Traits.hpp>
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+
 #include <cstdint>
 #include <cstring>
 #include <iterator>
@@ -193,7 +195,7 @@ TEMPLATE_LIST_TEST_CASE("AccessBlock", "", AccessBlocks)
             // all pages have a chunk size set at the end. And none of those is `chunkSize`.
             for(uint32_t index = 0; index < accessBlock.numPages(); ++index)
             {
-                const auto differentChunkSize = chunkSize + 1U + index;
+                auto const differentChunkSize = chunkSize + 1U + index;
                 REQUIRE(chunkSize != differentChunkSize);
                 accessBlock.create(accSerial, differentChunkSize);
             }

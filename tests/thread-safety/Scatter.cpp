@@ -35,7 +35,6 @@
 #include "mallocMC/mallocMC_utils.hpp"
 #include "mallocMC/oOMPolicies/ReturnNull.hpp"
 
-#include <algorithm>
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
 #include <alpaka/acc/Tag.hpp>
@@ -56,9 +55,12 @@
 #include <alpaka/queue/Traits.hpp>
 #include <alpaka/vec/Vec.hpp>
 #include <alpaka/workdiv/WorkDivHelpers.hpp>
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_all.hpp>
+
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -81,11 +83,11 @@ constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 2U>
 struct ScatterHeapConfig
 {
-    constexpr static uint32_t const accessblocksize = T_blockSize;
-    constexpr static uint32_t const pagesize = T_pageSize;
-    constexpr static uint32_t const wastefactor = T_wasteFactor;
-    constexpr static uint32_t const regionsize = 1U;
-    constexpr static bool const resetfreedpages = true;
+    static constexpr uint32_t const accessblocksize = T_blockSize;
+    static constexpr uint32_t const pagesize = T_pageSize;
+    static constexpr uint32_t const wastefactor = T_wasteFactor;
+    static constexpr uint32_t const regionsize = 1U;
+    static constexpr bool const resetfreedpages = true;
 };
 
 using MyScatter = mallocMC::CreationPolicies::Scatter<
@@ -183,7 +185,6 @@ struct CreateUntilSuccess
             });
     }
 };
-
 
 struct Destroy
 {
@@ -540,7 +541,6 @@ struct CreateAllChunkSizes
             });
     }
 };
-
 
 TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 {

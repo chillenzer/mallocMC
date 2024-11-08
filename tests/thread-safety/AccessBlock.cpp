@@ -30,7 +30,6 @@
 #include "../unit/mocks.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
-#include <algorithm>
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
 #include <alpaka/acc/Tag.hpp>
@@ -51,9 +50,12 @@
 #include <alpaka/queue/Traits.hpp>
 #include <alpaka/vec/Vec.hpp>
 #include <alpaka/workdiv/WorkDivHelpers.hpp>
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_all.hpp>
+
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -165,7 +167,6 @@ struct CreateUntilSuccess
     }
 };
 
-
 struct Destroy
 {
     template<typename TAcc>
@@ -194,7 +195,6 @@ struct IsValid
             [&acc, accessBlock](auto pointer) { return accessBlock->isValid(acc, pointer); });
     }
 };
-
 
 using Host = alpaka::AccCpuSerial<Dim, Idx>;
 
@@ -329,6 +329,7 @@ auto freeAllButOneOnFirstPage(
     alpaka::wait(queue);
     return pointer1;
 }
+
 struct CheckContent
 {
     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* content, span<void*> pointers, auto* results, auto chunkSize)
@@ -442,6 +443,7 @@ struct FillAllUpAndWriteToThem
         }
     }
 };
+
 struct CreateAndDestroMultipleTimes
 {
     ALPAKA_FN_ACC auto operator()(auto const& acc, auto* accessBlock, span<void*> pointers, auto chunkSize) const

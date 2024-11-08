@@ -26,6 +26,7 @@
 
 
 #include <alpaka/core/Common.hpp>
+
 #include <cstdint>
 
 /**

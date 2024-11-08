@@ -28,6 +28,7 @@
 #pragma once
 
 #include <alpaka/alpaka.hpp>
+
 #include <memory>
 #include <string>
 
@@ -39,7 +40,7 @@ namespace mallocMC
         struct AlpakaBuf
         {
             template<typename AlpakaDev>
-            auto setMemPool(const AlpakaDev& dev, size_t memsize) -> void*
+            auto setMemPool(AlpakaDev const& dev, size_t memsize) -> void*
             {
                 poolBuffer = std::make_unique<PoolBufferType>(alpaka::allocBuf<unsigned char, size_t>(dev, memsize));
                 return alpaka::getPtrNative(*poolBuffer);

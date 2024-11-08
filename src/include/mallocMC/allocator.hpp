@@ -34,6 +34,7 @@
 #include "mallocMC_traits.hpp"
 
 #include <alpaka/alpaka.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <sstream>
@@ -166,7 +167,7 @@ namespace mallocMC
 
         /* forbid to copy the allocator */
         ALPAKA_FN_HOST
-        Allocator(const Allocator&) = delete;
+        Allocator(Allocator const&) = delete;
 
     public:
         template<typename AlpakaDevice, typename AlpakaQueue>

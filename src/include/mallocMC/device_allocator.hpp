@@ -32,6 +32,7 @@
 #include "mallocMC_traits.hpp"
 
 #include <alpaka/core/Common.hpp>
+
 #include <cstdint>
 #include <cstdio>
 
@@ -67,7 +68,7 @@ namespace mallocMC
         using AlignmentPolicy = T_AlignmentPolicy;
 
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC auto malloc(const AlpakaAcc& acc, size_t bytes) -> void*
+        ALPAKA_FN_ACC auto malloc(AlpakaAcc const& acc, size_t bytes) -> void*
         {
             if(bytes == 0U)
             {
@@ -75,7 +76,7 @@ namespace mallocMC
             }
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
-            const uint32 req_size = distributionPolicy.collect(acc, bytes);
+            uint32 const req_size = distributionPolicy.collect(acc, bytes);
             void* memBlock = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::create(acc, req_size);
             if(CreationPolicy::isOOM(memBlock, req_size))
             {
@@ -85,7 +86,7 @@ namespace mallocMC
         }
 
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC void free(const AlpakaAcc& acc, void* pointer)
+        ALPAKA_FN_ACC void free(AlpakaAcc const& acc, void* pointer)
         {
             if(pointer != nullptr)
             {
@@ -102,7 +103,7 @@ namespace mallocMC
          * device side 0 will be returned.
          */
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC auto getAvailableSlots(const AlpakaAcc& acc, size_t slotSize) -> unsigned
+        ALPAKA_FN_ACC auto getAvailableSlots(AlpakaAcc const& acc, size_t slotSize) -> unsigned
         {
             slotSize = AlignmentPolicy::applyPadding(slotSize);
             if constexpr(Traits<DeviceAllocator>::providesAvailableSlots)

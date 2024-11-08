@@ -29,10 +29,12 @@
 #include <alpaka/acc/AccCpuThreads.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/atomic/Traits.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
-#include <cstdint>
 #include <mallocMC/creationPolicies/FlatterScatter/BitField.hpp>
+
+#include <cstdint>
 #include <stop_token>
 #include <thread>
 
@@ -65,7 +67,7 @@ TEST_CASE("Threaded BitMask")
 
         uint32_t result = BitMaskSize;
         auto noiseThread = std::jthread(
-            [&mask, firstFreeIndex](const std::stop_token& stopToken)
+            [&mask, firstFreeIndex](std::stop_token const& stopToken)
             {
                 while(not stopToken.stop_requested())
                 {

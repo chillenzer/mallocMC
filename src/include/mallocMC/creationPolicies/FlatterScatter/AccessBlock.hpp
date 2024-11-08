@@ -31,7 +31,6 @@
 #include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
-#include <algorithm>
 #include <alpaka/core/Common.hpp>
 #include <alpaka/core/Positioning.hpp>
 #include <alpaka/idx/Accessors.hpp>
@@ -41,11 +40,14 @@
 #include <alpaka/mem/view/ViewPlainPtr.hpp>
 #include <alpaka/vec/Vec.hpp>
 #include <alpaka/workdiv/WorkDivMembers.hpp>
+
+#include <sys/types.h>
+
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <iterator>
 #include <numeric>
-#include <sys/types.h>
 #include <vector>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
@@ -98,10 +100,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     class AccessBlock
     {
     protected:
-        constexpr static uint32_t const blockSize = T_HeapConfig::accessblocksize;
-        constexpr static uint32_t const pageSize = T_HeapConfig::pagesize;
-        constexpr static uint32_t const wasteFactor = T_HeapConfig::wastefactor;
-        constexpr static bool const resetfreedpages = T_HeapConfig::resetfreedpages;
+        static constexpr uint32_t const blockSize = T_HeapConfig::accessblocksize;
+        static constexpr uint32_t const pageSize = T_HeapConfig::pagesize;
+        static constexpr uint32_t const wasteFactor = T_HeapConfig::wastefactor;
+        static constexpr bool const resetfreedpages = T_HeapConfig::resetfreedpages;
 
         using MyPageInterpretation = PageInterpretation<pageSize, T_AlignmentPolicy::Properties::dataAlignment>;
 
@@ -122,6 +124,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 MyPageInterpretation(page, dummyChunkSize).cleanupFull();
             }
         }
+
         /**
          * @brief Compute the number of pages in the access block taking into account the space needed for metadata.
          *
@@ -197,8 +200,8 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 return true;
             }
             return chunkSize == 0U or atomicLoad(acc, pageTable.fillingLevels[index]) == 0U
-                ? false
-                : interpret(index, chunkSize).isValid(acc, pointer);
+                       ? false
+                       : interpret(index, chunkSize).isValid(acc, pointer);
         }
 
         /**
@@ -324,8 +327,8 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                         = MyPageInterpretation::numChunks(localChunkSize == 0 ? chunkSize : localChunkSize);
                     return ((this->isInAllowedRange(acc, localChunkSize, chunkSize) or localChunkSize == 0U)
                             and fillingLevel < numChunks)
-                        ? numChunks - fillingLevel
-                        : 0U;
+                               ? numChunks - fillingLevel
+                               : 0U;
                 });
         }
 
@@ -463,7 +466,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             }
         }
 
-
         /**
          * @brief Set the chunk sizes of a contiguous array of pages.
          *
@@ -569,7 +571,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             } while(isValidPageIdx(index) and pointer == nullptr);
             return pointer;
         }
-
 
         /**
          * @brief Main loop running over all pages checking for available ones.

@@ -41,9 +41,11 @@
 #include <alpaka/platform/Traits.hpp>
 #include <alpaka/queue/Properties.hpp>
 #include <alpaka/queue/Traits.hpp>
-#include <array>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
@@ -114,19 +116,19 @@ TEST_CASE("PageInterpretation")
         CHECK(
             page.maxBitFieldSize()
             == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(1U), BitMaskSize)
-                * sizeof(BitMask));
+                   * sizeof(BitMask));
         CHECK(
             PageInterpretation<pageSize, 32U>::maxBitFieldSize()
             == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(32U), BitMaskSize)
-                * sizeof(BitMask));
+                   * sizeof(BitMask));
         CHECK(
             PageInterpretation<pageSize, 16U>::maxBitFieldSize()
             == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(16U), BitMaskSize)
-                * sizeof(BitMask));
+                   * sizeof(BitMask));
         CHECK(
             PageInterpretation<pageSize, 17U>::maxBitFieldSize()
             == mallocMC::ceilingDivision(PageInterpretation<pageSize, 1U>::numChunks(17U), BitMaskSize)
-                * sizeof(BitMask));
+                   * sizeof(BitMask));
     }
 
     SECTION("reports numChunks that fit the page.")
@@ -213,8 +215,9 @@ TEST_CASE("PageInterpretation.create")
 TEST_CASE("PageInterpretation.destroy")
 {
     // Such that we can fit up to four levels of hierarchy in there:
-    constexpr uint32_t const pageSize = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
-        + BitMaskSize * BitMaskSize * BitMaskSize * static_cast<uint32_t>(sizeof(BitMask));
+    constexpr uint32_t const pageSize
+        = BitMaskSize * BitMaskSize * BitMaskSize * BitMaskSize
+          + BitMaskSize * BitMaskSize * BitMaskSize * static_cast<uint32_t>(sizeof(BitMask));
     // This is more than 8MB which is a typical stack's size. Let's save us some trouble and create it on the heap.
     std::unique_ptr<DataPage<pageSize>> actualData{new DataPage<pageSize>};
     DataPage<pageSize>& data{*actualData};
@@ -309,4 +312,5 @@ TEST_CASE("PageInterpretation.destroy")
         }
     }
 }
+
 // NOLINTEND(*widening*)
