@@ -32,11 +32,13 @@ constexpr auto ELEMS_PER_SLOT = 750;
 
 #include "verify_heap_config.hpp"
 
-#include <algorithm>
 #include <alpaka/alpaka.hpp>
+
+#include <mallocMC/mallocMC_utils.hpp>
+
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
-#include <mallocMC/mallocMC_utils.hpp>
 #include <sstream>
 #include <typeinfo>
 #include <vector>
@@ -50,8 +52,8 @@ bool verbose = false;
 // the type of the elements to allocate
 using allocElem_t = unsigned long long;
 
-auto run_heap_verification(const size_t, const unsigned, unsigned, const bool) -> bool;
-void parse_cmdline(const int, char**, size_t*, unsigned*, unsigned*, bool*);
+auto run_heap_verification(size_t const, unsigned const, unsigned, bool const) -> bool;
+void parse_cmdline(int const, char**, size_t*, unsigned*, unsigned*, bool*);
 void print_help(char**);
 
 // used to create an empty stream for non-verbose output
@@ -92,7 +94,7 @@ auto main(int argc, char** argv) -> int
 
     parse_cmdline(argc, argv, &heapInMB, &threads, &blocks, &machine_readable);
 
-    const auto correct = run_heap_verification(heapInMB, threads, blocks, machine_readable);
+    auto const correct = run_heap_verification(heapInMB, threads, blocks, machine_readable);
     if(!machine_readable || verbose)
     {
         if(correct)
@@ -120,7 +122,7 @@ auto main(int argc, char** argv) -> int
  * @param blocks will be filled with number of blocks, if given as a parameter
  */
 void parse_cmdline(
-    const int argc,
+    int const argc,
     char** argv,
     size_t* heapInMB,
     unsigned* threads,
@@ -241,22 +243,22 @@ void print_help(char** argv)
 struct Check_content
 {
     ALPAKA_FN_ACC void operator()(
-        const Acc& acc,
+        Acc const& acc,
         allocElem_t** data,
         unsigned long long* counter,
         unsigned long long* globalSum,
-        const size_t nSlots,
+        size_t const nSlots,
         int* correct) const
     {
         unsigned long long sum = 0;
         while(true)
         {
-            const size_t pos = alpaka::atomicOp<alpaka::AtomicAdd>(acc, counter, 1ull);
+            size_t const pos = alpaka::atomicOp<alpaka::AtomicAdd>(acc, counter, 1ull);
             if(pos >= nSlots)
             {
                 break;
             }
-            const size_t offset = pos * ELEMS_PER_SLOT;
+            size_t const offset = pos * ELEMS_PER_SLOT;
             for(size_t i = 0; i < ELEMS_PER_SLOT; ++i)
             {
                 if(static_cast<allocElem_t>(data[pos][i]) != static_cast<allocElem_t>(offset + i))
@@ -290,10 +292,10 @@ struct Check_content
 struct Check_content_fast
 {
     ALPAKA_FN_ACC void operator()(
-        const Acc& acc,
+        Acc const& acc,
         allocElem_t** data,
         unsigned long long* counter,
-        const size_t nSlots,
+        size_t const nSlots,
         int* correct) const
     {
         int c = 1;
@@ -304,7 +306,7 @@ struct Check_content_fast
             {
                 break;
             }
-            const size_t offset = pos * ELEMS_PER_SLOT;
+            size_t const offset = pos * ELEMS_PER_SLOT;
             for(size_t i = 0; i < ELEMS_PER_SLOT; ++i)
             {
                 if(static_cast<allocElem_t>(data[pos][i]) != static_cast<allocElem_t>(offset + i))
@@ -333,7 +335,7 @@ struct Check_content_fast
 struct AllocAll
 {
     ALPAKA_FN_ACC void operator()(
-        const Acc& acc,
+        Acc const& acc,
         allocElem_t** data,
         unsigned long long* counter,
         unsigned long long* globalSum,
@@ -347,7 +349,7 @@ struct AllocAll
                 break;
 
             size_t pos = alpaka::atomicOp<alpaka::AtomicAdd>(acc, counter, 1ull);
-            const size_t offset = pos * ELEMS_PER_SLOT;
+            size_t const offset = pos * ELEMS_PER_SLOT;
             for(size_t i = 0; i < ELEMS_PER_SLOT; ++i)
             {
                 p[i] = static_cast<allocElem_t>(offset + i);
@@ -371,10 +373,10 @@ struct AllocAll
 struct DeallocAll
 {
     ALPAKA_FN_ACC void operator()(
-        const Acc& acc,
+        Acc const& acc,
         allocElem_t** data,
         unsigned long long* counter,
-        const size_t nSlots,
+        size_t const nSlots,
         ScatterAllocator::AllocatorHandle mMC) const
     {
         while(true)
@@ -398,7 +400,7 @@ struct DeallocAll
  */
 struct DamageElement
 {
-    ALPAKA_FN_ACC void operator()(const Acc& acc, allocElem_t** data) const
+    ALPAKA_FN_ACC void operator()(Acc const& acc, allocElem_t** data) const
     {
         data[1][0] = static_cast<allocElem_t>(5 * ELEMS_PER_SLOT - 1);
     }
@@ -419,13 +421,13 @@ struct DamageElement
  * @param threads the number of CUDA threads per block
  */
 void allocate(
-    const Device& dev,
+    Device const& dev,
     Queue& queue,
     alpaka::Buf<Device, allocElem_t*, Dim, Idx>& d_testData,
     unsigned long long* nSlots,
     unsigned long long* sum,
-    const unsigned blocks,
-    const unsigned threads,
+    unsigned const blocks,
+    unsigned const threads,
     ScatterAllocator& mMC)
 {
     dout() << "allocating on device...";
@@ -436,7 +438,7 @@ void allocate(
     alpaka::memset(queue, d_sum, 0, 1);
     alpaka::memset(queue, d_nSlots, 0, 1);
 
-    const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
+    auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
     alpaka::enqueue(
         queue,
         alpaka::createTaskKernel<Acc>(
@@ -448,7 +450,7 @@ void allocate(
             mMC.getAllocatorHandle()));
 
     auto const platform = alpaka::Platform<alpaka::DevCpu>{};
-    const auto hostDev = alpaka::getDevByIdx(platform, 0);
+    auto const hostDev = alpaka::getDevByIdx(platform, 0);
 
     auto h_sum = alpaka::allocBuf<unsigned long long, Idx>(hostDev, Idx{1});
     auto h_nSlots = alpaka::allocBuf<unsigned long long, Idx>(hostDev, Idx{1});
@@ -477,17 +479,17 @@ void allocate(
  * @return true if the verification was successful, false otherwise
  */
 auto verify(
-    const Device& dev,
+    Device const& dev,
     Queue& queue,
     alpaka::Buf<Device, allocElem_t*, Dim, Idx>& d_testData,
-    const unsigned long long nSlots,
-    const unsigned blocks,
-    const unsigned threads) -> bool
+    unsigned long long const nSlots,
+    unsigned const blocks,
+    unsigned const threads) -> bool
 {
     dout() << "verifying on device... ";
 
     auto const platform = alpaka::Platform<alpaka::DevCpu>{};
-    const auto hostDev = alpaka::getDevByIdx(platform, 0);
+    auto const hostDev = alpaka::getDevByIdx(platform, 0);
 
     auto h_correct = alpaka::allocBuf<int, Idx>(hostDev, Idx{1});
     *alpaka::getPtrNative(h_correct) = 1;
@@ -503,7 +505,7 @@ auto verify(
     // can be replaced by a call to check_content_fast,
     // if the gaussian sum (see below) is not used and you
     // want to be a bit faster
-    const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
+    auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
     alpaka::enqueue(
         queue,
         alpaka::createTaskKernel<Acc>(
@@ -518,7 +520,7 @@ auto verify(
     alpaka::memcpy(queue, h_correct, d_correct, 1);
     alpaka::wait(queue);
 
-    const auto correct = *alpaka::getPtrNative(h_correct);
+    auto const correct = *alpaka::getPtrNative(h_correct);
     dout() << (correct ? "done\n" : "failed\n");
     return correct != 0;
 }
@@ -529,22 +531,22 @@ auto verify(
  * for params, see run_heap_verification-internal parameters
  */
 void print_machine_readable(
-    const unsigned pagesize,
-    const unsigned accessblocks,
-    const unsigned regionsize,
-    const unsigned wastefactor,
-    const bool resetfreedpages,
-    const unsigned blocks,
-    const unsigned threads,
-    const unsigned elemsPerSlot,
-    const size_t allocElemSize,
-    const size_t heapSize,
-    const size_t maxSpace,
-    const size_t maxSlots,
-    const unsigned long long usedSlots,
-    const float allocFrac,
-    const size_t wasted,
-    const bool correct)
+    unsigned const pagesize,
+    unsigned const accessblocks,
+    unsigned const regionsize,
+    unsigned const wastefactor,
+    bool const resetfreedpages,
+    unsigned const blocks,
+    unsigned const threads,
+    unsigned const elemsPerSlot,
+    size_t const allocElemSize,
+    size_t const heapSize,
+    size_t const maxSpace,
+    size_t const maxSlots,
+    unsigned long long const usedSlots,
+    float const allocFrac,
+    size_t const wasted,
+    bool const correct)
 {
     std::string sep = ",";
     std::stringstream h;
@@ -616,21 +618,21 @@ void print_machine_readable(
  * @return true if the verification was successful,
  *         false otherwise
  */
-auto run_heap_verification(const size_t heapMB, const unsigned blocks, unsigned threads, const bool machine_readable)
+auto run_heap_verification(size_t const heapMB, unsigned const blocks, unsigned threads, bool const machine_readable)
     -> bool
 {
     auto const platform = alpaka::Platform<Acc>{};
-    const auto dev = alpaka::getDevByIdx(platform, 0);
+    auto const dev = alpaka::getDevByIdx(platform, 0);
     auto queue = Queue{dev};
 
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
     threads = std::min(static_cast<size_t>(threads), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
-    const size_t heapSize = size_t(1024U * 1024U) * heapMB;
-    const size_t slotSize = sizeof(allocElem_t) * ELEMS_PER_SLOT;
-    const size_t nPointers = (heapSize + slotSize - 1) / slotSize;
-    const size_t maxSlots = heapSize / slotSize;
-    const size_t maxSpace = maxSlots * slotSize + nPointers * sizeof(allocElem_t*);
+    size_t const heapSize = size_t(1024U * 1024U) * heapMB;
+    size_t const slotSize = sizeof(allocElem_t) * ELEMS_PER_SLOT;
+    size_t const nPointers = (heapSize + slotSize - 1) / slotSize;
+    size_t const maxSlots = heapSize / slotSize;
+    size_t const maxSpace = maxSlots * slotSize + nPointers * sizeof(allocElem_t*);
     bool correct = true;
 
     dout() << "CreationPolicy Arguments:\n";
@@ -675,7 +677,7 @@ auto run_heap_verification(const size_t heapMB, const unsigned blocks, unsigned 
         // damaging one cell
         dout() << "damaging of element... ";
         {
-            const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
+            auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
             alpaka::enqueue(
                 queue,
                 alpaka::createTaskKernel<Acc>(workDiv, DamageElement{}, alpaka::getPtrNative(d_testData)));
@@ -692,7 +694,7 @@ auto run_heap_verification(const size_t heapMB, const unsigned blocks, unsigned 
         auto d_dealloc_counter = alpaka::allocBuf<unsigned long long, Idx>(dev, Idx{1});
         alpaka::memset(queue, d_dealloc_counter, 0, 1);
         {
-            const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
+            auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{blocks}, Idx{threads}, Idx{1}};
             alpaka::enqueue(
                 queue,
                 alpaka::createTaskKernel<Acc>(

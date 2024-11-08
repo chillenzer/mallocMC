@@ -62,6 +62,7 @@ namespace mallocMC
     public:
         using type = unsigned int;
     };
+
     template<>
     class __PointerEquivalent<8>
     {
@@ -161,7 +162,6 @@ namespace mallocMC
 #endif
     }
 
-
     ALPAKA_FN_ACC inline auto activemask()
     {
 #if defined(__CUDA_ARCH__)
@@ -194,9 +194,9 @@ namespace mallocMC
      * @return warp id within the block
      */
     template<typename AlpakaAcc>
-    ALPAKA_FN_ACC inline auto warpid_withinblock(const AlpakaAcc& acc) -> std::uint32_t
+    ALPAKA_FN_ACC inline auto warpid_withinblock(AlpakaAcc const& acc) -> std::uint32_t
     {
-        const auto localId = alpaka::mapIdx<1>(
+        auto const localId = alpaka::mapIdx<1>(
             alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc),
             alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc))[0];
         return localId / warpSize;

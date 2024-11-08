@@ -30,6 +30,7 @@
 #include "BadAllocException.hpp"
 
 #include <alpaka/core/Common.hpp>
+
 #include <cassert>
 #include <string>
 

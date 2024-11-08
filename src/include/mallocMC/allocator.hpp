@@ -35,6 +35,7 @@
 #include "mallocMC_utils.hpp"
 
 #include <alpaka/alpaka.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <sstream>
@@ -140,7 +141,7 @@ namespace mallocMC
          * compile time. The volatile workaround has no negative effects on the
          * register usage in CUDA.
          */
-        alloc(AlpakaDevice& dev, AlpakaQueue& queue, volatile size_t size)
+        alloc(AlpakaDevice& dev, AlpakaQueue& queue, size_t volatile size)
         {
             void* pool = reservePolicy.setMemPool(dev, size);
             std::tie(pool, size) = AlignmentPolicy::alignPool(pool, size);
@@ -173,7 +174,7 @@ namespace mallocMC
 
         /* forbid to copy the allocator */
         ALPAKA_FN_HOST
-        Allocator(const Allocator&) = delete;
+        Allocator(Allocator const&) = delete;
 
     public:
         template<typename AlpakaDevice, typename AlpakaQueue>

@@ -26,12 +26,14 @@
   THE SOFTWARE.
 */
 
-#include <algorithm>
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
+
+#include <mallocMC/mallocMC.hpp>
+
+#include <algorithm>
 #include <cassert>
 #include <iostream>
-#include <mallocMC/mallocMC.hpp>
 #include <numeric>
 #include <vector>
 
@@ -75,14 +77,14 @@ ALPAKA_STATIC_ACC_MEM_GLOBAL int* arA = nullptr;
 
 struct ExampleKernel
 {
-    ALPAKA_FN_ACC void operator()(const Acc& acc, ScatterAllocator::AllocatorHandle allocHandle) const
+    ALPAKA_FN_ACC void operator()(Acc const& acc, ScatterAllocator::AllocatorHandle allocHandle) const
     {
-        const auto id = static_cast<uint32_t>(alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]);
+        auto const id = static_cast<uint32_t>(alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]);
         if(id == 0)
             arA = (int*) allocHandle.malloc(acc, sizeof(int) * 32);
         // wait the the malloc from thread zero is not changing the result for some threads
         alpaka::syncBlockThreads(acc);
-        const auto slots = allocHandle.getAvailableSlots(acc, 1);
+        auto const slots = allocHandle.getAvailableSlots(acc, 1);
         if(arA != nullptr)
         {
             arA[id] = id;
@@ -101,14 +103,14 @@ struct ExampleKernel
 auto main() -> int
 {
     auto const platform = alpaka::Platform<Acc>{};
-    const auto dev = alpaka::getDevByIdx(platform, 0);
+    auto const dev = alpaka::getDevByIdx(platform, 0);
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
     unsigned const block = std::min(static_cast<size_t>(32u), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
     ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
 
-    const auto workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{block}, Idx{1}};
+    auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{block}, Idx{1}};
     alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel{}, scatterAlloc.getAllocatorHandle()));
 
     std::cout << "Slots from Host: " << scatterAlloc.getAvailableSlots(dev, queue, 1) << '\n';
