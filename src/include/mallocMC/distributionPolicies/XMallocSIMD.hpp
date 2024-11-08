@@ -37,6 +37,7 @@
 #include "XMallocSIMD.hpp"
 
 #include <alpaka/alpaka.hpp>
+
 #include <cstdint>
 #include <limits>
 #include <sstream>
@@ -88,7 +89,7 @@ namespace mallocMC
             using Properties = T_Config;
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC XMallocSIMD(const AlpakaAcc& acc)
+            ALPAKA_FN_ACC XMallocSIMD(AlpakaAcc const& acc)
                 : can_use_coalescing(false)
                 , warpid(warpid_withinblock(acc))
                 , myoffset(0)
@@ -116,7 +117,7 @@ namespace mallocMC
             static constexpr uint32 _pagesize = pagesize;
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC auto collect(const AlpakaAcc& acc, uint32 bytes) -> uint32
+            ALPAKA_FN_ACC auto collect(AlpakaAcc const& acc, uint32 bytes) -> uint32
             {
                 can_use_coalescing = false;
                 myoffset = 0;
@@ -129,7 +130,7 @@ namespace mallocMC
 
                 // second half: make sure that all coalesced allocations can fit
                 // within one page necessary for offset calculation
-                const bool coalescible = bytes > 0 && bytes < (pagesize / 32);
+                bool const coalescible = bytes > 0 && bytes < (pagesize / 32);
 
 #if(MALLOCMC_DEVICE_COMPILE)
                 threadcount = popc(ballot(coalescible));
@@ -150,7 +151,7 @@ namespace mallocMC
             }
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC auto distribute(const AlpakaAcc& acc, void* allocatedMem) -> void*
+            ALPAKA_FN_ACC auto distribute(AlpakaAcc const& acc, void* allocatedMem) -> void*
             {
                 auto& warp_res = alpaka::declareSharedVar<char * [maxThreadsPerBlock / warpSize], __COUNTER__>(acc);
 

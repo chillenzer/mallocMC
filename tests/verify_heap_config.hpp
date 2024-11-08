@@ -30,6 +30,7 @@
 
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
+
 #include <mallocMC/mallocMC.hpp>
 
 using Dim = alpaka::DimInt<1>;

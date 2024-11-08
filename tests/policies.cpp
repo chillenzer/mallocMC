@@ -26,6 +26,7 @@
 */
 
 #include <alpaka/alpaka.hpp>
+
 #include <catch2/catch.hpp>
 #include <mallocMC/mallocMC.hpp>
 
@@ -64,7 +65,7 @@ template<typename ScatterAllocator>
 void run()
 {
     auto const platform = alpaka::Platform<Acc>{};
-    const auto dev = alpaka::getDevByIdx(platform, 0);
+    auto const dev = alpaka::getDevByIdx(platform, 0);
 
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
 
@@ -73,7 +74,7 @@ void run()
         queue,
         alpaka::createTaskKernel<Acc>(
             alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}},
-            [] ALPAKA_FN_ACC(const Acc& acc, typename ScatterAllocator::AllocatorHandle allocHandle)
+            [] ALPAKA_FN_ACC(Acc const& acc, typename ScatterAllocator::AllocatorHandle allocHandle)
             {
                 auto* ptr = allocHandle.malloc(acc, sizeof(int) * 1000);
                 allocHandle.free(acc, ptr);
