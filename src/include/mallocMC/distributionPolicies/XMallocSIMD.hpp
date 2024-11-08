@@ -38,6 +38,7 @@
 
 #include <alpaka/alpaka.hpp>
 #include <alpaka/warp/Traits.hpp>
+
 #include <cstdint>
 #include <limits>
 #include <sstream>

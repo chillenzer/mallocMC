@@ -76,7 +76,7 @@ namespace mallocMC
             }
             bytes = AlignmentPolicy::applyPadding(bytes);
             DistributionPolicy distributionPolicy(acc);
-            const uint32 req_size = distributionPolicy.collect(acc, bytes);
+            uint32 const req_size = distributionPolicy.collect(acc, bytes);
             void* memBlock = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::create(acc, req_size);
             if(CreationPolicy::isOOM(memBlock, req_size))
             {
@@ -86,7 +86,7 @@ namespace mallocMC
         }
 
         template<typename AlpakaAcc>
-        ALPAKA_FN_ACC void free(const AlpakaAcc& acc, void* pointer)
+        ALPAKA_FN_ACC void free(AlpakaAcc const& acc, void* pointer)
         {
             if(pointer != nullptr)
             {

@@ -55,7 +55,7 @@ namespace mallocMC
             static constexpr auto providesAvailableSlots = false;
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC auto create(const AlpakaAcc& acc, uint32 bytes) const -> void*
+            ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32 bytes) const -> void*
             {
                 return ::malloc(static_cast<size_t>(bytes));
             }

@@ -36,6 +36,7 @@
 
 #include <alpaka/alpaka.hpp>
 #include <alpaka/core/Common.hpp>
+
 #include <sys/types.h>
 
 #ifdef _MSC_VER
@@ -104,7 +105,7 @@ namespace mallocMC
     template<typename TDim, typename TIdx>
     // ALPAKA_FN_ACC resolves to `__host__ __device__` if we're not in CUDA_ONLY_MODE. But the assembly instruction is
     // specific to the device and cannot be compiled on the host. So, we need an explicit `__device__` here.`
-    __device__ inline auto warpid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
+    inline __device__ auto warpid(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/) -> uint32_t
     {
         std::uint32_t mywarpid = 0;
         asm("mov.u32 %0, %%warpid;" : "=r"(mywarpid));
