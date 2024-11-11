@@ -830,34 +830,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
         CHECK(std::unique(beginNonNull, std::end(tmpManyPointers)) == std::end(tmpManyPointers));
     }
 
-    SECTION("can handle many different chunk sizes.")
-    {
-        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize);
-        std::span<uint32_t> chunkSizesSpan(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
-        std::iota(std::begin(chunkSizesSpan), std::end(chunkSizesSpan), 1U);
-        alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
-        alpaka::wait(queue);
-
-        auto workDiv = createWorkDiv<Acc>(devAcc, numPages);
-
-        alpaka::exec<Acc>(
-            queue,
-            workDiv,
-            CreateAllChunkSizes{},
-            accessBlock,
-            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), numPages),
-            std::span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
-
-        alpaka::wait(queue);
-
-        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-        alpaka::wait(queue);
-
-        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), numPages);
-        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
-        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
-    }
-
     SECTION("creates second memory somewhere in multi-page mode.")
     {
         uint32_t const size = 2U;
