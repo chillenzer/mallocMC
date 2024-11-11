@@ -254,7 +254,7 @@ auto setup()
 }
 
 template<typename TAcc>
-auto createWorkDiv(auto const& devAcc, auto const numElements) -> alpaka::WorkDivMembers<Dim, Idx>
+auto createWorkDiv(auto const& devAcc, auto const numElements, auto... args) -> alpaka::WorkDivMembers<Dim, Idx>
 {
     if constexpr(std::is_same_v<alpaka::AccToTag<TAcc>, alpaka::TagCpuSerial>)
     {
@@ -262,7 +262,9 @@ auto createWorkDiv(auto const& devAcc, auto const numElements) -> alpaka::WorkDi
     }
     else
     {
-        return alpaka::getValidWorkDiv<TAcc>(devAcc, {numElements}, {1U});
+        alpaka::KernelCfg<TAcc> const kernelCfg
+            = {numElements, 1, false, alpaka::GridBlockExtentSubDivRestrictions::Unrestricted};
+        return alpaka::getValidWorkDiv<TAcc>(kernelCfg, devAcc, args...);
     }
 }
 
@@ -314,10 +316,10 @@ auto freeAllButOneOnFirstPage(auto& queue, auto* accessBlock, auto& pointers)
     alpaka::wait(queue);
     auto size = pointers.m_extents[0] / numPages - 1;
     // Delete all other chunks on page 0.
-    auto workDiv = createWorkDiv<TAcc>(pointers.m_devAcc, size);
-    alpaka::exec<TAcc>(
+    customExec<TAcc>(
         queue,
-        workDiv,
+        pointers.m_devAcc,
+        size,
         Destroy{},
         accessBlock,
         span<void*>(alpaka::getPtrNative(pointers.m_onDevice) + 1U, size));
@@ -542,6 +544,14 @@ struct CreateAllChunkSizes
     }
 };
 
+template<typename TAcc>
+auto customExec(auto& queue, auto const& devAcc, auto const numElements, auto... args)
+{
+    auto workDiv = createWorkDiv<TAcc>(devAcc, numElements, args...);
+    alpaka::exec<TAcc>(queue, workDiv, args...);
+    return workDiv;
+}
+
 TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 {
     using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
@@ -569,10 +579,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
     SECTION("creates second memory somewhere else.")
     {
         uint32_t const size = 2U;
-        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            size,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
@@ -587,10 +597,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 
     SECTION("creates memory of different chunk size in different pages.")
     {
-        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            2U,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
@@ -612,10 +622,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
         // There is a single chunk available.
         // We try to do two allocations.
         // So, we expect one to succeed and one to fail.
-        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            size,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
@@ -663,10 +673,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 
     SECTION("destroys two pointers of different size.")
     {
-        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
-        alpaka::exec<Acc>(
+        auto workDiv = customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            2U,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
@@ -695,10 +705,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 
     SECTION("destroys two pointers of same size.")
     {
-        auto const workDiv = createWorkDiv<Acc>(devAcc, 2U);
-        alpaka::exec<Acc>(
+        auto workDiv = customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            2U,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U),
@@ -730,11 +740,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
         alpaka::memcpy(queue, content.m_onDevice, content.m_onHost);
         alpaka::wait(queue);
 
-        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-
-        alpaka::exec<Acc>(
+        auto workDiv = customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            pointers.m_extents[0],
             FillAllUpAndWriteToThem{},
             accessBlock,
             alpaka::getPtrNative(content.m_onDevice),
@@ -755,10 +764,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
             = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
         fillWith<Acc>(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
 
-        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            pointers.m_extents[0],
             Destroy{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]));
@@ -775,11 +784,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 
     SECTION("creates and destroys multiple times.")
     {
-        auto const workDiv = createWorkDiv<Acc>(devAcc, pointers.m_extents[0]);
-
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            pointers.m_extents[0],
             CreateAndDestroMultipleTimes{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), pointers.m_extents[0]),
@@ -801,12 +809,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
         // This is oversubscribed but we will only hold keep less than 1/oversubscriptionFactor of the memory in the
         // end.
         auto manyPointers = makeBuffer<void*>(devHost, devAcc, oversubscriptionFactor * availableSlots);
-        auto workDiv = createWorkDiv<Acc>(devAcc, manyPointers.m_extents[0]);
-
-        alpaka::wait(queue);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            manyPointers.m_extents[0],
             OversubscribedCreation{oversubscriptionFactor, availableSlots},
             accessBlock,
             span<void*>(alpaka::getPtrNative(manyPointers.m_onDevice), manyPointers.m_extents[0]),
@@ -833,10 +839,10 @@ TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
     SECTION("creates second memory somewhere in multi-page mode.")
     {
         uint32_t const size = 2U;
-        auto const workDiv = createWorkDiv<Acc>(devAcc, size);
-        alpaka::exec<Acc>(
+        customExec<Acc>(
             queue,
-            workDiv,
+            devAcc,
+            size,
             Create{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), size),
