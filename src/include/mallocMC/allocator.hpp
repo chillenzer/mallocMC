@@ -32,7 +32,6 @@
 #include "mallocMC_allocator_handle.hpp"
 #include "mallocMC_constraints.hpp"
 #include "mallocMC_traits.hpp"
-#include "mallocMC_utils.hpp"
 
 #include <alpaka/alpaka.hpp>
 
@@ -113,11 +112,11 @@ namespace mallocMC
         using uint32 = std::uint32_t;
 
     public:
-        using CreationPolicy = T_CreationPolicy;
         using DistributionPolicy = T_DistributionPolicy;
         using OOMPolicy = T_OOMPolicy;
         using ReservePoolPolicy = T_ReservePoolPolicy;
         using AlignmentPolicy = T_AlignmentPolicy;
+        using CreationPolicy = T_CreationPolicy::template AlignmentAwarePolicy<AlignmentPolicy>;
         using HeapInfoVector = std::vector<HeapInfo>;
         using DevAllocator = DeviceAllocator<CreationPolicy, DistributionPolicy, OOMPolicy, AlignmentPolicy>;
         using AllocatorHandle = AllocatorHandleImpl<Allocator>;
@@ -135,13 +134,7 @@ namespace mallocMC
          * @param size number of bytes
          */
         template<typename AlpakaDevice, typename AlpakaQueue>
-        ALPAKA_FN_HOST void
-        /* `volatile size_t size` is required to break clang optimizations which
-         * results into runtime errors. Observed in PIConGPU if size is known at
-         * compile time. The volatile workaround has no negative effects on the
-         * register usage in CUDA.
-         */
-        alloc(AlpakaDevice& dev, AlpakaQueue& queue, size_t volatile size)
+        ALPAKA_FN_HOST void alloc(AlpakaDevice& dev, AlpakaQueue& queue, size_t size)
         {
             void* pool = reservePolicy.setMemPool(dev, size);
             std::tie(pool, size) = AlignmentPolicy::alignPool(pool, size);
