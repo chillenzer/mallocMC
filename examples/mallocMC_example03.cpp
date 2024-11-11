@@ -66,7 +66,7 @@ struct AlignmentConfig
     static constexpr auto dataAlignment = 16;
 };
 
-ALPAKA_STATIC_ACC_MEM_GLOBAL static int* arA = nullptr;
+ALPAKA_STATIC_ACC_MEM_GLOBAL int* arA = nullptr;
 
 template<typename T_Allocator>
 struct ExampleKernel
