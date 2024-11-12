@@ -37,8 +37,8 @@
 #pragma once
 
 /** the mallocMC version: major API changes should be reflected here */
-#define MALLOCMC_VERSION_MAJOR 2
-#define MALLOCMC_VERSION_MINOR 6
+#define MALLOCMC_VERSION_MAJOR 3
+#define MALLOCMC_VERSION_MINOR 0
 #define MALLOCMC_VERSION_PATCH 0
 
 /** the mallocMC flavor is used to differentiate the releases of the
