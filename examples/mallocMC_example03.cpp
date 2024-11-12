@@ -26,16 +26,19 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/OldMalloc.hpp"
+
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
 
 #include <mallocMC/mallocMC.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <iostream>
-#include <numeric>
-#include <vector>
+
+using mallocMC::CreationPolicies::FlatterScatter;
+using mallocMC::CreationPolicies::OldMalloc;
+using mallocMC::CreationPolicies::Scatter;
 
 using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
@@ -43,21 +46,19 @@ using Idx = std::size_t;
 // Define the device accelerator
 using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 
-struct ScatterConfig
-{
-    static constexpr auto pagesize = 4096;
-    static constexpr auto accessblocksize = 512u * 1024u * 1024u;
-    static constexpr auto regionsize = 16;
-    static constexpr auto wastefactor = 2;
-    static constexpr auto resetfreedpages = false;
-};
+constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
+constexpr uint32_t const pagesize = 4U * 1024U;
+constexpr uint32_t const wasteFactor = 1U;
 
-struct ScatterHashParams
+// This happens to also work for the original Scatter algorithm, so we only define one.
+struct FlatterScatterHeapConfig : FlatterScatter<>::Properties::HeapConfig
 {
-    static constexpr auto hashingK = 38183;
-    static constexpr auto hashingDistMP = 17497;
-    static constexpr auto hashingDistWP = 1;
-    static constexpr auto hashingDistWPRel = 1;
+    static constexpr auto accessblocksize = blocksize;
+    static constexpr auto pagesize = ::pagesize;
+    static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
+    // Only used by original Scatter (but it doesn't hurt FlatterScatter to keep):
+    static constexpr auto regionsize = 16;
+    static constexpr auto wastefactor = wasteFactor;
 };
 
 struct AlignmentConfig
@@ -65,55 +66,71 @@ struct AlignmentConfig
     static constexpr auto dataAlignment = 16;
 };
 
-using ScatterAllocator = mallocMC::Allocator<
-    Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterConfig, ScatterHashParams>,
-    mallocMC::DistributionPolicies::Noop,
-    mallocMC::OOMPolicies::ReturnNull,
-    mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
-    mallocMC::AlignmentPolicies::Shrink<AlignmentConfig>>;
-
 ALPAKA_STATIC_ACC_MEM_GLOBAL int* arA = nullptr;
 
+template<typename T_Allocator>
 struct ExampleKernel
 {
-    ALPAKA_FN_ACC void operator()(Acc const& acc, ScatterAllocator::AllocatorHandle allocHandle) const
+    ALPAKA_FN_ACC void operator()(Acc const& acc, T_Allocator::AllocatorHandle allocHandle) const
     {
         auto const id = static_cast<uint32_t>(alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]);
         if(id == 0)
-            arA = (int*) allocHandle.malloc(acc, sizeof(int) * 32);
+        {
+            arA<Acc> = static_cast<int*>(allocHandle.malloc(acc, sizeof(int) * 32U));
+        }
         // wait the the malloc from thread zero is not changing the result for some threads
         alpaka::syncBlockThreads(acc);
         auto const slots = allocHandle.getAvailableSlots(acc, 1);
-        if(arA != nullptr)
+        if(arA<Acc> != nullptr)
         {
-            arA[id] = id;
-            printf("id: %u array: %d slots %u\n", id, arA[id], slots);
+            arA<Acc>[id] = id;
+            printf("id: %u array: %d slots %u\n", id, arA<Acc>[id], slots);
         }
         else
             printf("error: device size allocation failed");
 
-        // wait that all thread read from `arA`
+        // wait that all thread read from `arA<Acc>`
         alpaka::syncBlockThreads(acc);
         if(id == 0)
-            allocHandle.free(acc, arA);
+        {
+            allocHandle.free(acc, arA<Acc>);
+        }
     }
 };
 
-auto main() -> int
+template<typename T_CreationPolicy>
+auto example03() -> int
 {
+    using Allocator = mallocMC::Allocator<
+        Acc,
+        T_CreationPolicy,
+        mallocMC::DistributionPolicies::Noop,
+        mallocMC::OOMPolicies::ReturnNull,
+        mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
+        mallocMC::AlignmentPolicies::Shrink<AlignmentConfig>>;
+
     auto const platform = alpaka::Platform<Acc>{};
     auto const dev = alpaka::getDevByIdx(platform, 0);
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
-    unsigned const block = std::min(static_cast<size_t>(32u), static_cast<size_t>(devProps.m_blockThreadCountMax));
+    unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
-    ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
+    Allocator scatterAlloc(dev, queue, 2U * 1024U * 1024U * 1024U); // 2GB for device-side malloc
 
     auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{block}, Idx{1}};
-    alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel{}, scatterAlloc.getAllocatorHandle()));
+    alpaka::enqueue(
+        queue,
+        alpaka::createTaskKernel<Acc>(workDiv, ExampleKernel<Allocator>{}, scatterAlloc.getAllocatorHandle()));
 
     std::cout << "Slots from Host: " << scatterAlloc.getAvailableSlots(dev, queue, 1) << '\n';
 
+    return 0;
+}
+
+auto main(int /*argc*/, char* /*argv*/[]) -> int
+{
+    example03<FlatterScatter<FlatterScatterHeapConfig>>();
+    example03<Scatter<FlatterScatterHeapConfig>>();
+    example03<OldMalloc>();
     return 0;
 }

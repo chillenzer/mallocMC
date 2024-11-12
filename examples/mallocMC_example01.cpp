@@ -26,6 +26,9 @@
   THE SOFTWARE.
 */
 
+#include "mallocMC/creationPolicies/FlatterScatter.hpp"
+#include "mallocMC/creationPolicies/OldMalloc.hpp"
+
 #include <alpaka/alpaka.hpp>
 #include <alpaka/example/ExampleDefaultAcc.hpp>
 
@@ -33,8 +36,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <iostream>
 #include <numeric>
+
+using mallocMC::CreationPolicies::FlatterScatter;
+using mallocMC::CreationPolicies::OldMalloc;
+using mallocMC::CreationPolicies::Scatter;
 
 using Dim = alpaka::DimInt<1>;
 using Idx = std::size_t;
@@ -42,26 +50,24 @@ using Idx = std::size_t;
 // Define the device accelerator
 using Acc = alpaka::ExampleDefaultAcc<Dim, Idx>;
 
-struct ScatterHeapConfig
-{
-    static constexpr auto pagesize = 4096;
-    static constexpr auto accessblocksize = 512u * 1024u * 1024u;
-    static constexpr auto regionsize = 16;
-    static constexpr auto wastefactor = 2;
-    static constexpr auto resetfreedpages = false;
-};
+constexpr uint32_t const blocksize = 2U * 1024U * 1024U;
+constexpr uint32_t const pagesize = 4U * 1024U;
+constexpr uint32_t const wasteFactor = 1U;
 
-struct ScatterHashConfig
+// This happens to also work for the original Scatter algorithm, so we only define one.
+struct FlatterScatterHeapConfig : FlatterScatter<>::Properties::HeapConfig
 {
-    static constexpr auto hashingK = 38183;
-    static constexpr auto hashingDistMP = 17497;
-    static constexpr auto hashingDistWP = 1;
-    static constexpr auto hashingDistWPRel = 1;
+    static constexpr auto accessblocksize = blocksize;
+    static constexpr auto pagesize = ::pagesize;
+    static constexpr auto heapsize = 2U * 1024U * 1024U * 1024U;
+    // Only used by original Scatter (but it doesn't hurt FlatterScatter to keep):
+    static constexpr auto regionsize = 16;
+    static constexpr auto wastefactor = wasteFactor;
 };
 
 struct XMallocConfig
 {
-    static constexpr auto pagesize = ScatterHeapConfig::pagesize;
+    static constexpr auto pagesize = FlatterScatterHeapConfig::pagesize;
 };
 
 struct ShrinkConfig
@@ -69,20 +75,21 @@ struct ShrinkConfig
     static constexpr auto dataAlignment = 16;
 };
 
-using ScatterAllocator = mallocMC::Allocator<
-    Acc,
-    mallocMC::CreationPolicies::Scatter<ScatterHeapConfig, ScatterHashConfig>,
-    mallocMC::DistributionPolicies::Noop,
-    mallocMC::OOMPolicies::ReturnNull,
-    mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
-    mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>;
-
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arA;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arB;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arC;
 
-auto main() -> int
+template<typename T_CreationPolicy>
+auto example01() -> int
 {
+    using Allocator = mallocMC::Allocator<
+        Acc,
+        T_CreationPolicy,
+        mallocMC::DistributionPolicies::Noop,
+        mallocMC::OOMPolicies::ReturnNull,
+        mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>,
+        mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>;
+
     constexpr auto length = 100;
 
     auto const platform = alpaka::Platform<Acc>{};
@@ -90,26 +97,27 @@ auto main() -> int
     auto queue = alpaka::Queue<Acc, alpaka::Blocking>{dev};
 
     auto const devProps = alpaka::getAccDevProps<Acc>(dev);
-    unsigned const block = std::min(static_cast<size_t>(32u), static_cast<size_t>(devProps.m_blockThreadCountMax));
+    unsigned const block = std::min(static_cast<size_t>(32U), static_cast<size_t>(devProps.m_blockThreadCountMax));
 
     // round up
-    auto grid = (length + block - 1u) / block;
+    auto grid = (length + block - 1U) / block;
     assert(length <= block * grid); // necessary for used algorithm
 
     // init the heap
     std::cerr << "initHeap...";
-    ScatterAllocator scatterAlloc(dev, queue, 1U * 1024U * 1024U * 1024U); // 1GB for device-side malloc
+    auto const heapSize = 2U * 1024U * 1024U * 1024U;
+    Allocator scatterAlloc(dev, queue, heapSize); // 1GB for device-side malloc
     std::cerr << "done\n";
-    std::cout << ScatterAllocator::info("\n") << '\n';
+    std::cout << Allocator::info("\n") << '\n';
 
     // create arrays of arrays on the device
     {
         auto createArrayPointers
-            = [] ALPAKA_FN_ACC(Acc const& acc, int x, int y, ScatterAllocator::AllocatorHandle allocHandle)
+            = [] ALPAKA_FN_ACC(Acc const& acc, int x, int y, Allocator::AllocatorHandle allocHandle)
         {
-            arA = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-            arB = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
-            arC = (int**) allocHandle.malloc(acc, sizeof(int*) * x * y);
+            arA<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
+            arB<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
+            arC<Acc> = static_cast<int**>(allocHandle.malloc(acc, sizeof(int*) * x * y));
         };
         auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
@@ -124,18 +132,18 @@ auto main() -> int
 
     // fill 2 of them all with ascending values
     {
-        auto fillArrays = [] ALPAKA_FN_ACC(Acc const& acc, int length, ScatterAllocator::AllocatorHandle allocHandle)
+        auto fillArrays = [] ALPAKA_FN_ACC(Acc const& acc, int localLength, Allocator::AllocatorHandle allocHandle)
         {
             auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
-            arA[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arB[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
-            arC[id] = (int*) allocHandle.malloc(acc, length * sizeof(int));
+            arA<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
+            arB<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
+            arC<Acc>[id] = static_cast<int*>(allocHandle.malloc(acc, localLength * sizeof(int)));
 
-            for(int i = 0; i < length; ++i)
+            for(int i = 0; i < localLength; ++i)
             {
-                arA[id][i] = static_cast<int>(id * length + i);
-                arB[id][i] = static_cast<int>(id * length + i);
+                arA<Acc>[id][i] = static_cast<int>(id * localLength + i);
+                arB<Acc>[id][i] = static_cast<int>(id * localLength + i);
             }
         };
         auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
@@ -149,15 +157,15 @@ auto main() -> int
     {
         auto sumsBufferAcc = alpaka::allocBuf<int, Idx>(dev, Idx{block * grid});
 
-        auto addArrays = [] ALPAKA_FN_ACC(Acc const& acc, int length, int* sums)
+        auto addArrays = [] ALPAKA_FN_ACC(Acc const& acc, int localLength, int* sums)
         {
             auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             sums[id] = 0;
-            for(int i = 0; i < length; ++i)
+            for(int i = 0; i < localLength; ++i)
             {
-                arC[id][i] = arA[id][i] + arB[id][i];
-                sums[id] += arC[id][i];
+                arC<Acc>[id][i] = arA<Acc>[id][i] + arB<Acc>[id][i];
+                sums[id] += arC<Acc>[id][i];
             }
         };
         auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
@@ -181,7 +189,7 @@ auto main() -> int
     auto const gaussian = n * (n - 1);
     std::cout << "The gaussian sum as comparison: " << gaussian << '\n';
 
-    /*constexpr*/ if(mallocMC::Traits<ScatterAllocator>::providesAvailableSlots)
+    /*constexpr*/ if(mallocMC::Traits<Allocator>::providesAvailableSlots)
     {
         std::cout << "there are ";
         std::cout << scatterAlloc.getAvailableSlots(dev, queue, 1024U * 1024U);
@@ -189,23 +197,23 @@ auto main() -> int
     }
 
     {
-        auto freeArrays = [] ALPAKA_FN_ACC(Acc const& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        auto freeArrays = [] ALPAKA_FN_ACC(Acc const& acc, Allocator::AllocatorHandle allocHandle)
         {
             auto const id = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-            allocHandle.free(acc, arA[id]);
-            allocHandle.free(acc, arB[id]);
-            allocHandle.free(acc, arC[id]);
+            allocHandle.free(acc, arA<Acc>[id]);
+            allocHandle.free(acc, arB<Acc>[id]);
+            allocHandle.free(acc, arC<Acc>[id]);
         };
         auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{grid}, Idx{block}, Idx{1}};
         alpaka::enqueue(queue, alpaka::createTaskKernel<Acc>(workDiv, freeArrays, scatterAlloc.getAllocatorHandle()));
     }
 
     {
-        auto freeArrayPointers = [] ALPAKA_FN_ACC(Acc const& acc, ScatterAllocator::AllocatorHandle allocHandle)
+        auto freeArrayPointers = [] ALPAKA_FN_ACC(Acc const& acc, Allocator::AllocatorHandle allocHandle)
         {
-            allocHandle.free(acc, arA);
-            allocHandle.free(acc, arB);
-            allocHandle.free(acc, arC);
+            allocHandle.free(acc, arA<Acc>);
+            allocHandle.free(acc, arB<Acc>);
+            allocHandle.free(acc, arC<Acc>);
         };
         auto const workDiv = alpaka::WorkDivMembers<Dim, Idx>{Idx{1}, Idx{1}, Idx{1}};
         alpaka::enqueue(
@@ -213,5 +221,13 @@ auto main() -> int
             alpaka::createTaskKernel<Acc>(workDiv, freeArrayPointers, scatterAlloc.getAllocatorHandle()));
     }
 
+    return 0;
+}
+
+auto main(int /*argc*/, char* /*argv*/[]) -> int
+{
+    example01<FlatterScatter<FlatterScatterHeapConfig>>();
+    example01<Scatter<FlatterScatterHeapConfig>>();
+    example01<OldMalloc>();
     return 0;
 }
