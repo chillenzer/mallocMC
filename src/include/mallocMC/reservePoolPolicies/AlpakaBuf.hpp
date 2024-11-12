@@ -1,10 +1,11 @@
 /*
   mallocMC: Memory Allocator for Many Core Architectures.
 
-  Copyright 2020 Helmholtz-Zentrum Dresden - Rossendorf,
+  Copyright 2020-2024 Helmholtz-Zentrum Dresden - Rossendorf,
                  CERN
 
   Author(s):  Bernhard Manfred Gruber
+              Julian J. Lenz - j.lenz ( at ) hzdr.de
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
