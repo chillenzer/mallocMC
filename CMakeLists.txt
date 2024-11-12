@@ -28,12 +28,6 @@ endif()
 set(mallocMC_CATCH2_PROVIDER "intern" CACHE STRING "Select which Catch2 is used")
 set_property(CACHE mallocMC_CATCH2_PROVIDER PROPERTY STRINGS "intern;extern")
 mark_as_advanced(mallocMC_CATCH2_PROVIDER)
-if(${mallocMC_CATCH2_PROVIDER} STREQUAL "intern")
-    add_library(Catch2::Catch2 INTERFACE IMPORTED)
-    target_include_directories(Catch2::Catch2 INTERFACE ${CMAKE_CURRENT_LIST_DIR}/thirdParty/catch2/include)
-else()
-    find_package(Catch2 CONFIG REQUIRED)
-endif()
 
 # for installation, just copy include folder to install folder
 install(
@@ -64,13 +58,32 @@ alpaka_add_executable(mallocMC_Example03 EXCLUDE_FROM_ALL examples/mallocMC_exam
 target_include_directories(mallocMC_Example03 PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
 target_link_libraries(mallocMC_Example03 PUBLIC alpaka::alpaka warnings)
 
-alpaka_add_executable(VerifyHeap EXCLUDE_FROM_ALL tests/verify_heap.cpp tests/verify_heap_config.hpp)
-target_include_directories(VerifyHeap PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
-target_link_libraries(VerifyHeap PUBLIC alpaka::alpaka warnings)
+add_custom_target(examples DEPENDS mallocMC_Example01 mallocMC_Example03)
 
-alpaka_add_executable(tests EXCLUDE_FROM_ALL tests/main.cpp tests/dimensions.cpp tests/policies.cpp)
+if(${mallocMC_CATCH2_PROVIDER} STREQUAL "intern")
+    find_package(Catch2 3.6.0 REQUIRED)
+    include(Catch)
+else()
+    # get Catch2 v3 and build it from source with the same C++ standard as the tests
+    Include(FetchContent)
+    FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.git GIT_TAG v3.6.0)
+    FetchContent_MakeAvailable(Catch2)
+    target_compile_features(Catch2 PUBLIC cxx_std_17)
+    include(Catch)
+
+    # hide Catch2 cmake variables by default in cmake gui
+    get_cmake_property(variables VARIABLES)
+    foreach (var ${variables})
+        if (var MATCHES "^CATCH_")
+            mark_as_advanced(${var})
+        endif()
+    endforeach()
+endif()
+
+file(GLOB_RECURSE testSources "${CMAKE_CURRENT_SOURCE_DIR}/tests/*/*.cpp")
+alpaka_add_executable(tests EXCLUDE_FROM_ALL ${testSources})
+catch_discover_tests(tests)
+source_group(TREE "${CMAKE_CURRENT_LIST_DIR}/tests" FILES ${testSources})
+target_compile_features(tests PRIVATE cxx_std_17)
 target_include_directories(tests PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
-target_link_libraries(tests PUBLIC alpaka::alpaka Catch2::Catch2 warnings)
-
-
-add_custom_target(examples DEPENDS mallocMC_Example01 mallocMC_Example03 VerifyHeap)
+target_link_libraries(tests PRIVATE alpaka::alpaka Catch2::Catch2WithMain)
