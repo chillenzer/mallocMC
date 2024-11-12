@@ -29,7 +29,7 @@ Rules for contributions are found in [CONTRIBUTING.md](./CONTRIBUTING.md).
 On the Algorithms
 -----------------------------
 
-This library implements was originally inspired by the *ScatterAlloc* algorithm,
+This library was originally inspired by the *ScatterAlloc* algorithm,
 [forked](https://en.wikipedia.org/wiki/Fork_%28software_development%29)
 from the **ScatterAlloc** project, developed by the
 [Managed Volume Processing](http://www.icg.tugraz.at/project/mvp)
