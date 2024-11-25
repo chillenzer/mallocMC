@@ -378,10 +378,6 @@ namespace mallocMC::CreationPolicies
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
             using VecType = alpaka::Vec<Dim, Idx>;
 
-            auto poolView = alpaka::createView(dev, reinterpret_cast<char*>(pool), alpaka::Vec<Dim, Idx>(memsize));
-            alpaka::memset(queue, poolView, 0U);
-            alpaka::wait(queue);
-
             auto workDivSingleThread
                 = alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()};
             alpaka::exec<TAcc>(queue, workDivSingleThread, FlatterScatterAlloc::InitKernel{}, heap, pool, memsize);
