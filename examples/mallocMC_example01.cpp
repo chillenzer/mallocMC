@@ -77,7 +77,10 @@ ALPAKA_STATIC_ACC_MEM_GLOBAL int** arA;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arB;
 ALPAKA_STATIC_ACC_MEM_GLOBAL int** arC;
 
-template<typename T_CreationPolicy, typename T_ReservePoolPolicy>
+template<
+    typename T_CreationPolicy,
+    typename T_ReservePoolPolicy,
+    typename T_AlignmentPolicy = mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>
 auto example01() -> int
 {
     using Allocator = mallocMC::Allocator<
@@ -86,7 +89,7 @@ auto example01() -> int
         mallocMC::DistributionPolicies::Noop,
         mallocMC::OOMPolicies::ReturnNull,
         T_ReservePoolPolicy,
-        mallocMC::AlignmentPolicies::Shrink<ShrinkConfig>>;
+        T_AlignmentPolicy>;
 
     constexpr auto length = 100;
 
@@ -228,7 +231,10 @@ auto main(int /*argc*/, char* /*argv*/[]) -> int
     example01<Scatter<FlatterScatterHeapConfig>, mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>>();
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
     example01<OldMalloc, mallocMC::ReservePoolPolicies::CudaSetLimits>();
-    example01<mallocMC::CreationPolicies::GallatinCuda, mallocMC::ReservePoolPolicies::Noop>();
+    example01<
+        mallocMC::CreationPolicies::GallatinCuda<>,
+        mallocMC::ReservePoolPolicies::Noop,
+        mallocMC::AlignmentPolicies::Noop>();
 #else
     example01<OldMalloc>();
 #endif

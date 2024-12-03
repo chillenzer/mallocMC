@@ -45,6 +45,8 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "PGI")
   target_compile_options(warnings INTERFACE -Minform=inform)
 endif()
 
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/thirdParty/gallatin ${CMAKE_BINARY_DIR}/thirdParty/gallatin)
+
 # Executables
 file(GLOB_RECURSE headers src/include/**)
 add_custom_target(mallocMCIde SOURCES ${headers}) # create a target with the header files for IDE projects
@@ -52,11 +54,11 @@ source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/src/include FILES ${headers})
 
 alpaka_add_executable(mallocMC_Example01 EXCLUDE_FROM_ALL examples/mallocMC_example01.cpp)
 target_include_directories(mallocMC_Example01 PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
-target_link_libraries(mallocMC_Example01 PUBLIC alpaka::alpaka warnings)
+target_link_libraries(mallocMC_Example01 PUBLIC alpaka::alpaka warnings gallatin)
 
 alpaka_add_executable(mallocMC_Example03 EXCLUDE_FROM_ALL examples/mallocMC_example03.cpp)
 target_include_directories(mallocMC_Example03 PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/include)
-target_link_libraries(mallocMC_Example03 PUBLIC alpaka::alpaka warnings)
+target_link_libraries(mallocMC_Example03 PUBLIC alpaka::alpaka warnings gallatin)
 
 add_custom_target(examples DEPENDS mallocMC_Example01 mallocMC_Example03)
 

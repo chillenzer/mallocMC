@@ -28,7 +28,9 @@
 
 #pragma once
 
-#include <alpaka/core/Common.hpp>
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+#    include <gallatin/allocators/gallatin.cuh>
+#endif
 
 namespace mallocMC
 {
@@ -41,9 +43,16 @@ namespace mallocMC
          * free system calls that is offered by CUDA-capable accelerator of
          * compute capability 2.0 and higher
          */
+        template<
+            size_t bytes_per_segment = 16ULL * 1024 * 1024,
+            size_t smallest_slice = 16,
+            size_t largest_slice = 4096>
         class GallatinCuda
         {
+            using Gallatin = gallatin::allocators::Gallatin<bytes_per_segment, smallest_slice, largest_slice>;
+
         public:
+            Gallatin* heap{nullptr};
             template<typename T_AlignmentPolicy>
             using AlignmentAwarePolicy = GallatinCuda;
 
@@ -52,13 +61,13 @@ namespace mallocMC
             template<typename AlpakaAcc>
             ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32_t bytes) const -> void*
             {
-                return ::malloc(static_cast<size_t>(bytes));
+                return heap->malloc(static_cast<size_t>(bytes));
             }
 
             template<typename AlpakaAcc>
             ALPAKA_FN_ACC void destroy(AlpakaAcc const& /*acc*/, void* mem) const
             {
-                ::free(mem);
+                heap->free(mem);
             }
 
             ALPAKA_FN_ACC auto isOOM(void* p, size_t s) const -> bool
@@ -67,17 +76,15 @@ namespace mallocMC
             }
 
             template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
-            static void initHeap(
-                AlpakaDevice& dev,
-                AlpakaQueue& queue,
-                T_DeviceAllocator* heap,
-                void* pool,
-                size_t memsize)
+            static void initHeap(AlpakaDevice&, AlpakaQueue&, T_DeviceAllocator* devAllocator, void*, size_t memsize)
             {
                 static_assert(
                     std::is_same_v<alpaka::AccToTag<AlpakaAcc>, alpaka::TagGpuCudaRt>,
                     "The GallatinCuda creation policy is only available on CUDA architectures. Please choose a "
                     "different one.");
+
+                devAllocator->heap = nullptr;
+                devAllocator->heap = Gallatin::generate_on_device(memsize, 42, true);
             }
 
             static auto classname() -> std::string
