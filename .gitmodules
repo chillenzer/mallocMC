@@ -3,4 +3,4 @@
 	url = https://github.com/catchorg/catch2
 [submodule "thirdParty/gallatin"]
 	path = thirdParty/gallatin
-	url = https://github.com/saltsystemslab/gallatin
+	url = https://github.com/chillenzer/gallatin
