@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include <alpaka/alpaka.hpp>
+
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 #    include <gallatin/allocators/gallatin.cuh>
 #endif
@@ -76,15 +78,30 @@ namespace mallocMC
             }
 
             template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
-            static void initHeap(AlpakaDevice&, AlpakaQueue&, T_DeviceAllocator* devAllocator, void*, size_t memsize)
+            static void initHeap(
+                AlpakaDevice& dev,
+                AlpakaQueue& queue,
+                T_DeviceAllocator* devAllocator,
+                void*,
+                size_t memsize)
             {
                 static_assert(
                     std::is_same_v<alpaka::AccToTag<AlpakaAcc>, alpaka::TagGpuCudaRt>,
                     "The GallatinCuda creation policy is only available on CUDA architectures. Please choose a "
                     "different one.");
 
-                devAllocator->heap = nullptr;
-                devAllocator->heap = Gallatin::generate_on_device(memsize, 42, true);
+                auto devHost = alpaka::getDevByIdx(alpaka::PlatformCpu{}, 0);
+                using Dim = typename alpaka::trait::DimType<AlpakaAcc>::type;
+                using Idx = typename alpaka::trait::IdxType<AlpakaAcc>::type;
+                using VecType = alpaka::Vec<Dim, Idx>;
+
+                auto tmp = Gallatin::generate_on_device(memsize, 42, true);
+                auto workDivSingleThread
+                    = alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()};
+                alpaka::exec<AlpakaAcc>(
+                    queue,
+                    workDivSingleThread,
+                    [tmp, devAllocator] ALPAKA_FN_ACC(AlpakaAcc const&) { devAllocator->heap = tmp; });
             }
 
             static auto classname() -> std::string

@@ -230,11 +230,14 @@ auto main(int /*argc*/, char* /*argv*/[]) -> int
     example01<FlatterScatter<FlatterScatterHeapConfig>, mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>>();
     example01<Scatter<FlatterScatterHeapConfig>, mallocMC::ReservePoolPolicies::AlpakaBuf<Acc>>();
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-    example01<OldMalloc, mallocMC::ReservePoolPolicies::CudaSetLimits>();
     example01<
         mallocMC::CreationPolicies::GallatinCuda<>,
         mallocMC::ReservePoolPolicies::Noop,
         mallocMC::AlignmentPolicies::Noop>();
+    // GallatinCuda already uses cudaSetLimits and we're not allowed to call it a second time.
+    example01<OldMalloc, mallocMC::ReservePoolPolicies::Noop>();
+    // This should normally be:
+    //    example01<OldMalloc, mallocMC::ReservePoolPolicies::CudaSetLimits>();
 #else
     example01<OldMalloc>();
 #endif
