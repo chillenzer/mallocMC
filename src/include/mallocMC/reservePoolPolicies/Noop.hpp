@@ -28,8 +28,6 @@
 
 #pragma once
 
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-
 namespace mallocMC
 {
     namespace ReservePoolPolicies
@@ -69,5 +67,3 @@ namespace mallocMC
 
     } // namespace ReservePoolPolicies
 } // namespace mallocMC
-
-#endif

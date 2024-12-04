@@ -32,6 +32,21 @@
 
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 #    include <gallatin/allocators/gallatin.cuh>
+#else
+
+// Construct a fake, so we get a nice error message when we try to use is and it's not in the way when we don't.
+namespace gallatin::allocators
+{
+    template<size_t...>
+    struct Gallatin
+    {
+        static auto generate_on_device(auto...)
+        {
+            return nullptr;
+        }
+    };
+} // namespace gallatin::allocators
+
 #endif
 
 namespace mallocMC

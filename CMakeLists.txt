@@ -45,7 +45,11 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "PGI")
   target_compile_options(warnings INTERFACE -Minform=inform)
 endif()
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/thirdParty/gallatin ${CMAKE_BINARY_DIR}/thirdParty/gallatin)
+if(alpaka_ACC_GPU_CUDA_ENABLE)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/thirdParty/gallatin ${CMAKE_BINARY_DIR}/thirdParty/gallatin)
+else()
+  add_library(gallatin INTERFACE)
+endif()
 
 # Executables
 file(GLOB_RECURSE headers src/include/**)

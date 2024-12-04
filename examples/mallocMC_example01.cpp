@@ -239,7 +239,7 @@ auto main(int /*argc*/, char* /*argv*/[]) -> int
     // This should normally be:
     //    example01<OldMalloc, mallocMC::ReservePoolPolicies::CudaSetLimits>();
 #else
-    example01<OldMalloc>();
+    example01<OldMalloc, mallocMC::ReservePoolPolicies::Noop>();
 #endif
     return 0;
 }
