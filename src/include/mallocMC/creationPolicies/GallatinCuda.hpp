@@ -61,17 +61,19 @@ namespace mallocMC
          * compute capability 2.0 and higher
          */
         template<
+            typename T_AlignmentPolicy,
             size_t bytes_per_segment = 16ULL * 1024 * 1024,
             size_t smallest_slice = 16,
             size_t largest_slice = 4096>
-        class GallatinCuda
+        class GallatinCudaImpl
         {
             using Gallatin = gallatin::allocators::Gallatin<bytes_per_segment, smallest_slice, largest_slice>;
 
         public:
+            template<typename T_AlignmentPolicyLocal>
+            using AlignmentAwarePolicy
+                = GallatinCudaImpl<T_AlignmentPolicyLocal, bytes_per_segment, smallest_slice, largest_slice>;
             Gallatin* heap{nullptr};
-            template<typename T_AlignmentPolicy>
-            using AlignmentAwarePolicy = GallatinCuda;
 
             static constexpr auto providesAvailableSlots = false;
 
@@ -105,6 +107,15 @@ namespace mallocMC
                     "The GallatinCuda creation policy is only available on CUDA architectures. Please choose a "
                     "different one.");
 
+                // This is an extremely hot fix:
+                // PIConGPU initialises its allocator with 0 bytes to be able to distribute the pointer.
+                // Only afterwards it can find out its actual memory requirements and uses destructiveResize to set
+                // the correct heap size. Gallatin runs into issues with this approach.
+                // Instead, we simply don't believe the request if it's too small (typically 0, potentially the
+                // alignment policy kicks in and does something weird, so we leave a small margin)..
+                if(memsize <= T_AlignmentPolicy::dataAlignment)
+                    return;
+
                 auto devHost = alpaka::getDevByIdx(alpaka::PlatformCpu{}, 0);
                 using Dim = typename alpaka::trait::DimType<AlpakaAcc>::type;
                 using Idx = typename alpaka::trait::IdxType<AlpakaAcc>::type;
@@ -123,6 +134,17 @@ namespace mallocMC
             {
                 return "GallatinCuda";
             }
+        };
+
+        template<
+            size_t bytes_per_segment = 16ULL * 1024 * 1024,
+            size_t smallest_slice = 16,
+            size_t largest_slice = 4096>
+        struct GallatinCuda
+        {
+            template<typename T_AlignmentPolicy>
+            using AlignmentAwarePolicy
+                = GallatinCudaImpl<T_AlignmentPolicy, bytes_per_segment, smallest_slice, largest_slice>;
         };
 
     } // namespace CreationPolicies
