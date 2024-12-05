@@ -111,9 +111,8 @@ namespace mallocMC
                 // PIConGPU initialises its allocator with 0 bytes to be able to distribute the pointer.
                 // Only afterwards it can find out its actual memory requirements and uses destructiveResize to set
                 // the correct heap size. Gallatin runs into issues with this approach.
-                // Instead, we simply don't believe the request if it's too small (typically 0, potentially the
-                // alignment policy kicks in and does something weird, so we leave a small margin)..
-                if(memsize <= T_AlignmentPolicy::dataAlignment)
+                // Instead, we simply don't believe the request if it's 0.
+                if(memsize == 0)
                     return;
 
                 auto devHost = alpaka::getDevByIdx(alpaka::PlatformCpu{}, 0);
