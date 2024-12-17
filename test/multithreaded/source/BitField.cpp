@@ -24,7 +24,7 @@
   THE SOFTWARE.
 */
 
-#include "../unit/mocks.hpp"
+#include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuThreads.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
