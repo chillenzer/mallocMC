@@ -25,10 +25,15 @@
 */
 
 
-#include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
+#include "mallocMC/creationPolicies/Scatter.hpp"
 
-#include "../unit/mocks.hpp"
+#include "mallocMC/alignmentPolicies/Shrink.hpp"
+#include "mallocMC/creationPolicies/FlatterScatter/DataPage.hpp"
+#include "mallocMC/device_allocator.hpp"
+#include "mallocMC/distributionPolicies/Noop.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
+#include "mallocMC/oOMPolicies/ReturnNull.hpp"
+#include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/acc/AccCpuThreads.hpp>
@@ -65,8 +70,6 @@
 #include <tuple>
 #include <type_traits>
 
-using mallocMC::CreationPolicies::FlatterScatterAlloc::AccessBlock;
-
 using Dim = alpaka::DimInt<1>;
 using Idx = std::uint32_t;
 
@@ -74,10 +77,27 @@ using Idx = std::uint32_t;
 constexpr uint32_t pageSize = 1024;
 constexpr uint32_t numPages = 4;
 // Page table entry size = sizeof(chunkSize) + sizeof(fillingLevel):
-constexpr uint32_t pteSize = 4 + 4;
+constexpr uint32_t pteSize = 8 + 4 + 4;
 constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 
-using MyAccessBlock = AccessBlock<HeapConfig<blockSize, pageSize>, AlignmentPolicy>;
+template<uint32_t T_blockSize, uint32_t T_pageSize, uint32_t T_wasteFactor = 2U>
+struct ScatterHeapConfig
+{
+    static constexpr uint32_t const accessblocksize = T_blockSize;
+    static constexpr uint32_t const pagesize = T_pageSize;
+    static constexpr uint32_t const wastefactor = T_wasteFactor;
+    static constexpr uint32_t const regionsize = 1U;
+    static constexpr bool const resetfreedpages = true;
+};
+
+using MyScatter = mallocMC::CreationPolicies::Scatter<
+    ScatterHeapConfig<numPages * pageSize, pageSize>>::AlignmentAwarePolicy<mallocMC::AlignmentPolicies::Shrink<>>;
+using MyDeviceAllocator = mallocMC::DeviceAllocator<
+    MyScatter,
+    mallocMC::DistributionPolicies::Noop,
+    mallocMC::OOMPolicies::ReturnNull,
+    mallocMC::AlignmentPolicies::Shrink<>>;
+
 using std::span;
 
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
@@ -86,10 +106,10 @@ using std::span;
 
 struct FillWith
 {
-    template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
+    template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(
         TAcc const& acc,
-        AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock,
+        auto* accessBlock,
         uint32_t const chunkSize,
         void** result,
         uint32_t const size) const -> void
@@ -172,26 +192,6 @@ struct Destroy
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, auto* accessBlock, span<void*> pointers) const
     {
         forAll(acc, pointers.size(), [&](auto idx) { accessBlock->destroy(acc, pointers[idx]); });
-    }
-};
-
-struct IsValid
-{
-    template<typename TAcc>
-    ALPAKA_FN_ACC auto operator()(
-        TAcc const& acc,
-        auto* accessBlock,
-        void** pointers,
-        bool* results,
-        uint32_t const size) const
-    {
-        std::span<void*> tmpPointers(pointers, size);
-        std::span<bool> tmpResults(results, size);
-        std::transform(
-            std::begin(tmpPointers),
-            std::end(tmpPointers),
-            std::begin(tmpResults),
-            [&acc, accessBlock](auto pointer) { return accessBlock->isValid(acc, pointer); });
     }
 };
 
@@ -304,11 +304,8 @@ auto fillAllButOne(auto& queue, auto* accessBlock, auto const& chunkSize, auto& 
     return pointer1;
 }
 
-template<typename TAcc, uint32_t T_blockSize, uint32_t T_pageSize>
-auto freeAllButOneOnFirstPage(
-    auto& queue,
-    AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock,
-    auto& pointers)
+template<typename TAcc>
+auto freeAllButOneOnFirstPage(auto& queue, auto* accessBlock, auto& pointers)
 {
     std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
     std::sort(std::begin(tmp), std::end(tmp));
@@ -317,8 +314,7 @@ auto freeAllButOneOnFirstPage(
     alpaka::wait(queue);
     alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
     alpaka::wait(queue);
-    auto size
-        = pointers.m_extents[0] / AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>::numPages() - 1;
+    auto size = pointers.m_extents[0] / numPages - 1;
     // Delete all other chunks on page 0.
     customExec<TAcc>(
         queue,
@@ -411,13 +407,12 @@ auto getAvailableSlots(auto* accessBlock, auto& queue, auto const& devHost, auto
     return tmp;
 }
 
-template<uint32_t T_blockSize, uint32_t T_pageSize>
-auto pageIndex(AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock, auto* pointer)
+auto pageIndex(auto accessBlock, auto* pointer)
 {
     // This is a bit dirty: What we should do here is enqueue a kernel that calls accessBlock->pageIndex().
     // But we assume that the access block starts with the first page, so the pointer to the first page equals the
     // pointer to the access block. Not sure if this is reliable if the pointers are device pointers.
-    return mallocMC::indexOf(pointer, accessBlock, T_pageSize);
+    return mallocMC::indexOf(pointer, alpaka::getPtrNative(accessBlock), pageSize);
 }
 
 struct FillAllUpAndWriteToThem
@@ -557,12 +552,20 @@ auto customExec(auto& queue, auto const& devAcc, auto const numElements, auto...
     return workDiv;
 }
 
-TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
+TEMPLATE_LIST_TEST_CASE("Threaded Scatter", "", alpaka::EnabledAccTags)
 {
     using Acc = alpaka::TagToAcc<TestType, Dim, Idx>;
     auto [platformAcc, platformHost, devAcc, devHost, queue] = setup<Acc>();
-    auto accessBlockBuf = alpaka::allocBuf<MyAccessBlock, Idx>(devAcc, alpaka::Vec<Dim, Idx>{1U});
-    alpaka::memset(queue, accessBlockBuf, 0x00);
+    auto accessBlockBuf = alpaka::allocBuf<MyDeviceAllocator, Idx>(devAcc, alpaka::Vec<Dim, Idx>{1U});
+    auto dataBuf = alpaka::allocBuf<mallocMC::CreationPolicies::FlatterScatterAlloc::DataPage<blockSize>, Idx>(
+        devAcc,
+        alpaka::Vec<Dim, Idx>{1U});
+    MyScatter::initHeap<Acc>(
+        devAcc,
+        queue,
+        alpaka::getPtrNative(accessBlockBuf),
+        static_cast<void*>(alpaka::getPtrNative(dataBuf)),
+        blockSize);
     alpaka::wait(queue);
     auto* accessBlock = alpaka::getPtrNative(accessBlockBuf);
     auto const chunkSizes = createChunkSizes(devHost, devAcc, queue);
@@ -607,7 +610,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        CHECK(pageIndex(accessBlock, pointers.m_onHost[0]) != pageIndex(accessBlock, pointers.m_onHost[1]));
+        CHECK(pageIndex(dataBuf, pointers.m_onHost[0]) != pageIndex(dataBuf, pointers.m_onHost[1]));
     }
 
     SECTION("creates partly for insufficient memory with same chunk size.")
@@ -640,7 +643,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
     SECTION("does not race between clean up and create.")
     {
         fillWith<Acc>(queue, accessBlock, chunkSizes.m_onHost[0], pointers);
-        auto freePage = pageIndex(accessBlock, freeAllButOneOnFirstPage<Acc>(queue, accessBlock, pointers));
+        auto freePage = pageIndex(dataBuf, freeAllButOneOnFirstPage<Acc>(queue, accessBlock, pointers));
 
         // Now, pointer1 is the last valid pointer to page 0. Destroying it will clean up the page.
         alpaka::WorkDivMembers<Dim, Idx> const workDivSingleThread{Idx{1}, Idx{1}, Idx{1}};
@@ -665,12 +668,12 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        CHECK(pageIndex(accessBlock, pointers.m_onHost[0]) == freePage);
+        CHECK(pageIndex(dataBuf, pointers.m_onHost[0]) == freePage);
     }
 
     SECTION("destroys two pointers of different size.")
     {
-        customExec<Acc>(
+        auto workDiv = customExec<Acc>(
             queue,
             devAcc,
             2U,
@@ -680,37 +683,29 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             alpaka::getPtrNative(chunkSizes.m_onDevice));
         alpaka::wait(queue);
 
-        customExec<Acc>(
+        auto const beforeDestroy0
+            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        auto const beforeDestroy1
+            = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
+
+        alpaka::exec<Acc>(
             queue,
-            devAcc,
-            2U,
+            workDiv,
             Destroy{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
         alpaka::wait(queue);
 
-        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
-        customExec<Acc>(
-            queue,
-            devAcc,
-            1U,
-            IsValid{},
-            accessBlock,
-            alpaka::getPtrNative(pointers.m_onDevice),
-            alpaka::getPtrNative(result.m_onDevice),
-            result.m_extents[0]);
-        alpaka::wait(queue);
+        auto const afterDestroy0 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        auto const afterDestroy1 = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[1]);
 
-        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-        alpaka::wait(queue);
-
-        CHECK(not result.m_onHost[0]);
-        CHECK(not result.m_onHost[1]);
+        CHECK(beforeDestroy0 < afterDestroy0);
+        CHECK(beforeDestroy1 < afterDestroy1);
     }
 
     SECTION("destroys two pointers of same size.")
     {
-        customExec<Acc>(
+        auto workDiv = customExec<Acc>(
             queue,
             devAcc,
             2U,
@@ -720,36 +715,18 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             chunkSizes.m_onHost[0]);
         alpaka::wait(queue);
 
-        customExec<Acc>(
+        auto const beforeDestroy = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+
+        alpaka::exec<Acc>(
             queue,
-            devAcc,
-            2U,
+            workDiv,
             Destroy{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), 2U));
         alpaka::wait(queue);
 
-        auto result = makeBuffer<bool>(devHost, devAcc, 2U);
-        result.m_onHost[0] = true;
-        result.m_onHost[1] = true;
-        alpaka::memcpy(queue, result.m_onDevice, result.m_onHost);
-        alpaka::wait(queue);
-        customExec<Acc>(
-            queue,
-            devAcc,
-            1U,
-            IsValid{},
-            accessBlock,
-            alpaka::getPtrNative(pointers.m_onDevice),
-            alpaka::getPtrNative(result.m_onDevice),
-            result.m_extents[0]);
-        alpaka::wait(queue);
-
-        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-        alpaka::wait(queue);
-
-        CHECK(not result.m_onHost[0]);
-        CHECK(not result.m_onHost[1]);
+        auto const afterDestroy = getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]);
+        CHECK(beforeDestroy == afterDestroy - 2U);
     }
 
     SECTION("fills up all chunks in parallel and writes to them.")
@@ -798,24 +775,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
-
-        auto result = makeBuffer<bool>(devHost, devAcc, pointers.m_extents[0]);
-        customExec<Acc>(
-            queue,
-            devAcc,
-            1U,
-            IsValid{},
-            accessBlock,
-            alpaka::getPtrNative(pointers.m_onDevice),
-            alpaka::getPtrNative(result.m_onDevice),
-            result.m_extents[0]);
-        alpaka::wait(queue);
-
-        alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
-        alpaka::wait(queue);
-
-        std::span<bool> tmpResults(alpaka::getPtrNative(result.m_onHost), result.m_extents[0]);
-        CHECK(std::none_of(std::cbegin(tmpResults), std::cend(tmpResults), [](auto const val) { return val; }));
 
         CHECK(getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]) == allSlots);
         CHECK(
@@ -875,33 +834,6 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
         std::sort(beginNonNull, std::end(tmpManyPointers));
         CHECK(std::unique(beginNonNull, std::end(tmpManyPointers)) == std::end(tmpManyPointers));
-    }
-
-    SECTION("can handle many different chunk sizes.")
-    {
-        auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize);
-        std::span<uint32_t> chunkSizesSpan(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
-        std::iota(std::begin(chunkSizesSpan), std::end(chunkSizesSpan), 1U);
-        alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
-        alpaka::wait(queue);
-
-        customExec<Acc>(
-            queue,
-            devAcc,
-            MyAccessBlock::numPages(),
-            CreateAllChunkSizes{},
-            accessBlock,
-            span<void*>(alpaka::getPtrNative(pointers.m_onDevice), MyAccessBlock::numPages()),
-            std::span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
-
-        alpaka::wait(queue);
-
-        alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
-        alpaka::wait(queue);
-
-        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), MyAccessBlock::numPages());
-        std::sort(std::begin(tmpPointers), std::end(tmpPointers));
-        CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
 
     SECTION("creates second memory somewhere in multi-page mode.")
