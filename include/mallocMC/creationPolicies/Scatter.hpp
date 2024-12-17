@@ -921,7 +921,7 @@ namespace mallocMC
              * @param bytes the number of bytes to be freed
              */
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC void deallocPageBased(AlpakaAcc const& acc, void* mem, uint32 page, uint32 bytes)
+            ALPAKA_FN_ACC void deallocPageBased(AlpakaAcc const& acc, uint32 page, uint32 bytes)
             {
                 uint32 const pages = ceilingDivision(bytes, pagesize);
                 for(uint32 p = page; p < page + pages; ++p)
@@ -995,7 +995,7 @@ namespace mallocMC
                 if(chunksize <= pagesize)
                     deallocChunked(acc, mem, page, chunksize);
                 else
-                    deallocPageBased(acc, mem, page, chunksize);
+                    deallocPageBased(acc, page, chunksize);
             }
 
             /**

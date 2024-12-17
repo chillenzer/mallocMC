@@ -56,7 +56,7 @@ namespace mallocMC
             static constexpr auto providesAvailableSlots = false;
 
             template<typename AlpakaAcc>
-            ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32 bytes) const -> void*
+            ALPAKA_FN_ACC auto create([[maybe_unused]] AlpakaAcc const& acc, uint32 bytes) const -> void*
             {
                 return ::malloc(static_cast<size_t>(bytes));
             }
@@ -74,11 +74,11 @@ namespace mallocMC
 
             template<typename AlpakaAcc, typename AlpakaDevice, typename AlpakaQueue, typename T_DeviceAllocator>
             static void initHeap(
-                AlpakaDevice& dev,
-                AlpakaQueue& queue,
-                T_DeviceAllocator* heap,
-                void* pool,
-                size_t memsize)
+                [[maybe_unused]] AlpakaDevice& dev,
+                [[maybe_unused]] AlpakaQueue& queue,
+                [[maybe_unused]] T_DeviceAllocator* heap,
+                [[maybe_unused]] void* pool,
+                [[maybe_unused]] size_t memsize)
             {
             }
 

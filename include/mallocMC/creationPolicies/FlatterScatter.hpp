@@ -372,7 +372,7 @@ namespace mallocMC::CreationPolicies
          * @param memsize The size of the pool memory in bytes.
          */
         template<typename TAcc>
-        static void initHeap(auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
+        static void initHeap([[maybe_unused]] auto& dev, auto& queue, auto* heap, void* pool, size_t memsize)
         {
             using Dim = typename alpaka::trait::DimType<TAcc>::type;
             using Idx = typename alpaka::trait::IdxType<TAcc>::type;
