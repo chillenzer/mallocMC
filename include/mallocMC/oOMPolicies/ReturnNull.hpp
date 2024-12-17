@@ -46,7 +46,7 @@ namespace mallocMC
         {
         public:
             ALPAKA_FN_ACC
-            static auto handleOOM(void* mem) -> void*
+            static auto handleOOM([[maybe_unused]] void* mem) -> void*
             {
                 return nullptr;
             }
