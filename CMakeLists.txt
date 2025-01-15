@@ -48,6 +48,17 @@ target_include_directories(
                          $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
 )
 
+if(mallocMC_BUILD_TESTING)
+  include(cmake/tools.cmake)
+  enable_testing()
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/test ${CMAKE_BINARY_DIR}/test)
+endif()
+
+if(mallocMC_BUILD_EXAMPLES)
+  include(cmake/tools.cmake)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/examples ${CMAKE_BINARY_DIR}/examples)
+endif()
+
 # ---- Create an installable target ----
 # this allows users to install and find the library via `find_package()`.
 

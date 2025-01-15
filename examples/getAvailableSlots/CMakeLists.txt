@@ -18,7 +18,9 @@ CPMAddPackage(
   "alpaka_CXX_STANDARD 20"
 )
 
-CPMAddPackage(NAME mallocMC SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
+if(NOT TARGET mallocMC)
+  CPMAddPackage(NAME mallocMC SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
+endif()
 
 # ---- Create standalone executable ----
 

@@ -26,10 +26,12 @@ CPMAddPackage(
   "alpaka_CXX_STANDARD 20"
 )
 
-if(TEST_INSTALLED_VERSION)
-  find_package(mallocMC REQUIRED)
-else()
-  CPMAddPackage(NAME mallocMC SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
+if(NOT TARGET mallocMC)
+  if(TEST_INSTALLED_VERSION)
+    find_package(mallocMC REQUIRED)
+  else()
+    CPMAddPackage(NAME mallocMC SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
+  endif()
 endif()
 
 # ---- Create binary ----
