@@ -21,18 +21,14 @@ endif()
 # ---- Add dependencies via CPM ----
 # see https://github.com/TheLartians/CPM.cmake for more info
 
-include(cmake/CPM.cmake)
+include(cmake/CPM_0.40.2.cmake)
+CPMUsePackageLock(cmake/package-lock.cmake)
+
+include(cmake/add_controlled.cmake)
 
 # PackageProject.cmake will be used to make our target installable
-CPMAddPackage("gh:TheLartians/PackageProject.cmake@1.8.0")
-
-CPMAddPackage(
-  NAME alpaka
-  GIT_TAG 1.2.0
-  GITHUB_REPOSITORY alpaka-group/alpaka
-  OPTIONS
-  "alpaka_CXX_STANDARD 20"
-)
+add_controlled("PackageProject.cmake" REQUIRED)
+add_controlled("alpaka" REQUIRED)
 
 # ---- Create library ----
 
@@ -75,5 +71,4 @@ packageProject(
   INCLUDE_DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}
   VERSION_HEADER "${VERSION_HEADER_LOCATION}"
   COMPATIBILITY SameMajorVersion
-  DEPENDENCIES "fmt 9.1.0"
 )

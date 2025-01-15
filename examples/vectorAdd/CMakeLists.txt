@@ -8,15 +8,12 @@ include(../../cmake/tools.cmake)
 
 # ---- Dependencies ----
 
-include(../../cmake/CPM.cmake)
+include(../../cmake/CPM_0.40.2.cmake)
+CPMUsePackageLock(../../cmake/package-lock.cmake)
 
-CPMAddPackage(
-  NAME alpaka
-  GIT_TAG 1.2.0
-  GITHUB_REPOSITORY alpaka-group/alpaka
-  OPTIONS
-  "alpaka_CXX_STANDARD 20"
-)
+include(../../cmake/add_controlled.cmake)
+
+add_controlled("alpaka" REQUIRED PREFIX mallocMC)
 
 if(NOT TARGET mallocMC)
   CPMAddPackage(NAME mallocMC SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)

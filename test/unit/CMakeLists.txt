@@ -13,18 +13,13 @@ include(../../cmake/tools.cmake)
 
 # ---- Dependencies ----
 
-include(../../cmake/CPM.cmake)
+include(../../cmake/CPM_0.40.2.cmake)
+CPMUsePackageLock(../../cmake/package-lock.cmake)
 
-CPMAddPackage("gh:catchorg/Catch2@3.7.0")
-CPMAddPackage("gh:TheLartians/Format.cmake@1.7.3")
+include(../../cmake/add_controlled.cmake)
 
-CPMAddPackage(
-  NAME alpaka
-  GIT_TAG 1.2.0
-  GITHUB_REPOSITORY alpaka-group/alpaka
-  OPTIONS
-  "alpaka_CXX_STANDARD 20"
-)
+add_controlled("alpaka" REQUIRED PREFIX mallocMC)
+add_controlled("Catch2" REQUIRED PREFIX mallocMC)
 
 if(NOT TARGET mallocMC)
   if(TEST_INSTALLED_VERSION)
