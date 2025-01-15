@@ -7,7 +7,6 @@ CPMDeclarePackage(PackageProject.cmake
   GITHUB_REPOSITORY TheLartians/PackageProject.cmake
   SYSTEM YES
   EXCLUDE_FROM_ALL YES
-  REQUIRED TRUE
 )
 # alpaka
 CPMDeclarePackage(alpaka
@@ -16,8 +15,6 @@ CPMDeclarePackage(alpaka
   GITHUB_REPOSITORY alpaka-group/alpaka
   OPTIONS
     "alpaka_CXX_STANDARD 20"
-    "REQUIRED"
-    "TRUE"
 )
 # cmake-scripts
 CPMDeclarePackage(cmake-scripts
@@ -32,5 +29,4 @@ CPMDeclarePackage(Catch2
   GITHUB_REPOSITORY catchorg/Catch2
   SYSTEM YES
   EXCLUDE_FROM_ALL YES
-  REQUIRED TRUE
 )
