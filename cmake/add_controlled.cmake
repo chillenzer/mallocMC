@@ -24,6 +24,12 @@ function(add_controlled NAME)
     set(ADD_CONTROLLED_PREFIX ${PROJECT_NAME})
   endif()
 
+  if (TARGET ${NAME} OR TARGET ${NAME}::${NAME})
+    message("There already exists a target for dependency ${NAME}. Not addding ${NAME} for ${ADD_CONTROLLED_PREFIX} again.")
+    return()
+  endif()
+
+
   set(ALL_OPTIONS "ON;ON_ALLOW_FETCH;ON_ALWAYS_FETCH;AUTO;OFF")
   if(ADD_CONTROLLED_REQUIRED)
     # This is a required dependency, so we're only free to choose how, not if, we want to use it.
