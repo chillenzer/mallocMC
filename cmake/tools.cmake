@@ -10,15 +10,15 @@ include(${CMAKE_CURRENT_LIST_DIR}/CPM_0.40.2.cmake)
 
 # enables sanitizers support using the the `USE_SANITIZER` flag available values are: Address,
 # Memory, MemoryWithOrigins, Undefined, Thread, Leak, 'Address;Undefined'
-if(USE_SANITIZER OR USE_STATIC_ANALYZER)
+if(mallocMC_USE_SANITIZER OR mallocMC_USE_STATIC_ANALYZER)
   CPMAddPackage("gh:StableCoder/cmake-scripts#24.04")
 
-  if(USE_SANITIZER)
+  if(mallocMC_USE_SANITIZER)
     include(${cmake-scripts_SOURCE_DIR}/sanitizers.cmake)
   endif()
 
-  if(USE_STATIC_ANALYZER)
-    if("clang-tidy" IN_LIST USE_STATIC_ANALYZER)
+  if(mallocMC_USE_STATIC_ANALYZER)
+    if("clang-tidy" IN_LIST mallocMC_USE_STATIC_ANALYZER)
       set(CLANG_TIDY
           ON
           CACHE INTERNAL ""
@@ -29,7 +29,7 @@ if(USE_SANITIZER OR USE_STATIC_ANALYZER)
           CACHE INTERNAL ""
       )
     endif()
-    if("iwyu" IN_LIST USE_STATIC_ANALYZER)
+    if("iwyu" IN_LIST mallocMC_USE_STATIC_ANALYZER)
       set(IWYU
           ON
           CACHE INTERNAL ""
@@ -40,7 +40,7 @@ if(USE_SANITIZER OR USE_STATIC_ANALYZER)
           CACHE INTERNAL ""
       )
     endif()
-    if("cppcheck" IN_LIST USE_STATIC_ANALYZER)
+    if("cppcheck" IN_LIST mallocMC_USE_STATIC_ANALYZER)
       set(CPPCHECK
           ON
           CACHE INTERNAL ""
@@ -69,6 +69,6 @@ if(USE_SANITIZER OR USE_STATIC_ANALYZER)
 endif()
 
 # enables CCACHE support through the USE_CCACHE flag possible values are: YES, NO or equivalent
-if(USE_CCACHE)
+if(mallocMC_USE_CCACHE)
   CPMAddPackage("gh:TheLartians/Ccache.cmake@1.2.4")
 endif()
