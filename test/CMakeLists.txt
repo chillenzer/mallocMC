@@ -12,4 +12,8 @@ add_subdirectory(
     ${CMAKE_BINARY_DIR}/test/multithreaded
 )
 
-add_custom_target(mallocMCTests DEPENDS mallocMCUnitTests mallocMCMultithreadedTests)
+add_custom_target(
+    mallocMCTests
+    DEPENDS mallocMCUnitTests mallocMCMultithreadedTests
+    COMMENT "Shortcut for building all tests"
+)

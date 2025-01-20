@@ -12,4 +12,8 @@ add_subdirectory(
     ${CMAKE_BINARY_DIR}/examples/getAvailableSlots
 )
 
-add_custom_target(mallocMCExamples DEPENDS mallocMCExampleVectorAdd mallocMCExampleGetAvailableSlots)
+add_custom_target(
+    mallocMCExamples
+    DEPENDS mallocMCExampleVectorAdd mallocMCExampleGetAvailableSlots
+    COMMENT "Shortcut for building all examples."
+)
