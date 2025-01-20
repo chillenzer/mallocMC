@@ -20,10 +20,10 @@ endif()
 # ---- Add dependencies via CPM ----
 # see https://github.com/TheLartians/CPM.cmake for more info
 
-include(cmake/CPM_0.40.2.cmake)
-CPMUsePackageLock(cmake/package-lock.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/CPM_0.40.2.cmake)
+CPMUsePackageLock(${CMAKE_CURRENT_LIST_DIR}/cmake/package-lock.cmake)
 
-include(cmake/add_controlled.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/add_controlled.cmake)
 
 # PackageProject.cmake will be used to make our target installable
 add_controlled("PackageProject.cmake" REQUIRED)
@@ -44,13 +44,13 @@ target_include_directories(
 )
 
 if(mallocMC_BUILD_TESTING)
-  include(cmake/tools.cmake)
+  include(${CMAKE_CURRENT_LIST_DIR}/cmake/tools.cmake)
   enable_testing()
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/test ${CMAKE_BINARY_DIR}/test)
 endif()
 
 if(mallocMC_BUILD_EXAMPLES)
-  include(cmake/tools.cmake)
+  include(${CMAKE_CURRENT_LIST_DIR}/cmake/tools.cmake)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/examples ${CMAKE_BINARY_DIR}/examples)
 endif()
 

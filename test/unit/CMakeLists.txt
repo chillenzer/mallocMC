@@ -9,14 +9,14 @@ option(TEST_INSTALLED_VERSION "Test the version found by find_package" OFF)
 
 # --- Import tools ----
 
-include(../../cmake/tools.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/tools.cmake)
 
 # ---- Dependencies ----
 
-include(../../cmake/CPM_0.40.2.cmake)
-CPMUsePackageLock(../../cmake/package-lock.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/CPM_0.40.2.cmake)
+CPMUsePackageLock(${CMAKE_CURRENT_LIST_DIR}/../../cmake/package-lock.cmake)
 
-include(../../cmake/add_controlled.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/add_controlled.cmake)
 
 add_controlled("alpaka" REQUIRED PREFIX mallocMC)
 add_controlled("Catch2" REQUIRED PREFIX mallocMC)
