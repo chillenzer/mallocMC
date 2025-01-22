@@ -29,11 +29,17 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/add_controlled.cmake)
 add_controlled("PackageProject.cmake" REQUIRED)
 add_controlled("alpaka" REQUIRED)
 
+if(alpaka_ACC_GPU_CUDA_ENABLE)
+  add_controlled("Gallatin")
+endif()
+
 # ---- Create library ----
 
 # Note: for header-only libraries change all PUBLIC flags to INTERFACE and create an interface
 add_library(${PROJECT_NAME} INTERFACE)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE gallatin)
 
 # being a cross-platform target, we enforce standards conformance on MSVC
 target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
