@@ -38,6 +38,26 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
 
 if(alpaka_ACC_GPU_CUDA_ENABLE)
   add_controlled("Gallatin")
+
+  # Gallatin needs some fairly recent compute capability from CUDA.
+  # CMake defaults to taking the oldest supported by the device
+  # (https://cmake.org/cmake/help/latest/variable/CMAKE_CUDA_ARCHITECTURES.html)
+  # which can be too old. This leads to compilation errors along the lines of
+  #
+  #  error: no instance of overloaded function "atomicCAS" matches the argument list
+  #         argument types are: (unsigned short *, unsigned short, unsigned short)
+  #
+  # because this overload was only added later (apparently?).
+
+  if ("${CMAKE_CUDA_ARCHITECTURES}" LESS 70)
+    message(
+        WARNING
+        "CUDA architecture detected is too old: ${CMAKE_CUDA_ARCHITECTURES}. "
+        "If the architecture set is too old, this can lead to compilation errors with Gallatin. "
+        "If Gallatin is needed, please set CMAKE_CUDA_ARCHITECTURES to the correct value >= 70."
+      )
+  endif()
+
   target_link_libraries(${PROJECT_NAME} INTERFACE gallatin)
 endif()
 
