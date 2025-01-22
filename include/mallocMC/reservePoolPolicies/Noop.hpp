@@ -41,7 +41,7 @@ namespace mallocMC
         struct Noop
         {
             template<typename AlpakaDev>
-            auto setMemPool(AlpakaDev const& dev, size_t memsize) -> void*
+            auto setMemPool(AlpakaDev const& /*dev*/, size_t /*memsize*/) -> void*
             {
                 return nullptr;
             }
