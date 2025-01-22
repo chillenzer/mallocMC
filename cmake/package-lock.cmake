@@ -36,10 +36,11 @@ CPMDeclarePackage(Catch2
   EXCLUDE_FROM_ALL YES
 )
 # Gallatin
-CPMDeclarePackage(Catch2
+CPMDeclarePackage(Gallatin
   # There's no release available yet.
-  GIT_TAG 1aa70ade136c3c2042e2a9c2f25565aa56168a0f
-  GITHUB_REPOSITORY saltsystemslab/Gallatin
+  GIT_TAG ac0cb8e380ffcb74156bafb8805fb60412817c5f
+  # Use our own fork for some patches
+  GITHUB_REPOSITORY chillenzer/Gallatin
   SYSTEM YES
   EXCLUDE_FROM_ALL YES
 )
