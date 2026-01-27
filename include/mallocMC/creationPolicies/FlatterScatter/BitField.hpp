@@ -344,6 +344,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     template<uint32_t MyBitMaskSize = BitMaskSize>
     struct BitFieldFlatImpl
     {
+        static_assert(false, "Test that you've got the right version.");
         std::span<BitMaskImpl<MyBitMaskSize>> data;
 
         /**
