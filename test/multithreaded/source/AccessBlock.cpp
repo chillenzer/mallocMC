@@ -61,7 +61,16 @@
 #include <cstdio>
 #include <functional>
 #include <iterator>
+#ifdef _GLIBCXX_ASSERT
+#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine _GLIBCXX_ASSERT
+#endif
 #include <span>
+#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    define _GLIBCXX_ASSERT
+#endif
+
 #include <tuple>
 #include <type_traits>
 

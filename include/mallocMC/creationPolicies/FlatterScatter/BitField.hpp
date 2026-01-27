@@ -36,7 +36,15 @@
 
 #include <cstdint>
 #include <limits>
+#ifdef _GLIBCXX_ASSERT
+#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine _GLIBCXX_ASSERT
+#endif
 #include <span>
+#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    define _GLIBCXX_ASSERT
+#endif
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
