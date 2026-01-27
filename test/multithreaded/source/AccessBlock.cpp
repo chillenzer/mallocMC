@@ -25,6 +25,8 @@
 */
 
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include "mallocMC/mallocMC_utils.hpp"
@@ -67,12 +69,6 @@
 #    undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #endif
 #include <span>
-#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    define _GLIBCXX_ASSERT
-#    define _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
-
 #include <tuple>
 #include <type_traits>
 

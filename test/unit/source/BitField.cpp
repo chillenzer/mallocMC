@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/mallocMC_utils.hpp"
 #include "mocks.hpp"
 

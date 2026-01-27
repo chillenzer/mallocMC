@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/allocator.hpp"
 
 #include "mallocMC/alignmentPolicies/Shrink.hpp"

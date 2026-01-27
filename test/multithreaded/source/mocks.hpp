@@ -26,6 +26,8 @@
 
 #pragma once
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>

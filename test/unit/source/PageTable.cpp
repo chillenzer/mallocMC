@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include <catch2/catch_test_macros.hpp>

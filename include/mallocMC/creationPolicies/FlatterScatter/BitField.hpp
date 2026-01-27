@@ -42,11 +42,6 @@
 #    undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #endif
 #include <span>
-#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    define _GLIBCXX_ASSERT
-#    define _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc

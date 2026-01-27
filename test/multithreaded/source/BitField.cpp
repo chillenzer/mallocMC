@@ -24,6 +24,8 @@
   THE SOFTWARE.
 */
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuThreads.hpp>

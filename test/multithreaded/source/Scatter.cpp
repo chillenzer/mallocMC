@@ -25,6 +25,8 @@
 */
 
 
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/creationPolicies/Scatter.hpp"
 
 #include "mallocMC/alignmentPolicies/Shrink.hpp"
@@ -66,18 +68,9 @@
 #include <cstdio>
 #include <functional>
 #include <iterator>
-#ifdef _GLIBCXX_ASSERT
-#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef _GLIBCXX_ASSERT
-#    undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
+#undef _GLIBCXX_ASSERT
+#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include <span>
-#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    define _GLIBCXX_ASSERT
-#    define _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
-
 #include <tuple>
 #include <type_traits>
 
