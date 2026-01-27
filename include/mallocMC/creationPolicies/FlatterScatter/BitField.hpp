@@ -328,6 +328,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 
     using BitMask = BitMaskImpl<BitMaskSize>;
 
+#ifdef _GLIBCXX_ASSERT
+#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine _GLIBCXX_ASSERT
+#endif
     /**
      * @class BitFieldFlat
      * @brief Represents a (non-owning) bit field consisting of multiple bit masks.
@@ -344,7 +348,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     template<uint32_t MyBitMaskSize = BitMaskSize>
     struct BitFieldFlatImpl
     {
-        static_assert(false, "Test that you've got the right version.");
         std::span<BitMaskImpl<MyBitMaskSize>> data;
 
         /**
@@ -529,6 +532,11 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             return noFreeBitFound();
         }
     };
+
+#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    undefine MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
+#    define _GLIBCXX_ASSERT
+#endif
 
     using BitFieldFlat = BitFieldFlatImpl<BitMaskSize>;
 } // namespace mallocMC::CreationPolicies::FlatterScatterAlloc
