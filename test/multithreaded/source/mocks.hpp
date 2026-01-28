@@ -28,6 +28,9 @@
 
 #undef _GLIBCXX_ASSERT
 #undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
+// clang-format off
+#include "mallocMC/glibcxx_assert_workaround.hpp"
+// clang-format on
 #include <alpaka/acc/AccCpuSerial.hpp>
 #include <alpaka/atomic/AtomicAtomicRef.hpp>
 #include <alpaka/dim/DimIntegralConst.hpp>

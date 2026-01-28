@@ -26,6 +26,9 @@
 
 #undef _GLIBCXX_ASSERT
 #undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
+// clang-format off
+#include "mallocMC/glibcxx_assert_workaround.hpp"
+// clang-format on
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuThreads.hpp>

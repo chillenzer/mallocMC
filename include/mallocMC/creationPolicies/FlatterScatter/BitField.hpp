@@ -26,6 +26,9 @@
 
 #pragma once
 
+// clang-format off
+#include "mallocMC/glibcxx_assert_workaround.hpp"
+// clang-format on
 #include "mallocMC/creationPolicies/FlatterScatter/wrappingLoop.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
 
