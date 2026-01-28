@@ -36,6 +36,7 @@
 */
 #include <bits/c++config.h>
 
+#if (MALLOCMC_DEVICE_COMPILE)
 // Taken over from
 // https://github.com/jmmartinez/llvm-project/blob/29463adcd2869c9a6777d54d3521f0d435e3d38c/clang/lib/Headers/cuda_wrappers/bits/c%2B%2Bconfig.h
 // so licensed under APL2 with LLVM exceptions.
@@ -47,3 +48,4 @@ namespace std
         __builtin_abort();
     }
 } // namespace std
+#endif
