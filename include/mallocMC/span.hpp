@@ -5,7 +5,7 @@
 
   Copyright (C) 2012 Institute for Computer Graphics and Vision,
                      Graz University of Technology
-  Copyright (C) 2014-2024 Institute of Radiation Physics,
+  Copyright (C) 2014-2026 Institute of Radiation Physics,
                      Helmholtz-Zentrum Dresden - Rossendorf
 
   Author(s):  Markus Steinberger - steinberger ( at ) icg.tugraz.at
@@ -34,18 +34,48 @@
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   THE SOFTWARE.
 */
-#include <bits/c++config.h>
 
-#if (MALLOCMC_DEVICE_COMPILE)
-// Taken over from
-// https://github.com/jmmartinez/llvm-project/blob/29463adcd2869c9a6777d54d3521f0d435e3d38c/clang/lib/Headers/cuda_wrappers/bits/c%2B%2Bconfig.h
-// so licensed under APL2 with LLVM exceptions.
-namespace std
+// This is a workaround for the following issue:
+// https://github.com/llvm/llvm-project/pull/136133
+// If clang or clang-based compilers like hipcc try to compile device code
+// with a too recent version of libstdc++ from GCC,
+// they run into issues like
+// error: reference to __host__ function '__glibcxx_assert_fail' in __host__ __device__ function
+
+#pragma once
+#include <cstddef>
+
+template<typename TData>
+struct span
 {
-    __attribute__((device, noreturn, __always_inline__, __visibility__("default"))) inline void __glibcxx_assert_fail(
-        ...) noexcept
+    TData* ptr_;
+    size_t size_;
+
+    constexpr span(TData* ptr, size_t size) : ptr_(ptr), size_(size) {};
+
+    template<size_t N>
+    constexpr span(TData (&arr)[N]) : ptr_(arr)
+                                    , size_(N)
     {
-        __builtin_abort();
     }
-} // namespace std
-#endif
+
+    [[nodiscard]] constexpr auto size() const -> size_t
+    {
+        return size_;
+    }
+
+    [[nodiscard]] constexpr auto operator[](size_t index) const -> decltype(auto)
+    {
+        return ptr_[index];
+    }
+
+    [[nodiscard]] constexpr auto begin() const -> decltype(auto)
+    {
+        return ptr_;
+    }
+
+    [[nodiscard]] constexpr auto end() const -> decltype(auto)
+    {
+        return &(ptr_[size_]);
+    }
+};

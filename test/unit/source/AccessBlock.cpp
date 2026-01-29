@@ -24,16 +24,12 @@
   THE SOFTWARE.
 */
 
-#undef _GLIBCXX_ASSERT
-#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-// clang-format off
-#include "mallocMC/glibcxx_assert_workaround.hpp"
-// clang-format on
 #include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"
 #include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
+#include "mallocMC/span.hpp"
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
@@ -613,7 +609,7 @@ TEST_CASE("AccessBlock (Regression)")
         // Fill all memory with ones.
         for(void* pointer : pointers)
         {
-            auto mem = std::span(static_cast<unsigned char*>(pointer), chunkSizeOneMask);
+            auto mem = span(static_cast<unsigned char*>(pointer), chunkSizeOneMask);
             for(auto& byte : mem)
             {
                 byte = std::numeric_limits<unsigned char>::max();
@@ -626,7 +622,7 @@ TEST_CASE("AccessBlock (Regression)")
         accessBlock.destroy(accSerial, freedPointer);
 
         void* pointerTwoMasks = accessBlock.create(accSerial, chunkSizeTwoMasks);
-        for(auto& c : std::span(static_cast<unsigned char*>(pointerTwoMasks), chunkSizeTwoMasks))
+        for(auto& c : span(static_cast<unsigned char*>(pointerTwoMasks), chunkSizeTwoMasks))
         {
             c = 0U;
         }
@@ -636,7 +632,7 @@ TEST_CASE("AccessBlock (Regression)")
         {
             if(pointer != freedPointer)
             {
-                auto mem = std::span(static_cast<unsigned char*>(pointer), chunkSizeOneMask);
+                auto mem = span(static_cast<unsigned char*>(pointer), chunkSizeOneMask);
                 CHECK(std::all_of(
                     mem.begin(),
                     mem.end(),
@@ -645,7 +641,7 @@ TEST_CASE("AccessBlock (Regression)")
             }
         }
 
-        auto mem = std::span(static_cast<unsigned char*>(pointerTwoMasks), chunkSizeTwoMasks);
+        auto mem = span(static_cast<unsigned char*>(pointerTwoMasks), chunkSizeTwoMasks);
         CHECK(std::all_of(mem.begin(), mem.end(), [](auto const val) { return val == 0U; }));
 
         // Now, we want to be really explicit:

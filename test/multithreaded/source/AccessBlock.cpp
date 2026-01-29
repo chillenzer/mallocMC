@@ -25,14 +25,10 @@
 */
 
 
-#undef _GLIBCXX_ASSERT
-#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-// clang-format off
-#include "mallocMC/glibcxx_assert_workaround.hpp"
-// clang-format on
 #include "mallocMC/creationPolicies/FlatterScatter/AccessBlock.hpp"
 
 #include "mallocMC/mallocMC_utils.hpp"
+#include "mallocMC/span.hpp"
 #include "mocks.hpp"
 
 #include <alpaka/acc/AccCpuSerial.hpp>
@@ -66,12 +62,6 @@
 #include <cstdio>
 #include <functional>
 #include <iterator>
-#ifdef _GLIBCXX_ASSERT
-#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef _GLIBCXX_ASSERT
-#    undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
-#include <span>
 #include <tuple>
 #include <type_traits>
 
@@ -88,7 +78,6 @@ constexpr uint32_t pteSize = 4 + 4;
 constexpr uint32_t blockSize = numPages * (pageSize + pteSize);
 
 using MyAccessBlock = AccessBlock<HeapConfig<blockSize, pageSize>, AlignmentPolicy>;
-using std::span;
 
 // Fill all pages of the given access block with occupied chunks of the given size. This is useful to test the
 // behaviour near full filling but also to have a deterministic page and chunk where an allocation must happen
@@ -195,8 +184,8 @@ struct IsValid
         bool* results,
         uint32_t const size) const
     {
-        std::span<void*> tmpPointers(pointers, size);
-        std::span<bool> tmpResults(results, size);
+        span<void*> tmpPointers(pointers, size);
+        span<bool> tmpResults(results, size);
         std::transform(
             std::begin(tmpPointers),
             std::end(tmpPointers),
@@ -246,7 +235,7 @@ auto createChunkSizes(auto const& devHost, auto const& devAcc, auto& queue)
 auto createPointers(auto const& devHost, auto const& devAcc, auto& queue, uint32_t const size)
 {
     auto pointers = makeBuffer<void*>(devHost, devAcc, size);
-    std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+    span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
     std::fill(std::begin(tmp), std::end(tmp), reinterpret_cast<void*>(1U));
     alpaka::memcpy(queue, pointers.m_onDevice, pointers.m_onHost);
     return pointers;
@@ -320,7 +309,7 @@ auto freeAllButOneOnFirstPage(
     AccessBlock<HeapConfig<T_blockSize, T_pageSize>, AlignmentPolicy>* accessBlock,
     auto& pointers)
 {
-    std::span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+    span<void*> tmp(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
     std::sort(std::begin(tmp), std::end(tmp));
     // This points to the first chunk of page 0.
     auto* pointer1 = tmp[0];
@@ -385,7 +374,7 @@ auto checkContent(
     alpaka::wait(queue);
 
 
-    std::span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
+    span<bool> tmpResults(alpaka::getPtrNative(results.m_onHost), results.m_extents[0]);
     auto writtenCorrectly = std::reduce(std::cbegin(tmpResults), std::cend(tmpResults), true, std::multiplies<bool>{});
 
     return writtenCorrectly;
@@ -768,7 +757,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             devHost,
             devAcc,
             getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]));
-        std::span<uint32_t> tmp(alpaka::getPtrNative(content.m_onHost), content.m_extents[0]);
+        span<uint32_t> tmp(alpaka::getPtrNative(content.m_onHost), content.m_extents[0]);
         std::generate(std::begin(tmp), std::end(tmp), ContentGenerator{});
         alpaka::memcpy(queue, content.m_onDevice, content.m_onHost);
         alpaka::wait(queue);
@@ -824,7 +813,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::memcpy(queue, result.m_onHost, result.m_onDevice);
         alpaka::wait(queue);
 
-        std::span<bool> tmpResults(alpaka::getPtrNative(result.m_onHost), result.m_extents[0]);
+        span<bool> tmpResults(alpaka::getPtrNative(result.m_onHost), result.m_extents[0]);
         CHECK(std::none_of(std::cbegin(tmpResults), std::cend(tmpResults), [](auto const val) { return val; }));
 
         CHECK(getAvailableSlots<Acc>(accessBlock, queue, devHost, devAcc, chunkSizes.m_onHost[0]) == allSlots);
@@ -847,7 +836,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
+        span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), pointers.m_extents[0]);
         std::sort(std::begin(tmpPointers), std::end(tmpPointers));
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }
@@ -875,7 +864,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
 
         // We only let the last (availableSlots-1) keep their memory. So, the rest at the beginning should have a
         // nullptr.
-        std::span<void*> tmpManyPointers(alpaka::getPtrNative(manyPointers.m_onHost), manyPointers.m_extents[0]);
+        span<void*> tmpManyPointers(alpaka::getPtrNative(manyPointers.m_onHost), manyPointers.m_extents[0]);
         auto beginNonNull = std::begin(tmpManyPointers) + (oversubscriptionFactor - 1) * availableSlots + 1;
 
         CHECK(std::all_of(
@@ -890,7 +879,7 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
     SECTION("can handle many different chunk sizes.")
     {
         auto chunkSizes = makeBuffer<uint32_t>(devHost, devAcc, pageSize);
-        std::span<uint32_t> chunkSizesSpan(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
+        span<uint32_t> chunkSizesSpan(alpaka::getPtrNative(chunkSizes.m_onHost), chunkSizes.m_extents[0]);
         std::iota(std::begin(chunkSizesSpan), std::end(chunkSizesSpan), 1U);
         alpaka::memcpy(queue, chunkSizes.m_onDevice, chunkSizes.m_onHost);
         alpaka::wait(queue);
@@ -902,14 +891,14 @@ TEMPLATE_LIST_TEST_CASE("Threaded AccessBlock", "", alpaka::EnabledAccTags)
             CreateAllChunkSizes{},
             accessBlock,
             span<void*>(alpaka::getPtrNative(pointers.m_onDevice), MyAccessBlock::numPages()),
-            std::span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
+            span<uint32_t>(alpaka::getPtrNative(chunkSizes.m_onDevice), chunkSizes.m_extents[0]));
 
         alpaka::wait(queue);
 
         alpaka::memcpy(queue, pointers.m_onHost, pointers.m_onDevice);
         alpaka::wait(queue);
 
-        std::span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), MyAccessBlock::numPages());
+        span<void*> tmpPointers(alpaka::getPtrNative(pointers.m_onHost), MyAccessBlock::numPages());
         std::sort(std::begin(tmpPointers), std::end(tmpPointers));
         CHECK(std::unique(std::begin(tmpPointers), std::end(tmpPointers)) == std::end(tmpPointers));
     }

@@ -24,8 +24,6 @@
   THE SOFTWARE.
 */
 
-#undef _GLIBCXX_ASSERT
-#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 #include "mallocMC/creationPolicies/FlatterScatter/PageInterpretation.hpp"
 
 #include "mallocMC/creationPolicies/FlatterScatter/BitField.hpp"

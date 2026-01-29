@@ -26,11 +26,9 @@
 
 #pragma once
 
-// clang-format off
-#include "mallocMC/glibcxx_assert_workaround.hpp"
-// clang-format on
 #include "mallocMC/creationPolicies/FlatterScatter/wrappingLoop.hpp"
 #include "mallocMC/mallocMC_utils.hpp"
+#include "mallocMC/span.hpp"
 
 #include <alpaka/core/Common.hpp>
 #include <alpaka/intrinsic/Traits.hpp>
@@ -39,12 +37,6 @@
 
 #include <cstdint>
 #include <limits>
-#ifdef _GLIBCXX_ASSERT
-#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undef _GLIBCXX_ASSERT
-#    undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
-#endif
-#include <span>
 #include <type_traits>
 
 namespace mallocMC::CreationPolicies::FlatterScatterAlloc
@@ -336,10 +328,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
 
     using BitMask = BitMaskImpl<BitMaskSize>;
 
-#ifdef _GLIBCXX_ASSERT
-#    define MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undefine _GLIBCXX_ASSERT
-#endif
     /**
      * @class BitFieldFlat
      * @brief Represents a (non-owning) bit field consisting of multiple bit masks.
@@ -356,7 +344,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     template<uint32_t MyBitMaskSize = BitMaskSize>
     struct BitFieldFlatImpl
     {
-        std::span<BitMaskImpl<MyBitMaskSize>> data;
+        span<BitMaskImpl<MyBitMaskSize>> data;
 
         /**
          * @brief Check if the index-th bit in the bit field is set (=1).
@@ -540,11 +528,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             return noFreeBitFound();
         }
     };
-
-#ifdef MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    undefine MALLOCMC_HAS_BEEN_DEFINED_GLIBCXX_ASSERT
-#    define _GLIBCXX_ASSERT
-#endif
 
     using BitFieldFlat = BitFieldFlatImpl<BitMaskSize>;
 } // namespace mallocMC::CreationPolicies::FlatterScatterAlloc

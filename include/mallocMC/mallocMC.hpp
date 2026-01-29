@@ -37,8 +37,6 @@
 
 #pragma once
 
-#undef _GLIBCXX_ASSERT
-#undef _GLIBCXX_HAVE_IS_CONSTANT_EVALUATED
 // generic stuff
 #include "version.hpp"
 
