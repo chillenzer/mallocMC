@@ -167,6 +167,10 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         template<typename AlpakaAcc>
         ALPAKA_FN_INLINE ALPAKA_FN_ACC auto create(AlpakaAcc const& acc, uint32_t const bytes) -> void*
         {
+            if constexpr(T_HeapConfig::sleep_time > 0)
+            {
+                nanosleep(acc, T_HeapConfig::sleep_time);
+            }
             auto blockValue = block;
             auto hashValue = T_HashConfig::template hash<T_HeapConfig::pagesize>(acc, bytes);
             auto startIdx = startBlockIndex(acc, blockValue, hashValue);
@@ -258,12 +262,14 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
     template<
         uint32_t T_blockSize = defaultBlockSize,
         uint32_t T_pageSize = defaultPageSize,
-        uint32_t T_wasteFactor = 2U>
+        uint32_t T_wasteFactor = 2U,
+        uint32_t T_sleepTime = 0U>
     struct DefaultHeapConfig
     {
         static constexpr uint32_t const accessblocksize = T_blockSize;
         static constexpr uint32_t const pagesize = T_pageSize;
         static constexpr uint32_t const wastefactor = T_wasteFactor;
+        static constexpr uint32_t const sleep_time = T_sleepTime;
         static constexpr bool const resetfreedpages = true;
 
         /**

@@ -170,6 +170,31 @@ namespace mallocMC
     }
 #endif
 
+    /** suspend the calling thread for approximately `ns` nanoseconds
+     *
+     * No-op on backends that do not provide a nanosleep intrinsic.
+     */
+    template<typename TAcc>
+    ALPAKA_FN_ACC inline auto nanosleep(TAcc const& /*acc*/, uint32_t ns) -> void
+    {
+        (void) ns;
+    }
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    template<typename TDim, typename TIdx>
+    inline __device__ void nanosleep(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, uint32_t ns)
+    {
+        __nanosleep(ns);
+    }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_HIP_ENABLED
+    template<typename TDim, typename TIdx>
+    ALPAKA_FN_ACC inline auto nanosleep(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, uint32_t ns) -> void
+    {
+        __nanosleep(ns);
+    }
+#endif
 
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
      *
