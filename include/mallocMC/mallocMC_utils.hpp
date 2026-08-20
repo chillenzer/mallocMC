@@ -44,6 +44,10 @@
 #endif
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <stdexcept>
 #include <type_traits>
 
 /* HIP-clang is doing something wrong and uses the host path of the code when __HIP_DEVICE_COMPILE__
@@ -195,6 +199,51 @@ namespace mallocMC
         __nanosleep(ns);
     }
 #endif
+
+    /** read the allocation delay in nanoseconds from the environment
+     *
+     * The optional MALLOCMC_SLEEP_TIME environment variable (a non-negative integer number of
+     * nanoseconds) selects the delay to inject into every allocation request at run time, so a
+     * single compiled binary can be used for a whole sweep of delay values. If the variable is
+     * not set or cannot be parsed, the delay is zero. Values beyond the largest duration for
+     * which the __nanosleep intrinsics provide reliable results (~1 ms) are capped there.
+     */
+    ALPAKA_FN_HOST inline auto allocationDelayNs() -> std::uint32_t
+    {
+        constexpr std::uint32_t maxReliableDelayNs = 1'000'000U;
+        char const* env = std::getenv("MALLOCMC_SLEEP_TIME");
+        if((env == nullptr) || (env[0] == '\0'))
+        {
+            return 0U;
+        }
+        try
+        {
+            std::size_t consumed = 0U;
+            auto const value = std::stoul(env, &consumed);
+            if(consumed != std::strlen(env))
+            {
+                std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
+                return 0U;
+            }
+            if(value > static_cast<unsigned long>(maxReliableDelayNs))
+            {
+                std::fprintf(
+                    stderr,
+                    "mallocMC: capping MALLOCMC_SLEEP_TIME=%s (%lu ns) to the maximum reliable "
+                    "__nanosleep duration of %u ns\n",
+                    env,
+                    static_cast<unsigned long>(value),
+                    maxReliableDelayNs);
+                return maxReliableDelayNs;
+            }
+            return static_cast<std::uint32_t>(value);
+        }
+        catch(std::exception const&)
+        {
+            std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
+            return 0U;
+        }
+    }
 
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
      *
