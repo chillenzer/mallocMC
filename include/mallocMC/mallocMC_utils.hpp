@@ -174,9 +174,53 @@ namespace mallocMC
     }
 #endif
 
-    /** suspend the calling thread for approximately `ns` nanoseconds
+#if defined(ALPAKA_ACC_GPU_CUDA_ENABLED) || defined(ALPAKA_ACC_GPU_HIP_ENABLED)
+
+    /** read the current value of the device-wide global timer in nanoseconds
      *
-     * No-op on backends that do not provide a nanosleep intrinsic.
+     * The global timer is a 64-bit clock in nanoseconds that keeps running
+     * independently of the SM clock state, so - in contrast to the per-SM
+     * `clock()` cycle counter - no frequency calibration is needed to turn a
+     * requested duration in nanoseconds into a wait. On CUDA it is read
+     * through a `volatile` inline-asm, which guarantees the load is really
+     * executed on every loop iteration instead of being optimized away (the
+     * classic pitfall of busy-waiting on device counters).
+     */
+    ALPAKA_FN_ACC inline auto deviceGlobalTimerNs() -> unsigned long long
+    {
+#    if defined(ALPAKA_ACC_GPU_CUDA_ENABLED)
+        unsigned long long timer = 0ULL;
+        asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(timer));
+        return timer;
+#    else
+        return __globaltimer();
+#    endif
+    }
+
+    /** busy-wait until at least `ns` nanoseconds have elapsed
+     *
+     * Replaces the `__nanosleep` intrinsic, whose wake-up time is not
+     * reliable enough to serve as a controlled delay (runtime-vs-delay
+     * sweeps came out step-like and non-monotonic). The busy-wait guarantees
+     * the calling thread is not resumed before `ns` nanoseconds have really
+     * passed on the global timer; a small, bounded overshoot can occur.
+     */
+    ALPAKA_FN_ACC inline auto busyWaitNs(uint32_t ns) -> void
+    {
+        unsigned long long const target = deviceGlobalTimerNs() + static_cast<unsigned long long>(ns);
+        while(deviceGlobalTimerNs() < target)
+        {
+            // spin
+        }
+    }
+
+#endif // GPU backends
+
+    /** suspend the calling thread for at least `ns` nanoseconds
+     *
+     * Implemented as a busy-wait on the device global timer for the GPU
+     * backends. No-op on backends without a device global timer (e.g. the
+     * CPU backend), which keeps host-compiled setups unaffected.
      */
     template<typename TAcc>
     ALPAKA_FN_ACC inline auto nanosleep(TAcc const& /*acc*/, uint32_t ns) -> void
@@ -186,9 +230,9 @@ namespace mallocMC
 
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
     template<typename TDim, typename TIdx>
-    inline __device__ void nanosleep(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, uint32_t ns)
+    ALPAKA_FN_ACC inline auto nanosleep(alpaka::AccGpuCudaRt<TDim, TIdx> const& /*acc*/, uint32_t ns) -> void
     {
-        __nanosleep(ns);
+        busyWaitNs(ns);
     }
 #endif
 
@@ -196,7 +240,7 @@ namespace mallocMC
     template<typename TDim, typename TIdx>
     ALPAKA_FN_ACC inline auto nanosleep(alpaka::AccGpuHipRt<TDim, TIdx> const& /*acc*/, uint32_t ns) -> void
     {
-        __nanosleep(ns);
+        busyWaitNs(ns);
     }
 #endif
 
@@ -205,12 +249,13 @@ namespace mallocMC
      * The optional MALLOCMC_SLEEP_TIME environment variable (a non-negative integer number of
      * nanoseconds) selects the delay to inject into every allocation request at run time, so a
      * single compiled binary can be used for a whole sweep of delay values. If the variable is
-     * not set or cannot be parsed, the delay is zero. Values beyond the largest duration for
-     * which the __nanosleep intrinsics provide reliable results (~1 ms) are capped there.
+     * not set or cannot be parsed, the delay is zero. Values are capped at a (arbitrary)
+     * safety limit, so a unit mistake such as passing seconds instead of nanoseconds does not
+     * turn a whole benchmark run into a busy-wait per allocation.
      */
     ALPAKA_FN_HOST inline auto allocationDelayNs() -> std::uint32_t
     {
-        constexpr std::uint32_t maxReliableDelayNs = 1'000'000U;
+        constexpr std::uint32_t maxDelayNs = 1'000'000U;
         char const* env = std::getenv("MALLOCMC_SLEEP_TIME");
         if((env == nullptr) || (env[0] == '\0'))
         {
@@ -225,16 +270,15 @@ namespace mallocMC
                 std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
                 return 0U;
             }
-            if(value > static_cast<unsigned long>(maxReliableDelayNs))
+            if(value > static_cast<unsigned long>(maxDelayNs))
             {
                 std::fprintf(
                     stderr,
-                    "mallocMC: capping MALLOCMC_SLEEP_TIME=%s (%lu ns) to the maximum reliable "
-                    "__nanosleep duration of %u ns\n",
+                    "mallocMC: capping MALLOCMC_SLEEP_TIME=%s (%lu ns) to the maximum delay of %u ns\n",
                     env,
                     static_cast<unsigned long>(value),
-                    maxReliableDelayNs);
-                return maxReliableDelayNs;
+                    maxDelayNs);
+                return maxDelayNs;
             }
             return static_cast<std::uint32_t>(value);
         }
