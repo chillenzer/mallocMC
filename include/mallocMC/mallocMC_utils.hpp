@@ -255,7 +255,6 @@ namespace mallocMC
      */
     ALPAKA_FN_HOST inline auto allocationDelayNs() -> std::uint32_t
     {
-        constexpr std::uint32_t maxDelayNs = 1'000'000U;
         char const* env = std::getenv("MALLOCMC_SLEEP_TIME");
         if((env == nullptr) || (env[0] == '\0'))
         {
@@ -269,16 +268,6 @@ namespace mallocMC
             {
                 std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
                 return 0U;
-            }
-            if(value > static_cast<unsigned long>(maxDelayNs))
-            {
-                std::fprintf(
-                    stderr,
-                    "mallocMC: capping MALLOCMC_SLEEP_TIME=%s (%lu ns) to the maximum delay of %u ns\n",
-                    env,
-                    static_cast<unsigned long>(value),
-                    maxDelayNs);
-                return maxDelayNs;
             }
             return static_cast<std::uint32_t>(value);
         }
