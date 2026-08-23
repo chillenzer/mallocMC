@@ -244,38 +244,63 @@ namespace mallocMC
     }
 #endif
 
-    /** read the allocation delay in nanoseconds from the environment
-     *
-     * The optional MALLOCMC_SLEEP_TIME environment variable (a non-negative integer number of
-     * nanoseconds) selects the delay to inject into every allocation request at run time, so a
-     * single compiled binary can be used for a whole sweep of delay values. If the variable is
-     * not set or cannot be parsed, the delay is zero. Values are capped at a (arbitrary)
-     * safety limit, so a unit mistake such as passing seconds instead of nanoseconds does not
-     * turn a whole benchmark run into a busy-wait per allocation.
-     */
-    ALPAKA_FN_HOST inline auto allocationDelayNs() -> std::uint32_t
+    namespace
     {
-        char const* env = std::getenv("MALLOCMC_SLEEP_TIME");
-        if((env == nullptr) || (env[0] == '\0'))
+        /** read the delay in nanoseconds from the environment variable `name`
+         *
+         * The value is a non-negative integer number of nanoseconds. If the variable is not
+         * set, empty, or cannot be parsed, the delay is zero (malformed values are reported on
+         * `stderr`).
+         */
+        auto delayFromEnv(char const* name) -> std::uint32_t
         {
-            return 0U;
-        }
-        try
-        {
-            std::size_t consumed = 0U;
-            auto const value = std::stoul(env, &consumed);
-            if(consumed != std::strlen(env))
+            char const* env = std::getenv(name);
+            if((env == nullptr) || (env[0] == '\0'))
             {
-                std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
                 return 0U;
             }
-            return static_cast<std::uint32_t>(value);
+            try
+            {
+                std::size_t consumed = 0U;
+                auto const value = std::stoul(env, &consumed);
+                if(consumed != std::strlen(env))
+                {
+                    std::fprintf(stderr, "mallocMC: ignoring malformed %s=\"%s\"\n", name, env);
+                    return 0U;
+                }
+                return static_cast<std::uint32_t>(value);
+            }
+            catch(std::exception const&)
+            {
+                std::fprintf(stderr, "mallocMC: ignoring malformed %s=\"%s\"\n", name, env);
+                return 0U;
+            }
         }
-        catch(std::exception const&)
-        {
-            std::fprintf(stderr, "mallocMC: ignoring malformed MALLOCMC_SLEEP_TIME=\"%s\"\n", env);
-            return 0U;
-        }
+    } // namespace
+
+    /** read the allocation delay in nanoseconds from the environment
+     *
+     * The optional MALLOCMC_MALLOC_DELAY environment variable (a non-negative integer number
+     * of nanoseconds) selects the delay to inject into every allocation request at run time,
+     * and `freeDelayNs` does the same for every free request, so a single compiled binary can
+     * be used for a whole sweep of (allocation delay, free delay) combinations. If the
+     * variable is not set or cannot be parsed, the delay is zero.
+     */
+    ALPAKA_FN_HOST inline auto mallocDelayNs() -> std::uint32_t
+    {
+        return delayFromEnv("MALLOCMC_MALLOC_DELAY");
+    }
+
+    /** read the free delay in nanoseconds from the environment
+     *
+     * The optional MALLOCMC_FREE_DELAY environment variable (a non-negative integer number of
+     * nanoseconds) selects the delay to inject into every free request at run time; see
+     * `mallocDelayNs` for the free-delay counterpart of the sweep. If the variable is not set
+     * or cannot be parsed, the delay is zero.
+     */
+    ALPAKA_FN_HOST inline auto freeDelayNs() -> std::uint32_t
+    {
+        return delayFromEnv("MALLOCMC_FREE_DELAY");
     }
 
     /** the maximal number threads per block, valid for sm_2.X - sm_7.5
