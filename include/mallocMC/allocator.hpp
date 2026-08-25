@@ -152,6 +152,23 @@ namespace mallocMC
                 pool,
                 size);
 
+            // Read the run-time malloc/free delays once, on the host, and store them in the
+            // device-side allocator so DeviceAllocator::malloc / ::free can apply them
+            // regardless of the creation policy.
+            auto const mallocSleepNs = mallocDelayNs();
+            auto const freeSleepNs = freeDelayNs();
+            auto* devAllocatorPtr = alpaka::getPtrNative(*devAllocatorBuffer);
+            using VecType = alpaka::Vec<Dim, Idx>;
+            alpaka::exec<AlpakaAcc>(
+                queue,
+                alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()},
+                [devAllocatorPtr, mallocSleepNs, freeSleepNs] ALPAKA_FN_ACC(AlpakaAcc const&)
+                {
+                    devAllocatorPtr->mallocSleepNs = mallocSleepNs;
+                    devAllocatorPtr->freeSleepNs = freeSleepNs;
+                });
+            alpaka::wait(queue);
+
             heapInfos.p = pool;
             heapInfos.size = size;
         }

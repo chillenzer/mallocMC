@@ -89,11 +89,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
         size_t heapSize{};
         MyAccessBlock* accessBlocks{};
         uint32_t volatile block = 0U;
-        // Allocation and free delays in nanoseconds, set from the MALLOCMC_MALLOC_DELAY /
-        // MALLOCMC_FREE_DELAY environment variables at initialisation (see `mallocDelayNs` /
-        // `freeDelayNs`) and applied at the top of `DeviceAllocator::malloc` / `::free`.
-        uint32_t mallocSleepNs = 0U;
-        uint32_t freeSleepNs = 0U;
 
         ALPAKA_FN_INLINE ALPAKA_FN_ACC static auto init(auto const& acc, void* accessBlocksPointer, auto heapSize)
             -> void
@@ -257,8 +252,9 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
      * allocate larger chunks that necessary.
      *
      * The allocation and free delays are deliberately not part of the configuration: they are read at run time
-     * from the MALLOCMC_MALLOC_DELAY / MALLOCMC_FREE_DELAY environment variables (see `mallocDelayNs` /
-     * `freeDelayNs`), so a single binary can be used to sweep over (allocation delay, free delay) combinations.
+     * from the MALLOCMC_MALLOC_DELAY / MALLOCMC_FREE_DELAY environment variables and applied by
+     * `DeviceAllocator::malloc` / `::free`, so a single binary can be used to sweep over (allocation delay,
+     * free delay) combinations.
      *
      * @tparam T_blockSize The size of one access block in bytes.
      * @tparam T_pageSize The size of one page in bytes.
@@ -347,9 +343,7 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
             auto const& acc,
             Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>* m_heap,
             void* m_heapmem,
-            size_t const m_memsize,
-            uint32_t const m_mallocSleepNs,
-            uint32_t const m_freeSleepNs) const
+            size_t const m_memsize) const
         {
             auto const idx = alpaka::mapIdx<1U>(
                 alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc),
@@ -359,8 +353,6 @@ namespace mallocMC::CreationPolicies::FlatterScatterAlloc
                 m_heap->accessBlocks
                     = static_cast<Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>::MyAccessBlock*>(m_heapmem);
                 m_heap->heapSize = m_memsize;
-                m_heap->mallocSleepNs = m_mallocSleepNs;
-                m_heap->freeSleepNs = m_freeSleepNs;
             }
             // We can't rely on thread 0 to finish the above before we start, so we use the static version:
             Heap<T_HeapConfig, T_HashConfig, T_AlignmentPolicy>::init(acc, m_heapmem, m_memsize);
@@ -431,30 +423,12 @@ namespace mallocMC::CreationPolicies
                 return;
             }
             auto numPagesPerBlock = MyHeap::MyAccessBlock::numPages();
-            // Read the run-time delays once, on the host, and hand them to the kernel that initialises the heap.
-            auto const mallocSleepNs = mallocDelayNs();
-            auto const freeSleepNs = freeDelayNs();
 
             alpaka::KernelCfg<TAcc> const kernelCfg
                 = {numBlocks * numPagesPerBlock, 1U, false, alpaka::GridBlockExtentSubDivRestrictions::Unrestricted};
-            auto workDiv = alpaka::getValidWorkDiv(
-                kernelCfg,
-                dev,
-                FlatterScatterAlloc::InitKernel{},
-                heap,
-                pool,
-                memsize,
-                mallocSleepNs,
-                freeSleepNs);
-            alpaka::exec<TAcc>(
-                queue,
-                workDiv,
-                FlatterScatterAlloc::InitKernel{},
-                heap,
-                pool,
-                memsize,
-                mallocSleepNs,
-                freeSleepNs);
+            auto workDiv
+                = alpaka::getValidWorkDiv(kernelCfg, dev, FlatterScatterAlloc::InitKernel{}, heap, pool, memsize);
+            alpaka::exec<TAcc>(queue, workDiv, FlatterScatterAlloc::InitKernel{}, heap, pool, memsize);
             alpaka::wait(queue);
         }
 

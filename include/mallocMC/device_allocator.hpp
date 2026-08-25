@@ -36,8 +36,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <type_traits>
-#include <utility>
 
 namespace mallocMC
 {
@@ -64,32 +62,15 @@ namespace mallocMC
     {
         using uint32 = std::uint32_t;
 
-        // A creation policy can optionally carry the run-time allocation/free delays (in
-        // nanoseconds). The members are detected at compile time so that this generic class
-        // stays usable with policies that do not provide them.
-        template<typename TPolicy, typename = void>
-        struct hasMallocSleepNs : std::false_type
-        {
-        };
-
-        template<typename TPolicy>
-        struct hasMallocSleepNs<TPolicy, std::void_t<decltype(std::declval<TPolicy const&>().mallocSleepNs)>>
-            : std::true_type
-        {
-        };
-
-        template<typename TPolicy, typename = void>
-        struct hasFreeSleepNs : std::false_type
-        {
-        };
-
-        template<typename TPolicy>
-        struct hasFreeSleepNs<TPolicy, std::void_t<decltype(std::declval<TPolicy const&>().freeSleepNs)>>
-            : std::true_type
-        {
-        };
-
     public:
+        // Run-time allocation/free delays in nanoseconds, read from the
+        // MALLOCMC_MALLOC_DELAY / MALLOCMC_FREE_DELAY environment variables at
+        // initialisation (see `Allocator::alloc`) and applied at the top of
+        // `malloc` / `free`. Held here, on the allocator itself, so that every
+        // creation policy supports the delays without carrying them itself.
+        uint32_t mallocSleepNs = 0U;
+        uint32_t freeSleepNs = 0U;
+
         using CreationPolicy = T_CreationPolicy;
         using DistributionPolicy = T_DistributionPolicy;
         using OOMPolicy = T_OOMPolicy;
@@ -99,11 +80,7 @@ namespace mallocMC
         ALPAKA_FN_ACC auto malloc(AlpakaAcc const& acc, size_t bytes) -> void*
         {
             // Impose the allocation delay at the very top of every allocation request.
-            using Policy = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>;
-            if constexpr(hasMallocSleepNs<Policy>::value)
-            {
-                nanosleep(acc, this->mallocSleepNs);
-            }
+            nanosleep(acc, this->mallocSleepNs);
             if(bytes == 0U)
             {
                 return nullptr;
@@ -123,11 +100,7 @@ namespace mallocMC
         ALPAKA_FN_ACC void free(AlpakaAcc const& acc, void* pointer)
         {
             // Impose the free delay at the very top of every free request.
-            using Policy = CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>;
-            if constexpr(hasFreeSleepNs<Policy>::value)
-            {
-                nanosleep(acc, this->freeSleepNs);
-            }
+            nanosleep(acc, this->freeSleepNs);
             if(pointer != nullptr)
             {
                 CreationPolicy::template AlignmentAwarePolicy<T_AlignmentPolicy>::destroy(acc, pointer);
