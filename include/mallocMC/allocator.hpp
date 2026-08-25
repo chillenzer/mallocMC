@@ -152,22 +152,10 @@ namespace mallocMC
                 pool,
                 size);
 
-            // Read the run-time malloc/free delays once, on the host, and store them in the
-            // device-side allocator so DeviceAllocator::malloc / ::free can apply them
+            // Read the run-time malloc/free delays once, on the host, and store them in
+            // the device-side allocator so DeviceAllocator::malloc / ::free can apply them
             // regardless of the creation policy.
-            auto const mallocSleepNs = mallocDelayNs();
-            auto const freeSleepNs = freeDelayNs();
-            auto* devAllocatorPtr = alpaka::getPtrNative(*devAllocatorBuffer);
-            using VecType = alpaka::Vec<Dim, Idx>;
-            alpaka::exec<AlpakaAcc>(
-                queue,
-                alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()},
-                [devAllocatorPtr, mallocSleepNs, freeSleepNs] ALPAKA_FN_ACC(AlpakaAcc const&)
-                {
-                    devAllocatorPtr->mallocSleepNs = mallocSleepNs;
-                    devAllocatorPtr->freeSleepNs = freeSleepNs;
-                });
-            alpaka::wait(queue);
+            storeSleepDelays(queue, mallocDelayNs(), freeDelayNs());
 
             heapInfos.p = pool;
             heapInfos.size = size;
@@ -212,6 +200,34 @@ namespace mallocMC
         {
             free();
             alloc(dev, queue, size);
+        }
+
+        /**
+         * Store the malloc / free sleep delays in the device-side allocator.
+         *
+         * This member is public on purpose: nvcc refuses to compile an extended
+         * `__device__` lambda (the `ALPAKA_FN_ACC` lambda below) whose enclosing
+         * function is a private or protected member of its class, and the caller
+         * `alloc` is private.
+         *
+         * @param queue    the queue to launch the kernel on
+         * @param mallocNs sleep delay in ns applied at the top of every device-side malloc
+         * @param freeNs   sleep delay in ns applied at the top of every device-side free
+         */
+        template<typename AlpakaQueue>
+        ALPAKA_FN_HOST void storeSleepDelays(AlpakaQueue& queue, std::uint32_t mallocNs, std::uint32_t freeNs)
+        {
+            auto* devAllocatorPtr = alpaka::getPtrNative(*devAllocatorBuffer);
+            using VecType = alpaka::Vec<Dim, Idx>;
+            alpaka::exec<AlpakaAcc>(
+                queue,
+                alpaka::WorkDivMembers<Dim, Idx>{VecType::ones(), VecType::ones(), VecType::ones()},
+                [devAllocatorPtr, mallocNs, freeNs] ALPAKA_FN_ACC(AlpakaAcc const&)
+                {
+                    devAllocatorPtr->mallocSleepNs = mallocNs;
+                    devAllocatorPtr->freeSleepNs = freeNs;
+                });
+            alpaka::wait(queue);
         }
 
         ALPAKA_FN_HOST
